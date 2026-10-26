@@ -1,13 +1,15 @@
 name: fitness_tracker
-description: 适用于Android平台的现代化个人健身数据管理系统。
+description: 铁镌 - 镌刻每一次撸铁的现代化个人健身数据管理系统。
 publish_to: "none"
-version: 1.0.0+1
+version: 1.2.0+3
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
   cupertino_icons: ^1.0.5
   provider: ^6.1.1
@@ -47,3 +49,4 @@ flutter:
     - assets/熊猫头.gif
     - assets/一起跳舞.gif
     - assets/coach_rules.json
+    - assets/images/

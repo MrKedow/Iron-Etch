@@ -1,6 +1,6 @@
 // ==================== main.dart (JSON存储 + 云同步) ====================
-import 'package:fitness_tracker/services/knowledge_update_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,318 +9,46 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:excel/excel.dart' hide Border;
-import 'package:fitness_tracker/widgets/draggable_cat.dart';
 import 'package:fitness_tracker/screens/settings_page.dart';
 import 'package:fitness_tracker/screens/coach_analysis_page.dart';
+import 'package:fitness_tracker/screens/history_page.dart';
+import 'package:fitness_tracker/screens/splash_screen.dart';
+import 'package:fitness_tracker/screens/theme_gallery_page.dart';
+import 'package:fitness_tracker/providers/app_providers.dart';
+import 'package:fitness_tracker/theme/app_theme.dart';
+import 'package:fitness_tracker/widgets/app_ui.dart';
+import 'package:fitness_tracker/widgets/status_banner.dart';
 import 'package:share_plus/share_plus.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
-  final savedThemeIndex = prefs.getInt('selected_theme') ?? 0;
+  final savedThemeId = prefs.getString('selected_theme_id');
+  final legacyThemeIndex = prefs.getInt('selected_theme') ?? 0;
+  final initialThemeId = savedThemeId ??
+      (legacyThemeIndex >= 0 && legacyThemeIndex < AppThemes.all.length
+          ? AppThemes.all[legacyThemeIndex].id
+          : AppThemes.ironForge.id);
 
-runApp(
-  MultiProvider(
-    providers: [
-      // 1. 先注册 JsonStorageService（普通 Provider，不监听变化）
-      Provider(create: (_) => JsonStorageService()),
-      // 2. 再注册 WorkoutProvider（依赖 JsonStorageService）
-      ChangeNotifierProvider(
-        create: (context) => WorkoutProvider(
-          jsonService: context.read<JsonStorageService>(),
+  runApp(
+    MultiProvider(
+      providers: [
+        // 1. 先注册 JsonStorageService（普通 Provider，不监听变化）
+        Provider(create: (_) => JsonStorageService()),
+        // 2. 再注册 WorkoutProvider（依赖 JsonStorageService）
+        ChangeNotifierProvider(
+          create: (context) => WorkoutProvider(
+            jsonService: context.read<JsonStorageService>(),
+          ),
         ),
-      ),
-      // 3. 其他提供者
-      ChangeNotifierProvider(create: (_) => ThemeProvider(savedThemeIndex)),
-      ChangeNotifierProvider(create: (_) => NutstoreService()),
-      ChangeNotifierProvider(create: (_) => SettingsProvider()),
-    ],
-    child: const FitnessApp(),
-  ),
-);
-}
-
-// ==================== 设置提供者 ====================
-class SettingsProvider extends ChangeNotifier {
-  bool _showDraggableCat = true;
-  bool _autoUpdateKnowledge = false;
-
-  bool get showDraggableCat => _showDraggableCat;
-  bool get autoUpdateKnowledge => _autoUpdateKnowledge;
-
-  Future<void> setShowDraggableCat(bool value) async {
-    _showDraggableCat = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('show_draggable_cat', value);
-    notifyListeners();
-  }
-
-  Future<void> setAutoUpdateKnowledge(bool value) async {
-    _autoUpdateKnowledge = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('auto_update_knowledge', value);
-    notifyListeners();
-  }
-
-  SettingsProvider() {
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    _showDraggableCat = prefs.getBool('show_draggable_cat') ?? true;
-    _autoUpdateKnowledge = prefs.getBool('auto_update_knowledge') ?? false;
-    notifyListeners();
-  }
-}
-
-// ==================== 主题管理 ====================
-class ThemeProvider extends ChangeNotifier {
-  int _selectedThemeIndex;
-  ThemeProvider(this._selectedThemeIndex);
-  int get selectedThemeIndex => _selectedThemeIndex;
-  void setTheme(int index) async {
-    _selectedThemeIndex = index;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('selected_theme', index);
-    notifyListeners();
-  }
-
-  ThemeData get currentTheme => _themes[_selectedThemeIndex];
-
-  static final List<ThemeData> _themes = [
-    // 0: 远山青
-    ThemeData(
-      brightness: Brightness.dark,
-      primaryColor: const Color(0xFF3AB8C7),
-      colorScheme: const ColorScheme.dark(
-        primary: Color(0xFF3AB8C7),
-        secondary: Color(0xFF2E8B9E),
-        surface: Color(0xFF1A2A3A),
-        onSurface: Colors.white,
-      ),
-      scaffoldBackgroundColor: const Color(0xFF1A2A3A),
-      cardColor: const Color(0xFF2A3A4A),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF2A3A4A),
-        elevation: 0,
-        titleTextStyle: TextStyle(
-            color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-        iconTheme: IconThemeData(color: Colors.white),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF3AB8C7),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: const Color(0xFF3A4A5A),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.all(16),
-        labelStyle: const TextStyle(color: Colors.white70),
-        hintStyle: const TextStyle(color: Colors.white54),
-      ),
-      textTheme: const TextTheme(
-        bodyLarge: TextStyle(color: Colors.white),
-        bodyMedium: TextStyle(color: Colors.white70),
-      ),
-      dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF2A3A4A)),
+        // 3. 其他提供者
+        ChangeNotifierProvider(create: (_) => ThemeProvider(initialThemeId)),
+        ChangeNotifierProvider(create: (_) => NutstoreService()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+      ],
+      child: const FitnessApp(),
     ),
-    // 1: 萤石黑
-    ThemeData(
-      brightness: Brightness.dark,
-      primaryColor: const Color(0xFF007AFF),
-      colorScheme: const ColorScheme.dark(
-        primary: Color(0xFF007AFF),
-        secondary: Color(0xFF5856D6),
-        surface: Color(0xFF000000),
-        onSurface: Colors.white,
-      ),
-      scaffoldBackgroundColor: const Color(0xFF000000),
-      cardColor: const Color(0xFF1C1C1E),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF1C1C1E),
-        elevation: 0,
-        titleTextStyle: TextStyle(
-            color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-        iconTheme: IconThemeData(color: Color(0xFF007AFF)),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF007AFF),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: const Color(0xFF2C2C2E),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.all(16),
-        labelStyle: const TextStyle(color: Colors.white60),
-        hintStyle: const TextStyle(color: Colors.white38),
-      ),
-      textTheme: const TextTheme(
-        bodyLarge: TextStyle(color: Colors.white),
-        bodyMedium: TextStyle(color: Colors.white70),
-      ),
-      dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF1C1C1E)),
-    ),
-    // 2: 珠玉白
-    ThemeData(
-      brightness: Brightness.light,
-      primaryColor: const Color(0xFF4A6FA5),
-      colorScheme: const ColorScheme.light(
-        primary: Color(0xFF4A6FA5),
-        secondary: Color(0xFF6B8FC7),
-        surface: Color(0xFFF8F9FA),
-        onSurface: Colors.black87,
-      ),
-      scaffoldBackgroundColor: const Color(0xFFF8F9FA),
-      cardColor: Colors.white,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        titleTextStyle: TextStyle(
-            color: Colors.black87, fontSize: 18, fontWeight: FontWeight.bold),
-        iconTheme: IconThemeData(color: Color(0xFF4A6FA5)),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF4A6FA5),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: const Color(0xFFF0F2F5),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFE0E3E8)),
-        ),
-        contentPadding: const EdgeInsets.all(16),
-        labelStyle: const TextStyle(color: Colors.black54),
-        hintStyle: const TextStyle(color: Colors.black38),
-      ),
-      textTheme: const TextTheme(
-        bodyLarge: TextStyle(color: Colors.black87),
-        bodyMedium: TextStyle(color: Colors.black54),
-      ),
-      dialogTheme: const DialogThemeData(backgroundColor: Colors.white),
-    ),
-    // 3: 活力橙
-    ThemeData(
-      brightness: Brightness.dark,
-      primaryColor: const Color(0xFFFF9500),
-      colorScheme: const ColorScheme.dark(
-        primary: Color(0xFFFF9500),
-        secondary: Color(0xFFFF6B00),
-        surface: Color(0xFF1A1A1A),
-        onSurface: Colors.white,
-      ),
-      scaffoldBackgroundColor: const Color(0xFF1A1A1A),
-      cardColor: const Color(0xFF2A2A2A),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF2A2A2A),
-        elevation: 0,
-        titleTextStyle: TextStyle(
-            color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-        iconTheme: IconThemeData(color: Color(0xFFFF9500)),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFFF9500),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: const Color(0xFF3A3A3A),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.all(16),
-        labelStyle: const TextStyle(color: Colors.white60),
-        hintStyle: const TextStyle(color: Colors.white38),
-      ),
-      textTheme: const TextTheme(
-        bodyLarge: TextStyle(color: Colors.white),
-        bodyMedium: TextStyle(color: Colors.white70),
-      ),
-      dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF2A2A2A)),
-    ),
-    // 4: 全透明
-    ThemeData(
-      brightness: Brightness.dark,
-      primaryColor: Colors.white,
-      colorScheme: const ColorScheme.dark(
-        primary: Colors.white,
-        secondary: Colors.white70,
-        surface: Colors.transparent,
-        onSurface: Colors.white,
-      ),
-      scaffoldBackgroundColor: Colors.transparent,
-      cardColor: Colors.black.withValues(alpha: 0.6),
-      appBarTheme: AppBarTheme(
-        backgroundColor: Colors.black.withValues(alpha: 0.7),
-        elevation: 0,
-        titleTextStyle: const TextStyle(
-            color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white.withValues(alpha: 0.3),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.black.withValues(alpha: 0.4),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.white54, width: 1),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.white54, width: 1),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.white, width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.all(16),
-        labelStyle: const TextStyle(color: Colors.white70),
-        hintStyle: const TextStyle(color: Colors.white60),
-      ),
-      textTheme: const TextTheme(
-        bodyLarge: TextStyle(color: Colors.white),
-        bodyMedium: TextStyle(color: Colors.white70),
-      ),
-      dialogTheme: DialogThemeData(
-          backgroundColor: Colors.grey.shade800.withValues(alpha: 0.85)),
-    ),
-  ];
+  );
 }
 
 // ==================== 数据模型 ====================
@@ -431,14 +159,22 @@ class JsonStorageService {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/$fileName');
       if (!await file.exists()) return [];
-      final content = await file.readAsString();
-      final map = jsonDecode(content);
-      final list = (map['records'] as List?) ?? [];
-      return list.map((item) => _recordFromJson(item)).toList();
+      return _parseRecordsFile(file);
     } catch (e) {
       print('加载 JSON 失败: $e');
       return [];
     }
+  }
+
+  Future<List<WorkoutRecord>> loadRecordsFromPath(String path) async {
+    return _parseRecordsFile(File(path));
+  }
+
+  Future<List<WorkoutRecord>> _parseRecordsFile(File file) async {
+    final content = await file.readAsString();
+    final map = jsonDecode(content);
+    final list = (map['records'] as List?) ?? [];
+    return list.map((item) => _recordFromJson(item)).toList();
   }
 
   Map<String, dynamic> _recordToJson(WorkoutRecord r) {
@@ -517,11 +253,10 @@ class WorkoutProvider extends ChangeNotifier {
     if (existingIndex != -1) {
       final existing = _records[existingIndex];
       final mergedProjects = [...existing.projects, ...newRecord.projects];
-      final updatedSession = newRecord.sessionNumber;
       final updatedRecord = WorkoutRecord(
         id: existing.id,
         date: existing.date,
-        sessionNumber: updatedSession,
+        sessionNumber: existing.sessionNumber,
         projects: mergedProjects,
         timestamp: DateTime.now(),
       );
@@ -529,28 +264,25 @@ class WorkoutProvider extends ChangeNotifier {
     } else {
       _records.add(newRecord);
     }
-    _saveRecords();
-    notifyListeners();
+    recalculateSessionNumbers();
   }
 
   void updateRecord(String id, WorkoutRecord updatedRecord) {
     final index = _records.indexWhere((record) => record.id == id);
     if (index != -1) {
       _records[index] = updatedRecord;
-      _saveRecords();
-      notifyListeners();
+      recalculateSessionNumbers();
     }
   }
 
   void deleteRecord(String id) {
     _records.removeWhere((record) => record.id == id);
-    _saveRecords();
-    notifyListeners();
+    recalculateSessionNumbers();
   }
 
   void loadRecords(List<WorkoutRecord> newRecords) {
     _records = newRecords;
-    notifyListeners();
+    recalculateSessionNumbers();
   }
 
   void clearRecords() {
@@ -558,6 +290,41 @@ class WorkoutProvider extends ChangeNotifier {
     _saveRecords();
     notifyListeners();
   }
+
+  /// 根据训练日期自动计算“第几次训练”，并保持记录按时间排序。
+  void recalculateSessionNumbers() {
+    _records.sort((a, b) => a.date.compareTo(b.date));
+    final uniqueDates = <String>[];
+    for (final record in _records) {
+      final key = DateFormat('yyyy-MM-dd').format(record.date);
+      if (!uniqueDates.contains(key)) uniqueDates.add(key);
+    }
+    for (final record in _records) {
+      final key = DateFormat('yyyy-MM-dd').format(record.date);
+      record.sessionNumber = uniqueDates.indexOf(key) + 1;
+    }
+    _saveRecords();
+    notifyListeners();
+  }
+
+  int sessionNumberForDate(DateTime date) {
+    final keys = _records
+        .map((r) => DateFormat('yyyy-MM-dd').format(r.date))
+        .toSet()
+        .toList();
+    final key = DateFormat('yyyy-MM-dd').format(date);
+    if (!keys.contains(key)) keys.add(key);
+    keys.sort();
+    return keys.indexOf(key) + 1;
+  }
+
+  int get totalSessions => _records
+      .map((r) => DateFormat('yyyy-MM-dd').format(r.date))
+      .toSet()
+      .length;
+
+  List<WorkoutRecord> get sortedRecords => List<WorkoutRecord>.from(_records)
+    ..sort((a, b) => b.date.compareTo(a.date));
 
   bool isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
@@ -586,8 +353,7 @@ class WorkoutProvider extends ChangeNotifier {
       }
     }
     _records = merged.values.toList();
-    _saveRecords();
-    notifyListeners();
+    recalculateSessionNumbers();
   }
 
   Future<void> _saveRecords() async {
@@ -1040,10 +806,21 @@ class FitnessApp extends StatelessWidget {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         return MaterialApp(
-          title: '健身数据管理系统 Fitness-Tracker_Android',
+          title: '铁镌',
           debugShowCheckedModeBanner: false,
           theme: themeProvider.currentTheme,
-          home: const MainScreen(),
+          themeAnimationDuration: const Duration(milliseconds: 650),
+          themeAnimationCurve: Curves.easeOutCubic,
+          locale: const Locale('zh', 'CN'),
+          supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          builder: (context, child) =>
+              AppBackdrop(child: child ?? const SizedBox.shrink()),
+          home: const SplashScreen(),
         );
       },
     );
@@ -1053,19 +830,17 @@ class FitnessApp extends StatelessWidget {
 // ==================== 主界面 ====================
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
+
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   DateTime selectedDate = DateTime.now();
-  int? sessionNumber;
   final List<WorkoutProject> projects = [WorkoutProject.empty()];
   DateTime firstWorkoutDate = DateTime(2025, 6, 9, 18, 29);
 
-  final FocusNode _sessionFocusNode = FocusNode();
   final TextEditingController dateController = TextEditingController();
-  final TextEditingController sessionController = TextEditingController();
   final List<TextEditingController> nameControllers = [];
   final List<TextEditingController> weightControllers = [];
   final List<TextEditingController> setsControllers = [];
@@ -1084,19 +859,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _initializeControllers();
     _loadData();
     _loadFirstWorkoutDate();
-    _runAutoUpdateIfEnabled();
-  }
-
-  Future<void> _runAutoUpdateIfEnabled() async {
-    final settings = Provider.of<SettingsProvider>(context, listen: false);
-    if (settings.autoUpdateKnowledge) {
-      final success = await KnowledgeUpdateService.runUpdate();
-      if (success && mounted) {
-        _showToast('知识库已自动更新', isError: false);
-      } else if (!success && mounted) {
-        _showToast('自动更新失败，请检查网络', isError: true);
-      }
-    }
   }
 
   void _loadData() async {
@@ -1105,141 +867,114 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await provider.loadSavedRecords();
     await provider.loadLastExportPath();
     await nutstore.loadSavedConfig();
-    if (mounted) {
-      setState(() {});
-      _updateSessionNumberForDate(selectedDate);
-    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _refresh() async {
+    final provider = context.read<WorkoutProvider>();
+    await provider.loadSavedRecords();
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadFirstWorkoutDate() async {
     final prefs = await SharedPreferences.getInstance();
     final savedDate = prefs.getString('first_workout_date');
-    if (savedDate != null) {
-      firstWorkoutDate = DateTime.parse(savedDate);
-    } else {
-      firstWorkoutDate = DateTime(2025, 6, 9, 18, 29);
-    }
-    setState(() {});
+    if (!mounted) return;
+    setState(() {
+      firstWorkoutDate = savedDate == null
+          ? DateTime(2025, 6, 9, 18, 29)
+          : DateTime.parse(savedDate);
+    });
   }
 
-  void _updateSessionNumberForDate(DateTime date) {
-    final provider = Provider.of<WorkoutProvider>(context, listen: false);
-    final recordsOnDate = provider.records
-        .where((r) =>
-            r.date.year == date.year &&
-            r.date.month == date.month &&
-            r.date.day == date.day)
-        .toList();
-    if (recordsOnDate.isNotEmpty) {
-      final numbers =
-          recordsOnDate.map((r) => r.sessionNumber).whereType<int>().toList();
-      if (numbers.isNotEmpty) {
-        sessionNumber = numbers.reduce((a, b) => a > b ? a : b);
-      } else {
-        sessionNumber = null;
-      }
-    } else {
-      sessionNumber = null;
-    }
-    sessionController.text = sessionNumber?.toString() ?? '';
-    setState(() {});
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  void _jumpToDate(DateTime date) {
+    setState(() {
+      selectedDate = date;
+      dateController.text = DateFormat('yyyy-MM-dd').format(date);
+    });
   }
 
   Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
       initialDate: selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      builder: (context, child) {
-        final isGlass =
-            Theme.of(context).scaffoldBackgroundColor == Colors.transparent;
-        return Theme(
-          data: Theme.of(context).copyWith(
-            dialogTheme: DialogThemeData(
-              backgroundColor:
-                  isGlass ? Colors.grey.shade800.withValues(alpha: 0.85) : null,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      helpText: '选择训练日期',
+      cancelText: '取消',
+      confirmText: '确定',
     );
-    if (picked != null && picked != selectedDate) {
-      setState(() {
-        selectedDate = picked;
-        dateController.text = DateFormat('yyyy-MM-dd').format(picked);
-      });
-      _updateSessionNumberForDate(picked);
+    if (picked != null && !_isSameDay(picked, selectedDate)) {
+      _jumpToDate(picked);
     }
   }
 
   void _saveWorkout(BuildContext context) {
-    final List<WorkoutProject> validProjects = [];
-    for (int i = 0; i < projects.length; i++) {
+    final validProjects = <WorkoutProject>[];
+    for (var i = 0; i < projects.length; i++) {
       if (nameControllers[i].text.trim().isNotEmpty) {
         validProjects.add(WorkoutProject(
-          name: nameControllers[i].text,
+          name: nameControllers[i].text.trim(),
           part: partNotifiers[i].value,
           weight: double.tryParse(weightControllers[i].text) ?? 0,
           sets: int.tryParse(setsControllers[i].text) ?? 0,
           repsPerSet: int.tryParse(repsControllers[i].text) ?? 0,
-          feeling: feelingControllers[i].text,
-          supplement: supplementControllers[i].text,
+          feeling: feelingControllers[i].text.trim(),
+          supplement: supplementControllers[i].text.trim(),
         ));
       }
     }
     if (validProjects.isEmpty) {
-      _showToast('请至少填写一个完整的训练项目', isError: true);
+      _showToast('请至少填写一个动作名称', isError: true);
       return;
     }
 
+    final provider = context.read<WorkoutProvider>();
     final record = WorkoutRecord(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       date: selectedDate,
-      sessionNumber: sessionNumber,
+      sessionNumber: provider.sessionNumberForDate(selectedDate),
       projects: validProjects,
       timestamp: DateTime.now(),
     );
-
-    Provider.of<WorkoutProvider>(context, listen: false).addRecord(record);
+    provider.addRecord(record);
 
     setState(() {
-      projects.clear();
-      projects.add(WorkoutProject.empty());
+      projects
+        ..clear()
+        ..add(WorkoutProject.empty());
       _initializeControllers();
     });
-    _updateSessionNumberForDate(selectedDate);
-    _showToast('训练记录保存成功！');
-    _updateSessionNumberForDate(selectedDate);
+    _showToast('已保存到第 ${provider.sessionNumberForDate(selectedDate)} 次训练');
   }
 
   @override
   void dispose() {
     dateController.dispose();
-    sessionController.dispose();
-    _sessionFocusNode.dispose();
     _clearControllers();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   Future<void> _exportToExcel(BuildContext context) async {
-    final provider = Provider.of<WorkoutProvider>(context, listen: false);
-    final excelService = ExcelExportService();
+    final provider = context.read<WorkoutProvider>();
     setState(() => _isLoading = true);
     try {
-      final filePath = await excelService.exportToExcel(provider.records);
-      if (filePath != null) {
-        final file = File(filePath);
-        // 使用 Share 插件分享文件
-        final XFile xFile = XFile(filePath);
-        await Share.shareXFiles([xFile], text: '健身数据导出文件');
-      } else {
+      final filePath =
+          await ExcelExportService().exportToExcel(provider.records);
+      if (filePath == null) {
         if (mounted) _showToast('导出失败', isError: true);
+        return;
       }
+      await Share.shareXFiles(
+        [XFile(filePath)],
+        text: '铁镌训练数据',
+      );
     } catch (e) {
-      if (mounted) _showToast('导出失败: $e', isError: true);
+      if (mounted) _showToast('导出失败：$e', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -1257,7 +992,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     setState(() => _isLoading = true);
     try {
-      // 0. 检查连接有效性
       final isStillConnected = await nutstore.checkConnection();
       if (!isStillConnected) {
         _showToast('云服务认证已过期，请重新登录', isError: true);
@@ -1266,469 +1000,236 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         return;
       }
 
-      // 1. 下载云端 JSON 文件
       List<WorkoutRecord> cloudRecords = [];
       bool cloudFileExists = false;
-      String tempPath =
+      final tempPath =
           '${(await getApplicationDocumentsDirectory()).path}/temp_cloud.json';
-      final downloadResult = await nutstore.downloadFileWithInfo(tempPath);
 
+      final downloadResult = await nutstore.downloadFileWithInfo(tempPath);
       if (downloadResult['success'] == true) {
         cloudFileExists = true;
         try {
-          final content = await File(tempPath).readAsString();
-          final map = jsonDecode(content);
-          final list = (map['records'] as List?) ?? [];
-          cloudRecords = list.map((item) => _recordFromJson(item)).toList();
-          print('云端 JSON 下载成功，解析出 ${cloudRecords.length} 条记录');
-        } catch (parseError) {
-          print('解析云端 JSON 失败: $parseError');
-          _showToast('云端文件损坏，请手动处理', isError: true);
-          return;
-        }
-      } else {
-        final statusCode = downloadResult['statusCode'];
-        if (statusCode == 404) {
-          print('云端文件不存在 (404)');
-        } else {
-          print('下载云端文件失败: ${downloadResult['error']}');
-          _showToast('读取云端数据失败: ${downloadResult['error']}', isError: true);
-          return;
+          final loaded = await jsonService.loadRecordsFromPath(tempPath);
+          cloudRecords = loaded;
+        } catch (e) {
+          debugPrint('解析云端数据失败: $e');
         }
       }
 
-      // 2. 获取本地记录
-      List<WorkoutRecord> localRecords = List.from(provider.records);
-      print('本地记录数: ${localRecords.length}');
+      if (!mounted) return;
 
-      // 3. 处理云端文件不存在或解析为空的情况
-      if (!cloudFileExists || (cloudFileExists && cloudRecords.isEmpty)) {
-        if (localRecords.isNotEmpty) {
-          final shouldOverwrite = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('云端数据为空'),
-              content: Text(
-                cloudFileExists
-                    ? '云端文件存在但无有效记录。\n是否用本地 ${localRecords.length} 条记录覆盖云端？'
-                    : '云端无文件。\n是否用本地 ${localRecords.length} 条记录上传到云端？',
-              ),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('取消')),
-                ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('覆盖')),
-              ],
-            ),
-          );
-          if (shouldOverwrite != true) {
-            _showToast('已取消同步');
-            return;
-          }
-        }
-        // 执行上传
-        final savePath = await jsonService.saveRecords(localRecords);
-        if (savePath == null) throw Exception('保存本地 JSON 失败');
-        await nutstore.uploadFile(savePath);
-        _showToast('已${cloudFileExists ? '覆盖' : '上传'}云端数据');
+      if (!cloudFileExists) {
+        await _uploadCurrentData(context, provider, nutstore);
         return;
       }
 
-      // 4. 双向同步核心逻辑（云端有有效记录）
-      List<WorkoutRecord> finalRecords = [];
-      Set<String> processedCloudDates = {};
+      final hasLocal = provider.records.isNotEmpty;
+      if (!hasLocal) {
+        provider.loadRecords(cloudRecords);
+        _showToast('已将云端 ${cloudRecords.length} 条记录下载到本地');
+        return;
+      }
 
-      for (var local in localRecords) {
-        final localDateKey = DateFormat('yyyy-MM-dd').format(local.date);
-        WorkoutRecord? matchedCloud;
-        for (var cloud in cloudRecords) {
-          if (DateFormat('yyyy-MM-dd').format(cloud.date) == localDateKey) {
-            matchedCloud = cloud;
-            break;
-          }
-        }
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('发现云端训练数据'),
+          content: Text(
+            '云端有 ${cloudRecords.length} 条记录，本地有 ${provider.records.length} 条记录。\n请选择处理方式。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'upload'),
+              child: const Text('用本地覆盖云端'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, 'merge'),
+              child: const Text('合并两边记录'),
+            ),
+          ],
+        ),
+      );
 
-        if (matchedCloud == null) {
-          finalRecords.add(local);
-          print('本地独有日期 $localDateKey');
-        } else {
-          processedCloudDates.add(localDateKey);
-          if (_areRecordsEqual(local, matchedCloud)) {
-            finalRecords.add(matchedCloud);
-            print('日期 $localDateKey 内容相同，保留云端版本');
+      if (choice == 'upload') {
+        await _uploadCurrentData(context, provider, nutstore);
+      } else if (choice == 'merge') {
+        final merged = <WorkoutRecord>[];
+        final seen = <String>{};
+        for (final record in [...provider.records, ...cloudRecords]) {
+          final key = DateFormat('yyyy-MM-dd').format(record.date);
+          if (seen.add(key)) {
+            merged.add(record);
           } else {
-            final merged = _mergeRecords(local, matchedCloud);
-            finalRecords.add(merged);
-            print('日期 $localDateKey 内容不同，已合并');
+            final index = merged.indexWhere(
+              (r) => DateFormat('yyyy-MM-dd').format(r.date) == key,
+            );
+            if (index != -1) {
+              merged[index] = WorkoutRecord(
+                id: merged[index].id,
+                date: merged[index].date,
+                sessionNumber: merged[index].sessionNumber,
+                projects: [
+                  ...merged[index].projects,
+                  ...record.projects,
+                ],
+                timestamp: DateTime.now(),
+              );
+            }
           }
         }
+        provider.loadRecords(merged);
+        await _uploadCurrentData(context, provider, nutstore);
       }
-
-      for (var cloud in cloudRecords) {
-        final cloudDateKey = DateFormat('yyyy-MM-dd').format(cloud.date);
-        if (!processedCloudDates.contains(cloudDateKey)) {
-          finalRecords.add(cloud);
-          print('云端独有日期 $cloudDateKey');
-        }
-      }
-
-      provider.loadRecords(finalRecords);
-      print('最终本地记录数: ${finalRecords.length}');
-
-      final savePath = await jsonService.saveRecords(finalRecords);
-      if (savePath == null) throw Exception('保存本地 JSON 失败');
-      await nutstore.uploadFile(savePath);
-
-      _showToast('云同步完成！');
-    } catch (e) {
-      print('同步失败: $e');
-      _showToast('同步失败: $e', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // 辅助方法：从 JSON Map 创建 WorkoutRecord
-  WorkoutRecord _recordFromJson(Map<String, dynamic> json) {
-    return WorkoutRecord(
-      id: json['id'],
-      date: DateTime.parse(json['date']),
-      sessionNumber: json['sessionNumber'],
-      projects: (json['projects'] as List)
-          .map((p) => WorkoutProject(
-                name: p['name'],
-                part: p['part'],
-                weight: (p['weight'] as num).toDouble(),
-                sets: p['sets'],
-                repsPerSet: p['repsPerSet'],
-                feeling: p['feeling'] ?? '',
-                supplement: p['supplement'] ?? '',
-              ))
-          .toList(),
-      timestamp: DateTime.parse(json['timestamp']),
-    );
-  }
-
-  bool _areRecordsEqual(WorkoutRecord a, WorkoutRecord b) {
-    if (a.sessionNumber != b.sessionNumber) return false;
-    if (a.projects.length != b.projects.length) return false;
-    List<WorkoutProject> sortProjects(List<WorkoutProject> list) {
-      return List.from(list)
-        ..sort(
-            (x, y) => '${x.name}|${x.part}'.compareTo('${y.name}|${y.part}'));
+  Future<void> _uploadCurrentData(
+    BuildContext context,
+    WorkoutProvider provider,
+    NutstoreService nutstore,
+  ) async {
+    final jsonService = context.read<JsonStorageService>();
+    final path = await jsonService.saveRecords(provider.records);
+    if (path == null) {
+      if (mounted) _showToast('保存本地数据失败', isError: true);
+      return;
     }
-
-    final aSorted = sortProjects(a.projects);
-    final bSorted = sortProjects(b.projects);
-    for (int i = 0; i < aSorted.length; i++) {
-      final p1 = aSorted[i];
-      final p2 = bSorted[i];
-      if (p1.name != p2.name) return false;
-      if (p1.part != p2.part) return false;
-      if (p1.weight != p2.weight) return false;
-      if (p1.sets != p2.sets) return false;
-      if (p1.repsPerSet != p2.repsPerSet) return false;
-      if (p1.feeling != p2.feeling) return false;
-      if (p1.supplement != p2.supplement) return false;
-    }
-    return true;
-  }
-
-  WorkoutRecord _mergeRecords(WorkoutRecord local, WorkoutRecord cloud) {
-    final Map<String, WorkoutProject> projectMap = {};
-    for (var p in cloud.projects) {
-      final key = '${p.name}|${p.part}';
-      projectMap[key] = p;
-    }
-    for (var p in local.projects) {
-      final key = '${p.name}|${p.part}';
-      projectMap[key] = p;
-    }
-    int? mergedSession;
-    if (local.sessionNumber != null && cloud.sessionNumber != null) {
-      mergedSession = local.sessionNumber! > cloud.sessionNumber!
-          ? local.sessionNumber
-          : cloud.sessionNumber;
-    } else {
-      mergedSession = local.sessionNumber ?? cloud.sessionNumber;
-    }
-    return WorkoutRecord(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      date: local.date,
-      sessionNumber: mergedSession,
-      projects: projectMap.values.toList(),
-      timestamp: DateTime.now(),
-    );
-  }
-
-  Future<bool?> _showEmptyUploadConfirmDialog(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    final dontShowAgain =
-        prefs.getBool('dont_show_empty_upload_warning') ?? false;
-    if (dontShowAgain) return true;
-    bool? result;
-    bool dontShow = false;
-    await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('无记录上云'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('本地无任何训练记录，继续上云将清空云端表格。确定继续吗？'),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Checkbox(
-                    value: dontShow,
-                    onChanged: (v) => setState(() => dontShow = v ?? false),
-                  ),
-                  const Text('不再提示'),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('取消')),
-            ElevatedButton(
-              onPressed: () async {
-                if (dontShow) {
-                  await prefs.setBool('dont_show_empty_upload_warning', true);
-                }
-                Navigator.pop(context, true);
-              },
-              child: const Text('继续'),
-            ),
-          ],
-        ),
-      ),
-    ).then((value) => result = value);
-    return result;
+    final ok = await nutstore.uploadFile(path);
+    if (!mounted) return;
+    _showToast(ok ? '云端数据已更新' : '上传失败，请稍后重试', isError: !ok);
   }
 
   void _showCloudLoginDialog(BuildContext context) {
     final usernameController = TextEditingController();
     final passwordController = TextEditingController();
+    bool isConnecting = false;
+    String? error;
+
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          bool rememberPassword = true;
-          bool isConnecting = false;
-          return AlertDialog(
-            title: const Row(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('连接坚果云'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.cloud, color: Colors.blue),
-                SizedBox(width: 10),
-                Text('连接坚果云服务')
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('服务器地址：',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 5),
-                  const Text('https://dav.jianguoyun.com/dav',
-                      style: TextStyle(color: Colors.blue)),
-                  const SizedBox(height: 15),
-                  const Text('账户邮箱：',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 5),
-                  TextField(
-                      controller: usernameController,
-                      decoration: const InputDecoration(
-                          hintText: '您的坚果云邮箱', border: OutlineInputBorder())),
-                  const SizedBox(height: 15),
-                  const Text('应用密码：',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 5),
-                  TextField(
-                      controller: passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                          hintText: '坚果云应用密码', border: OutlineInputBorder())),
-                  const SizedBox(height: 15),
-                  Row(children: [
-                    Checkbox(
-                        value: rememberPassword,
-                        onChanged: (v) =>
-                            setState(() => rememberPassword = v ?? true)),
-                    const Text('记住密码')
-                  ]),
-                  const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: () {
-                      showDialog(
-                          context: context,
-                          builder: (_) =>
-                              AlertDialog(
-                                  title: const Text('坚果云配置帮助'),
-                                  content:
-                                      Text(NutstoreService.getHelpMessage()),
-                                  actions: [
-                                    TextButton(
-                                        onPressed: () => Navigator.pop(context),
-                                        child: const Text('关闭'))
-                                  ]));
-                    },
-                    child: const Text('查看配置说明'),
+                const Text(
+                  '使用坚果云 WebDAV 同步训练数据。请在坚果云网页端「安全选项」中生成应用密码。',
+                  style: TextStyle(fontSize: 12, height: 1.5),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: usernameController,
+                  decoration: const InputDecoration(
+                    labelText: '坚果云账号',
+                    hintText: '邮箱地址',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: '应用密码',
+                    hintText: '不是登录密码',
+                  ),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    error!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
                   ),
                 ],
-              ),
+              ],
             ),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('取消')),
-              ElevatedButton(
-                onPressed: isConnecting
-                    ? null
-                    : () async {
-                        setState(() => isConnecting = true);
-                        final nutstore = Provider.of<NutstoreService>(context,
-                            listen: false);
-                        final connected = await nutstore.connect(
-                            username: usernameController.text,
-                            password: passwordController.text,
-                            saveCredentials: rememberPassword);
-                        if (connected && mounted) {
-                          Navigator.pop(context);
-                          _showToast('坚果云连接成功！');
-                        } else {
-                          if (mounted) {
-                            _showToast('连接失败，请检查配置', isError: true);
-                          }
-                        }
-                        setState(() => isConnecting = false);
-                      },
-                child: isConnecting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('连接'),
-              ),
-            ],
-          );
-        },
+          ),
+          actions: [
+            TextButton(
+              onPressed:
+                  isConnecting ? null : () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: isConnecting
+                  ? null
+                  : () async {
+                      if (usernameController.text.trim().isEmpty ||
+                          passwordController.text.isEmpty) {
+                        setDialogState(() => error = '请填写账号和应用密码');
+                        return;
+                      }
+                      setDialogState(() {
+                        isConnecting = true;
+                        error = null;
+                      });
+                      final nutstore = context.read<NutstoreService>();
+                      final ok = await nutstore.connect(
+                        username: usernameController.text.trim(),
+                        password: passwordController.text,
+                      );
+                      if (!mounted) return;
+                      if (ok) {
+                        Navigator.pop(dialogContext);
+                        _showToast('坚果云连接成功');
+                      } else {
+                        setDialogState(() {
+                          isConnecting = false;
+                          error = '连接失败，请检查账号或应用密码';
+                        });
+                      }
+                    },
+              child: isConnecting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('连接'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   void _showCloudMenu(BuildContext context) {
-    final RenderBox button = context.findRenderObject() as RenderBox;
-    final RenderBox overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox;
-    final RelativeRect position = RelativeRect.fromRect(
-      Rect.fromPoints(
-          button.localToGlobal(Offset.zero, ancestor: overlay),
-          button.localToGlobal(button.size.bottomRight(Offset.zero),
-              ancestor: overlay)),
-      Offset.zero & overlay.size,
-    );
-    showMenu(
+    showModalBottomSheet(
       context: context,
-      position: position,
-      items: const [
-        PopupMenuItem(value: 'logout', child: Text('退出云服务')),
-        PopupMenuItem(value: 'switch', child: Text('切换云账号')),
-      ],
-    ).then((value) {
-      if (value == 'logout') {
-        _logoutCloud();
-      } else if (value == 'switch') {
-        _switchCloudAccount();
-      }
-    });
-  }
-
-  Future<void> _logoutCloud() async {
-    final nutstore = Provider.of<NutstoreService>(context, listen: false);
-    await nutstore.clearCredentials();
-    _showToast('已退出云服务');
-  }
-
-  Future<void> _switchCloudAccount() async {
-    await _logoutCloud();
-    if (mounted) {
-      _showCloudLoginDialog(context);
-    }
-  }
-
-  void _showExportSuccessDialog(
-      BuildContext context, String filePath, bool isEmpty) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(children: [
-          Icon(isEmpty ? Icons.info_outline : Icons.check_circle,
-              color: isEmpty ? Colors.orange : Colors.green),
-          const SizedBox(width: 10),
-          Text(isEmpty ? '导出空模板成功' : '导出成功')
-        ]),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(isEmpty ? '空模板已成功导出到：' : '数据已成功导出到：'),
-            const SizedBox(height: 10),
-            Text(filePath,
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            const SizedBox(height: 15),
-            Text(isEmpty ? '这是一个空模板，您可以填写数据后导入使用。' : '文件已记录，可点击"上云"按钮上传到坚果云。'),
-            if (!isEmpty) const SizedBox(height: 10),
-            if (!isEmpty)
-              const Text('注意：同一天的训练项目在Excel中可以手动合并单元格，日期只在第一行显示。',
-                  style: TextStyle(fontSize: 12, color: Colors.orange)),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context), child: const Text('确定')),
-          if (!isEmpty)
-            ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _syncWithCloud(context);
-                },
-                child: const Text('立即上云')),
-        ],
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-    );
-  }
-
-  void _showDownloadSuccessDialog(BuildContext context, String filePath) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(children: [
-          Icon(Icons.check_circle, color: Colors.green),
-          SizedBox(width: 10),
-          Text('下载成功')
-        ]),
-        content: Column(
+      builder: (sheetContext) => SafeArea(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('数据已从坚果云下载并与本地合并：'),
-            const SizedBox(height: 10),
-            Text(filePath,
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ListTile(
+              leading: const Icon(Icons.sync),
+              title: const Text('立即同步'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _syncWithCloud(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text('断开连接', style: TextStyle(color: Colors.red)),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                await context.read<NutstoreService>().clearCredentials();
+                if (mounted) _showToast('已断开坚果云连接');
+              },
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context), child: const Text('确定'))
-        ],
       ),
     );
   }
@@ -1737,172 +1238,34 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => HistoryScreen(
+        builder: (_) => HistoryPage(
           onExport: () => _exportToExcel(context),
-          onSync: () => _syncWithCloud(context),
+          onSync: () {
+            final nutstore = context.read<NutstoreService>();
+            if (nutstore.isConnected) {
+              _showCloudMenu(context);
+            } else {
+              _showCloudLoginDialog(context);
+            }
+          },
         ),
       ),
     );
   }
 
-  void _showThemeSelector(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => Consumer<ThemeProvider>(
-        builder: (context, themeProvider, child) {
-          final themeNames = ['远山青', '萤石黑', '珠玉白', '活力橙', '全透明'];
-          final List<Color> themeColors = [
-            const Color(0xFF3AB8C7),
-            const Color(0xFF007AFF),
-            const Color(0xFF4A6FA5),
-            const Color(0xFFFF9500),
-            Colors.white,
-          ];
-          final List<LinearGradient?> gradients = [
-            const LinearGradient(
-                colors: [Color(0xFF3AB8C7), Color(0xFF2E8B9E)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight),
-            const LinearGradient(
-                colors: [Color(0xFF1C1C1E), Color(0xFF2C2C2E)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight),
-            const LinearGradient(
-                colors: [Color(0xFFFDFBF7), Color(0xFFF0EDE5)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight),
-            const LinearGradient(
-                colors: [Color(0xFFFF9500), Color(0xFFFF6B00)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight),
-            null,
-          ];
-          final themeDescriptions = [
-            '青绿渐变 · 清新自然',
-            '玻璃光泽 · 深邃纯黑',
-            '汉白玉渐变 · 温润护眼',
-            '活力渐变 · 热情奔放',
-            '晶莹剔透 · 仿真玻璃',
-          ];
-
-          return SafeArea(
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('选择主题',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  const Text('不同主题会改变整体配色方案',
-                      style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  const SizedBox(height: 20),
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: themeNames.length,
-                    itemBuilder: (context, index) {
-                      final isSelected =
-                          themeProvider.selectedThemeIndex == index;
-                      final bool isJadeWhite = index == 2;
-                      final bool isGlass = index == 4;
-                      final bool isLightTheme =
-                          Theme.of(context).brightness == Brightness.light;
-                      final Color textColor =
-                          isLightTheme ? Colors.black87 : Colors.white;
-                      return GestureDetector(
-                        onTap: () {
-                          themeProvider.setTheme(index);
-                          Navigator.pop(context);
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            gradient: isGlass ? null : gradients[index],
-                            color: isGlass
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : null,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isSelected
-                                  ? (isJadeWhite ? Colors.blue : Colors.white)
-                                  : (isGlass
-                                      ? Colors.black
-                                      : Colors.transparent),
-                              width: isGlass && !isSelected ? 1 : 3,
-                            ),
-                            boxShadow: isSelected
-                                ? [
-                                    BoxShadow(
-                                        color: themeColors[index]
-                                            .withValues(alpha: 0.3),
-                                        blurRadius: 8,
-                                        spreadRadius: 2)
-                                  ]
-                                : null,
-                            backgroundBlendMode:
-                                isGlass ? BlendMode.srcOver : null,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(themeNames[index],
-                                      style: TextStyle(
-                                          color: isJadeWhite
-                                              ? Colors.black87
-                                              : textColor,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold)),
-                                  const SizedBox(width: 8),
-                                  if (isSelected)
-                                    Icon(Icons.check_circle,
-                                        color: isJadeWhite
-                                            ? Colors.blue
-                                            : Colors.white,
-                                        size: 20),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(themeDescriptions[index],
-                                  style: TextStyle(
-                                      color: isJadeWhite
-                                          ? Colors.black54
-                                          : textColor.withValues(alpha: 0.7),
-                                      fontSize: 12)),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('关闭')),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+  void _showThemeGallery(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ThemeGalleryPage()),
     );
   }
 
   void _showToast(String message, {bool isError = false}) {
-    if (message.trim().isEmpty) message = '操作完成';
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message,
-            style: const TextStyle(color: Colors.white, fontSize: 14)),
-        backgroundColor: isError ? Colors.red : Colors.green,
-        duration: const Duration(seconds: 2),
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -1919,6 +1282,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       repsController: repsControllers[index],
       feelingController: feelingControllers[index],
       supplementController: supplementControllers[index],
+      canRemove: projects.length > 1,
+      onRemove: () => _removeProjectAt(index),
     );
   }
 
@@ -1935,31 +1300,33 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     });
   }
 
-  void _removeProject() {
-    if (projects.length > 1) {
-      setState(() {
-        projects.removeLast();
-        nameControllers.removeLast().dispose();
-        weightControllers.removeLast().dispose();
-        setsControllers.removeLast().dispose();
-        repsControllers.removeLast().dispose();
-        feelingControllers.removeLast().dispose();
-        supplementControllers.removeLast().dispose();
-        partNotifiers.removeLast();
-      });
-    }
+  void _removeProjectAt(int index) {
+    if (projects.length <= 1) return;
+    setState(() {
+      projects.removeAt(index);
+      nameControllers.removeAt(index).dispose();
+      weightControllers.removeAt(index).dispose();
+      setsControllers.removeAt(index).dispose();
+      repsControllers.removeAt(index).dispose();
+      feelingControllers.removeAt(index).dispose();
+      supplementControllers.removeAt(index).dispose();
+      partNotifiers.removeAt(index).dispose();
+    });
   }
 
   void _initializeControllers() {
     _clearControllers();
-    for (var project in projects) {
+    for (final project in projects) {
       nameControllers.add(TextEditingController(text: project.name));
       weightControllers.add(TextEditingController(
-          text: project.weight == 0 ? '' : project.weight.toString()));
+        text: project.weight == 0 ? '' : project.weight.toString(),
+      ));
       setsControllers.add(TextEditingController(
-          text: project.sets == 0 ? '' : project.sets.toString()));
+        text: project.sets == 0 ? '' : project.sets.toString(),
+      ));
       repsControllers.add(TextEditingController(
-          text: project.repsPerSet == 0 ? '' : project.repsPerSet.toString()));
+        text: project.repsPerSet == 0 ? '' : project.repsPerSet.toString(),
+      ));
       feelingControllers.add(TextEditingController(text: project.feeling));
       supplementControllers
           .add(TextEditingController(text: project.supplement));
@@ -1968,23 +1335,26 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _clearControllers() {
-    for (var c in nameControllers) {
+    for (final c in nameControllers) {
       c.dispose();
     }
-    for (var c in weightControllers) {
+    for (final c in weightControllers) {
       c.dispose();
     }
-    for (var c in setsControllers) {
+    for (final c in setsControllers) {
       c.dispose();
     }
-    for (var c in repsControllers) {
+    for (final c in repsControllers) {
       c.dispose();
     }
-    for (var c in feelingControllers) {
+    for (final c in feelingControllers) {
       c.dispose();
     }
-    for (var c in supplementControllers) {
+    for (final c in supplementControllers) {
       c.dispose();
+    }
+    for (final n in partNotifiers) {
+      n.dispose();
     }
     nameControllers.clear();
     weightControllers.clear();
@@ -1995,1143 +1365,532 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     partNotifiers.clear();
   }
 
+  Widget _quickDateChip(String label, int daysAgo, AppThemeSpec spec) {
+    final date = DateTime.now().subtract(Duration(days: daysAgo));
+    final active = _isSameDay(date, selectedDate);
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _jumpToDate(date),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: active
+                ? spec.primary.withValues(alpha: .18)
+                : spec.textPrimary.withValues(alpha: .04),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: active
+                  ? spec.primary.withValues(alpha: .45)
+                  : spec.textPrimary.withValues(alpha: .06),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: active ? spec.primary : spec.textSecondary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dateCard(
+    BuildContext context,
+    WorkoutProvider provider,
+    AppThemeSpec spec,
+  ) {
+    final hasRecord =
+        provider.records.any((r) => _isSameDay(r.date, selectedDate));
+    final sessionNumber = provider.sessionNumberForDate(selectedDate);
+    return GlassPanel(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              GradientIconBadge(
+                icon: Icons.event_available_rounded,
+                colors: [spec.primary, spec.secondary],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '训练日期',
+                      style: TextStyle(
+                        color: spec.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${DateFormat('yyyy年M月d日').format(selectedDate)} · ${weekdayLabel(selectedDate)}',
+                      style: TextStyle(
+                        color: spec.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Pill(
+                label: hasRecord
+                    ? '第 $sessionNumber 次 · 合并'
+                    : '第 $sessionNumber 次',
+                icon: Icons.tag_rounded,
+                filled: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => _selectDate(context),
+              child: Container(
+                height: 54,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: spec.textPrimary.withValues(alpha: .04),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: spec.primary.withValues(alpha: .28),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_month_rounded,
+                        color: spec.primary, size: 21),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        DateFormat('yyyy-MM-dd').format(selectedDate),
+                        style: TextStyle(
+                          color: spec.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '更换日期',
+                      style: TextStyle(
+                        color: spec.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.keyboard_arrow_down_rounded,
+                        color: spec.textSecondary),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _quickDateChip('今天', 0, spec),
+              const SizedBox(width: 8),
+              _quickDateChip('昨天', 1, spec),
+              const SizedBox(width: 8),
+              _quickDateChip('前天', 2, spec),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final duration = DateTime.now().difference(firstWorkoutDate);
-    final theme = Theme.of(context);
-    final isLight = theme.brightness == Brightness.light;
-    final isGlass = theme.scaffoldBackgroundColor == Colors.transparent;
-    final inputBorder =
-        theme.inputDecorationTheme.border ?? const OutlineInputBorder();
-    final enabledBorder =
-        theme.inputDecorationTheme.enabledBorder ?? inputBorder;
+    final spec = context.watch<ThemeProvider>().currentSpec;
+    final provider = context.watch<WorkoutProvider>();
+    final now = DateTime.now();
+    final weekSessions = provider.records.where((r) {
+      final diff = now.difference(r.date).inDays;
+      return diff >= 0 && diff < 7;
+    }).length;
+    final totalWork =
+        provider.records.fold<double>(0, (sum, r) => sum + r.totalWork);
+    final recent = provider.sortedRecords.take(3).toList();
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        title: null,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.analytics),
-            onPressed: () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const CoachAnalysisPage()));
-            },
-            tooltip: 'AI分析',
-          ),
-          IconButton(
-            icon: const Icon(Icons.history),
-            onPressed: () => _showHistory(context),
-            tooltip: '历史记录',
-          ),
-          IconButton(
-            icon: const Icon(Icons.palette),
-            onPressed: () => _showThemeSelector(context),
-            tooltip: '切换主题',
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const SettingsPage()));
-            },
-            tooltip: '设置',
-          ),
-          Consumer<NutstoreService>(
-            builder: (context, nutstore, child) {
-              return IconButton(
-                icon: Icon(
-                  nutstore.isConnected ? Icons.cloud_done : Icons.cloud,
-                  color: nutstore.isConnected ? Colors.green : null,
-                ),
-                onPressed: () {
-                  if (nutstore.isConnected) {
-                    _showCloudMenu(context);
-                  } else {
-                    _showCloudLoginDialog(context);
-                  }
-                },
-                tooltip: '云服务',
-              );
-            },
-          ),
-          if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2)),
-            ),
-        ],
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final parentSize = constraints.biggest;
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              _isLoading
-                  ? const Center(
-                      child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                          CircularProgressIndicator(),
-                          SizedBox(height: 20),
-                          Text('处理中...')
-                        ]))
-                  : Consumer<WorkoutProvider>(
-                      builder: (context, provider, child) {
-                        return SingleChildScrollView(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            children: [
-                              Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text('健身坚持统计',
-                                              style: const TextStyle(
-                                                  fontFamily: 'SimSun',
-                                                  fontSize: 20,
-                                                  fontWeight: FontWeight.bold)),
-                                          const SizedBox(height: 4),
-                                          Text('每一次努力都值得记录',
-                                              style: TextStyle(
-                                                  fontFamily: 'SimSun',
-                                                  color: Colors.grey[600])),
-                                        ],
-                                      ),
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        children: [
-                                          GestureDetector(
-                                            onTap: () async {
-                                              final picked =
-                                                  await showDatePicker(
-                                                context: context,
-                                                initialDate: firstWorkoutDate,
-                                                firstDate: DateTime(2020),
-                                                lastDate: DateTime.now(),
-                                              );
-                                              if (picked != null) {
-                                                final time =
-                                                    await showTimePicker(
-                                                  context: context,
-                                                  initialTime:
-                                                      TimeOfDay.fromDateTime(
-                                                          firstWorkoutDate),
-                                                );
-                                                if (time != null) {
-                                                  final newDate = DateTime(
-                                                      picked.year,
-                                                      picked.month,
-                                                      picked.day,
-                                                      time.hour,
-                                                      time.minute);
-                                                  final prefs =
-                                                      await SharedPreferences
-                                                          .getInstance();
-                                                  await prefs.setString(
-                                                      'first_workout_date',
-                                                      newDate
-                                                          .toIso8601String());
-                                                  firstWorkoutDate = newDate;
-                                                  setState(() {});
-                                                  _showToast(
-                                                      '起始日期已更新，坚持天数已重新计算');
-                                                }
-                                              }
-                                            },
-                                            child: Text('${duration.inDays} 天',
-                                                style: TextStyle(
-                                                    fontSize: 32,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Theme.of(context)
-                                                        .primaryColor)),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                              '${duration.inHours % 24}小时 ${duration.inMinutes % 60}分钟',
-                                              style: TextStyle(
-                                                  fontFamily: 'SimSun',
-                                                  color: Colors.grey[600])),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: GestureDetector(
-                                      onTap: () => _selectDate(context),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).cardColor,
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          border: enabledBorder.borderSide !=
-                                                  BorderSide.none
-                                              ? Border.all(
-                                                  color: enabledBorder
-                                                      .borderSide.color,
-                                                  width: enabledBorder
-                                                      .borderSide.width)
-                                              : null,
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.calendar_today,
-                                                size: 20,
-                                                color: Theme.of(context)
-                                                    .primaryColor),
-                                            const SizedBox(width: 8),
-                                            Flexible(
-                                              child: Text(
-                                                dateController.text,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            const Icon(Icons.arrow_drop_down),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 20),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: sessionController,
-                                      focusNode: _sessionFocusNode,
-                                      keyboardType: TextInputType.number,
-                                      decoration: const InputDecoration(
-                                        hintText: '第几次训练',
-                                        border: OutlineInputBorder(),
-                                      ),
-                                      onChanged: (value) {
-                                        if (value.isEmpty) {
-                                          sessionNumber = null;
-                                        } else {
-                                          sessionNumber = int.tryParse(value);
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              ConstrainedBox(
-                                constraints:
-                                    const BoxConstraints(minHeight: 200),
-                                child: ListView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: projects.length,
-                                  itemBuilder: (context, index) =>
-                                      _buildProjectCard(index),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  ElevatedButton.icon(
-                                      onPressed: _addProject,
-                                      icon: const Icon(Icons.add),
-                                      label: const Text('添加项目')),
-                                  const SizedBox(width: 20),
-                                  ElevatedButton.icon(
-                                    onPressed: _removeProject,
-                                    icon: const Icon(Icons.remove),
-                                    label: const Text('删除项目'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                          Theme.of(context).cardColor,
-                                      foregroundColor:
-                                          isLight ? Colors.black87 : null,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-                              ElevatedButton.icon(
-                                onPressed: () => _saveWorkout(context),
-                                icon: const Icon(Icons.save),
-                                label: const Text('保存记录'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF34C759),
-                                  minimumSize: const Size(double.infinity, 48),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-              if (Provider.of<SettingsProvider>(context).showDraggableCat)
-                DraggableCat(
-                  catSize: 50.0,
-                  githubUrl: 'https://github.com/MrKedow/Fitness-Tracker',
-                  parentSize: parentSize,
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-// ==================== 历史记录页面（与原版相同，无变化） ====================
-class HistoryScreen extends StatefulWidget {
-  final VoidCallback onExport;
-  final VoidCallback onSync;
-  const HistoryScreen({
-    super.key,
-    required this.onExport,
-    required this.onSync,
-  });
-  @override
-  State<HistoryScreen> createState() => _HistoryScreenState();
-}
-
-class _HistoryScreenState extends State<HistoryScreen> {
-  WorkoutRecord? _recordToEdit;
-  final ScrollController _horizontalScrollController = ScrollController();
-  bool _showHorizontalScrollbar = false;
-  final Set<int> _collapsedColumns = {};
-  final List<String> _columnNames = ['日期', '第几次', '项目详情', '总做功', '操作'];
-
-  @override
-  void dispose() {
-    _horizontalScrollController.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
-      // 应用即将退出，强制保存
-      final provider = Provider.of<WorkoutProvider>(context, listen: false);
-      // 注意：这里的保存是异步的，但无法等待，可考虑使用同步方式（不推荐）
-      // 更好的做法是使用 Provider 的自动保存机制（每次变更都保存）
-    }
-  }
-
-  void _toggleColumn(int index) {
-    final visibleCount = _columnNames.length - _collapsedColumns.length;
-    if (visibleCount == 1 && !_collapsedColumns.contains(index)) {
-      _expandAllColumns();
-      return;
-    }
-    setState(() {
-      if (_collapsedColumns.contains(index)) {
-        _collapsedColumns.remove(index);
-      } else {
-        _collapsedColumns.add(index);
-      }
-    });
-  }
-
-  void _expandAllColumns() {
-    setState(() {
-      _collapsedColumns.clear();
-    });
-  }
-
-  void _collapseCurrentColumn(int index) {
-    final visibleCount = _columnNames.length - _collapsedColumns.length;
-    if (visibleCount == 1 && !_collapsedColumns.contains(index)) {
-      _showToast('至少保留一列');
-      return;
-    }
-    setState(() {
-      if (!_collapsedColumns.contains(index)) {
-        _collapsedColumns.add(index);
-      }
-    });
-  }
-
-  void _showContextMenuForColumn(TapDownDetails details, int columnIndex) {
-    final RenderBox overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox;
-    final position = RelativeRect.fromRect(
-      details.globalPosition & const Size(40, 40),
-      Offset.zero & overlay.size,
-    );
-    showMenu(
-      context: context,
-      position: position,
-      items: [
-        const PopupMenuItem(value: 'expand', child: Text('展开折叠列')),
-        const PopupMenuItem(value: 'collapse', child: Text('折叠当前列')),
-      ],
-    ).then((value) {
-      if (value == 'expand') {
-        _expandAllColumns();
-      } else if (value == 'collapse') {
-        _collapseCurrentColumn(columnIndex);
-      }
-    });
-  }
-
-  Future<void> _mergeSameDayRecords() async {
-    final provider = Provider.of<WorkoutProvider>(context, listen: false);
-    final shouldMerge = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('整合同一天记录'),
-        content: const Text('将同一天的多条记录合并为一条（项目合并，次数取最大值）。是否继续？'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消')),
-          ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('整合')),
-        ],
-      ),
-    );
-    if (shouldMerge == true) {
-      provider.mergeSameDayRecords();
-      _showToast('已整合同一天的记录');
-    }
-  }
-
-  void _showToast(String message, {bool isError = false}) {
-    if (message.trim().isEmpty) message = '操作完成';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message,
-            style: const TextStyle(color: Colors.white, fontSize: 14)),
-        backgroundColor: isError ? Colors.red : Colors.green,
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _showContextMenu(BuildContext context, WorkoutRecord record) {
-    final RenderBox overlay =
-        Overlay.of(context).context.findRenderObject() as RenderBox;
-    final RenderBox button = context.findRenderObject() as RenderBox;
-    final RelativeRect position = RelativeRect.fromRect(
-      Rect.fromPoints(
-          button.localToGlobal(Offset.zero, ancestor: overlay),
-          button.localToGlobal(button.size.bottomRight(Offset.zero),
-              ancestor: overlay)),
-      Offset.zero & overlay.size,
-    );
-    showMenu(
-      context: context,
-      position: position,
-      items: [
-        PopupMenuItem(
-          value: 'edit',
-          child: const Row(children: [
-            Icon(Icons.edit, size: 20),
-            SizedBox(width: 8),
-            Text('编辑')
-          ]),
-          onTap: () {
-            Future.delayed(Duration.zero, () {
-              if (mounted) {
-                _editRecord(record);
-              }
-            });
-          },
-        ),
-        PopupMenuItem(
-          value: 'delete',
-          child: const Row(children: [
-            Icon(Icons.delete, color: Colors.red, size: 20),
-            SizedBox(width: 8),
-            Text('删除', style: TextStyle(color: Colors.red))
-          ]),
-          onTap: () {
-            Future.delayed(Duration.zero, () {
-              if (mounted) {
-                _deleteRecord(context, record);
-              }
-            });
-          },
-        ),
-      ],
-    );
-  }
-
-  void _editRecord(WorkoutRecord record) {
-    setState(() {
-      _recordToEdit = WorkoutRecord(
-          id: record.id,
-          date: record.date,
-          sessionNumber: record.sessionNumber,
-          projects: record.projects.map((p) => p.copy()).toList(),
-          timestamp: record.timestamp);
-    });
-    _showEditDialog();
-  }
-
-  void _showEditDialog() {
-    if (_recordToEdit == null) return;
-    final record = _recordToEdit!;
-    final dateController = TextEditingController(
-        text: DateFormat('yyyy-MM-dd').format(record.date));
-    final sessionController =
-        TextEditingController(text: record.sessionNumber.toString());
-    final List<TextEditingController> nameControllers = [];
-    final List<TextEditingController> weightControllers = [];
-    final List<TextEditingController> setsControllers = [];
-    final List<TextEditingController> repsControllers = [];
-    final List<TextEditingController> feelingControllers = [];
-    final List<TextEditingController> supplementControllers = [];
-    final List<ValueNotifier<String>> partNotifiers = [];
-    for (var project in record.projects) {
-      nameControllers.add(TextEditingController(text: project.name));
-      weightControllers
-          .add(TextEditingController(text: project.weight.toString()));
-      setsControllers.add(TextEditingController(text: project.sets.toString()));
-      repsControllers
-          .add(TextEditingController(text: project.repsPerSet.toString()));
-      feelingControllers.add(TextEditingController(text: project.feeling));
-      supplementControllers
-          .add(TextEditingController(text: project.supplement));
-      partNotifiers.add(ValueNotifier<String>(project.part));
-    }
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          void addProject() {
-            setState(() {
-              record.projects.add(WorkoutProject.empty());
-              nameControllers.add(TextEditingController());
-              weightControllers.add(TextEditingController());
-              setsControllers.add(TextEditingController());
-              repsControllers.add(TextEditingController());
-              feelingControllers.add(TextEditingController());
-              supplementControllers.add(TextEditingController());
-              partNotifiers.add(ValueNotifier<String>('胸'));
-            });
-          }
-
-          void removeProject() {
-            if (record.projects.length > 1) {
-              setState(() {
-                record.projects.removeLast();
-                nameControllers.removeLast();
-                weightControllers.removeLast();
-                setsControllers.removeLast();
-                repsControllers.removeLast();
-                feelingControllers.removeLast();
-                supplementControllers.removeLast();
-                partNotifiers.removeLast();
-              });
-            }
-          }
-
-          Future<void> selectDate() async {
-            final DateTime? picked = await showDatePicker(
-              context: context,
-              initialDate: record.date,
-              firstDate: DateTime(2020),
-              lastDate: DateTime.now(),
-              builder: (context, child) {
-                final isGlass = Theme.of(context).scaffoldBackgroundColor ==
-                    Colors.transparent;
-                return Theme(
-                  data: Theme.of(context).copyWith(
-                    dialogTheme: DialogThemeData(
-                        backgroundColor: isGlass
-                            ? Colors.grey.shade800.withValues(alpha: 0.85)
-                            : null),
-                  ),
-                  child: child!,
-                );
-              },
-            );
-            if (picked != null && picked != record.date) {
-              setState(() {
-                record.date = picked;
-                dateController.text = DateFormat('yyyy-MM-dd').format(picked);
-              });
-            }
-          }
-
-          Widget buildProjectCard(int index) {
-            return ValueListenableBuilder<String>(
-              valueListenable: partNotifiers[index],
-              builder: (context, part, child) {
-                final weight =
-                    double.tryParse(weightControllers[index].text) ?? 0;
-                final sets = int.tryParse(setsControllers[index].text) ?? 0;
-                final reps = int.tryParse(repsControllers[index].text) ?? 0;
-                final work = WorkoutProject(
-                        name: '',
-                        part: part,
-                        weight: weight,
-                        sets: sets,
-                        repsPerSet: reps,
-                        feeling: '',
-                        supplement: '')
-                    .calculateWork();
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: Theme.of(context)
-                            .primaryColor
-                            .withValues(alpha: 0.3)),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(children: [
-                        Text('项目 ${index + 1}',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
-                        const Spacer(),
-                        if (record.projects.length > 1)
-                          IconButton(
-                              icon: const Icon(Icons.close, size: 20),
-                              onPressed: () {
-                                setState(() {
-                                  if (record.projects.length > 1) {
-                                    record.projects.removeAt(index);
-                                    nameControllers.removeAt(index);
-                                    weightControllers.removeAt(index);
-                                    setsControllers.removeAt(index);
-                                    repsControllers.removeAt(index);
-                                    feelingControllers.removeAt(index);
-                                    supplementControllers.removeAt(index);
-                                    partNotifiers.removeAt(index);
-                                  }
-                                });
-                              })
-                      ]),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                              child: TextField(
-                                  controller: nameControllers[index],
-                                  decoration: const InputDecoration(
-                                      labelText: '项目名称',
-                                      border: OutlineInputBorder()),
-                                  onChanged: (value) =>
-                                      record.projects[index].name = value)),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: part,
-                              decoration: const InputDecoration(
-                                  labelText: '锻炼部位',
-                                  border: OutlineInputBorder()),
-                              items: const ['胸', '背', '腿', '肩', '腹']
-                                  .map((part) => DropdownMenuItem(
-                                      value: part, child: Text(part)))
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  partNotifiers[index].value = value;
-                                  record.projects[index].part = value;
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                              child: TextField(
-                                  controller: weightControllers[index],
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                      labelText: '重量 (kg)',
-                                      border: OutlineInputBorder(),
-                                      suffixText: 'kg'),
-                                  onChanged: (value) => record.projects[index]
-                                      .weight = double.tryParse(value) ?? 0)),
-                          const SizedBox(width: 16),
-                          Expanded(
-                              child: TextField(
-                                  controller: setsControllers[index],
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                      labelText: '组数',
-                                      border: OutlineInputBorder()),
-                                  onChanged: (value) => record.projects[index]
-                                      .sets = int.tryParse(value) ?? 0)),
-                          const SizedBox(width: 16),
-                          Expanded(
-                              child: TextField(
-                                  controller: repsControllers[index],
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                      labelText: '每组数量',
-                                      border: OutlineInputBorder()),
-                                  onChanged: (value) => record.projects[index]
-                                      .repsPerSet = int.tryParse(value) ?? 0)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(children: [
-                        const Icon(Icons.bar_chart, color: Colors.orange),
-                        const SizedBox(width: 8),
-                        const Text('做功:',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(width: 8),
-                        Text('${work.toStringAsFixed(0)} J',
-                            style: const TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.bold))
-                      ]),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                              child: TextField(
-                                  controller: feelingControllers[index],
-                                  decoration: const InputDecoration(
-                                      labelText: '感受',
-                                      border: OutlineInputBorder()),
-                                  onChanged: (value) =>
-                                      record.projects[index].feeling = value)),
-                          const SizedBox(width: 16),
-                          Expanded(
-                              child: TextField(
-                                  controller: supplementControllers[index],
-                                  decoration: const InputDecoration(
-                                      labelText: '补剂',
-                                      border: OutlineInputBorder()),
-                                  onChanged: (value) => record
-                                      .projects[index].supplement = value)),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          }
-
-          return AlertDialog(
-            title: const Row(children: [
-              Icon(Icons.edit, color: Colors.blue),
-              SizedBox(width: 10),
-              Text('编辑记录')
-            ]),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('📅 日期'),
-                            const SizedBox(height: 8),
-                            GestureDetector(
-                              onTap: selectDate,
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                    color: Theme.of(context).cardColor,
-                                    borderRadius: BorderRadius.circular(12)),
-                                child: Row(children: [
-                                  Icon(Icons.calendar_today,
-                                      size: 20,
-                                      color: Theme.of(context).primaryColor),
-                                  const SizedBox(width: 8),
-                                  Text(dateController.text),
-                                  const Spacer(),
-                                  const Icon(Icons.arrow_drop_down)
-                                ]),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('#️⃣ 第几次训练'),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: sessionController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                  hintText: '输入数字（可选）',
-                                  border: OutlineInputBorder()),
-                              onChanged: (value) {
-                                if (value.isEmpty) {
-                                  setState(() => record.sessionNumber = null);
-                                } else {
-                                  final num = int.tryParse(value);
-                                  if (num != null) {
-                                    setState(() => record.sessionNumber = num);
-                                  }
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  ...List.generate(record.projects.length,
-                      (index) => buildProjectCard(index)),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      ElevatedButton.icon(
-                          onPressed: addProject,
-                          icon: const Icon(Icons.add),
-                          label: const Text('添加项目')),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                          onPressed: removeProject,
-                          icon: const Icon(Icons.remove),
-                          label: const Text('删除项目'),
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: Theme.of(context).cardColor)),
-                    ],
+        titleSpacing: 16,
+        title: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                gradient: spec.heroGradient,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: spec.primary.withValues(alpha: .28),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
+              child: const Icon(Icons.fitness_center_rounded,
+                  color: Colors.white, size: 20),
             ),
-            actions: [
-              TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _recordToEdit = null;
-                    });
-                    Navigator.pop(context);
-                  },
-                  child: const Text('取消')),
-              ElevatedButton(
-                onPressed: () {
-                  final provider =
-                      Provider.of<WorkoutProvider>(context, listen: false);
-                  provider.updateRecord(record.id, record);
-                  setState(() {
-                    _recordToEdit = null;
-                  });
-                  Navigator.pop(context);
-                  _showToast('记录更新成功！');
-                },
-                child: const Text('保存'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  void _deleteRecord(BuildContext context, WorkoutRecord record) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(children: [
-          Icon(Icons.warning, color: Colors.orange),
-          SizedBox(width: 10),
-          Text('确认删除')
-        ]),
-        content: const Text('确定要删除这条记录吗？此操作不可撤销。'),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '铁镌',
+                  style: TextStyle(
+                    color: spec.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                  ),
+                ),
+                Text(
+                  'IRON ETCH',
+                  style: TextStyle(
+                    color: spec.textSecondary,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2.1,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context), child: const Text('取消')),
-          ElevatedButton(
+          IconButton(
+            tooltip: 'AI 训练舱',
             onPressed: () {
-              final provider =
-                  Provider.of<WorkoutProvider>(context, listen: false);
-              provider.deleteRecord(record.id);
-              Navigator.pop(context);
-              _showToast('记录已删除');
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CoachAnalysisPage()),
+              );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('删除'),
+            icon: const Icon(Icons.auto_awesome_rounded),
           ),
+          IconButton(
+            tooltip: '训练历史',
+            onPressed: () => _showHistory(context),
+            icon: const Icon(Icons.history_rounded),
+          ),
+          IconButton(
+            tooltip: '主题工坊',
+            onPressed: () => _showThemeGallery(context),
+            icon: const Icon(Icons.palette_outlined),
+          ),
+          IconButton(
+            tooltip: '设置',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsPage()),
+              );
+            },
+            icon: const Icon(Icons.settings_outlined),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(
+                18,
+                6,
+                18,
+                34 + MediaQuery.paddingOf(context).bottom,
+              ),
+              children: [
+                StatusBanner(
+                  streakDays: duration.inDays,
+                  streakHours: duration.inHours % 24,
+                  streakMinutes: duration.inMinutes % 60,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: StatTile(
+                        label: '累计训练',
+                        value: '${provider.totalSessions}',
+                        unit: '次',
+                        icon: Icons.fitness_center_rounded,
+                        accent: spec.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: StatTile(
+                        label: '本周训练',
+                        value: '$weekSessions',
+                        unit: '次',
+                        icon: Icons.local_fire_department_rounded,
+                        accent: const Color(0xFFF97316),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: StatTile(
+                        label: '累计做功',
+                        value: formatCompact(totalWork),
+                        unit: 'J',
+                        icon: Icons.bolt_rounded,
+                        accent: spec.secondary,
+                      ),
+                    ),
+                  ],
+                ),
+                SectionHeader(
+                  title: '记录今天的铁',
+                  subtitle: '训练次数已按日期自动编号，不再需要手动填写',
+                  trailing: Pill(
+                    label: '${projects.length} 个动作',
+                    icon: Icons.list_alt_rounded,
+                  ),
+                ),
+                _dateCard(context, provider, spec),
+                const SizedBox(height: 14),
+                for (var i = 0; i < projects.length; i++) _buildProjectCard(i),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _addProject,
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('添加动作'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          side: BorderSide(
+                            color: spec.primary.withValues(alpha: .32),
+                          ),
+                          foregroundColor: spec.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                GestureDetector(
+                  onTap: () => _saveWorkout(context),
+                  child: Container(
+                    height: 58,
+                    decoration: BoxDecoration(
+                      gradient: spec.heroGradient,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: spec.primary.withValues(alpha: .34),
+                          blurRadius: 24,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check_circle_rounded,
+                            color: Colors.white, size: 22),
+                        SizedBox(width: 9),
+                        Text(
+                          '保存训练记录',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: .4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SectionHeader(
+                  title: '最近训练',
+                  subtitle: '快速回看最近的训练节奏',
+                  trailing: TextButton(
+                    onPressed: () => _showHistory(context),
+                    child: const Text('全部记录'),
+                  ),
+                ),
+                if (recent.isEmpty)
+                  GlassPanel(
+                    padding: const EdgeInsets.all(22),
+                    child: Column(
+                      children: [
+                        Icon(Icons.self_improvement_rounded,
+                            color: spec.primary, size: 34),
+                        const SizedBox(height: 10),
+                        Text(
+                          '还没有训练记录',
+                          style: TextStyle(
+                            color: spec.textPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '填写上方的动作和重量，保存你的第一次铁镌。',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: spec.textSecondary,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  for (final record in recent)
+                    _RecentRecordCard(
+                      record: record,
+                      onTap: () => _showHistory(context),
+                    ),
+              ],
+            ),
+          ),
+          if (_isLoading)
+            Positioned.fill(
+              child: ColoredBox(
+                color: spec.background.withValues(alpha: .55),
+                child: const Center(child: CircularProgressIndicator()),
+              ),
+            ),
         ],
       ),
     );
   }
+}
+
+class _RecentRecordCard extends StatelessWidget {
+  final WorkoutRecord record;
+  final VoidCallback onTap;
+
+  const _RecentRecordCard({required this.record, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final isGlassTheme =
-        Theme.of(context).scaffoldBackgroundColor == Colors.transparent;
-    final records = Provider.of<WorkoutProvider>(context).records;
-
-    if (_collapsedColumns.length == _columnNames.length) {
-      _collapsedColumns.clear();
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('历史记录'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: widget.onExport,
-            tooltip: '导出数据',
+    final spec = context.watch<ThemeProvider>().currentSpec;
+    final parts = record.projects.map((p) => p.part).toSet().toList();
+    return GlassPanel(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      radius: 18,
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: spec.primary.withValues(alpha: .13),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '${record.date.day}',
+                  style: TextStyle(
+                    color: spec.primary,
+                    fontSize: 17,
+                    height: 1,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  '${record.date.month}月',
+                  style: TextStyle(
+                    color: spec.textSecondary,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.cloud_sync),
-            onPressed: widget.onSync,
-            tooltip: '云同步',
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '第 ${record.sessionNumber ?? '-'} 次训练',
+                      style: TextStyle(
+                        color: spec.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    for (final part in parts.take(2))
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Pill(label: part, color: spec.secondary),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  record.projects
+                      .map((p) => p.name)
+                      .where((n) => n.isNotEmpty)
+                      .join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: spec.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                formatCompact(record.totalWork),
+                style: TextStyle(
+                  color: spec.primary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                ),
+              ),
+              Text(
+                '焦耳',
+                style: TextStyle(color: spec.textSecondary, fontSize: 9),
+              ),
+            ],
           ),
         ],
       ),
-      body: records.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.history, size: 80, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text('暂无历史记录',
-                      style: TextStyle(fontSize: 18, color: Colors.grey[600])),
-                  const SizedBox(height: 8),
-                  Text('开始您的第一次训练吧！',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[500])),
-                ],
-              ),
-            )
-          : SingleChildScrollView(
-              scrollDirection: Axis.vertical,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Theme(
-                  data: Theme.of(context).copyWith(
-                    cardColor: isGlassTheme
-                        ? Colors.grey.shade800.withValues(alpha: 0.5)
-                        : null,
-                    dividerColor: Colors.grey.withValues(alpha: 0.2),
-                  ),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border:
-                          Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-                    ),
-                    child: DataTable(
-                      columnSpacing: 4,
-                      headingRowHeight: 48,
-                      dataRowMinHeight: 56,
-                      dataRowMaxHeight: double.infinity,
-                      headingRowColor: WidgetStateProperty.all(
-                        Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                      ),
-                      columns: _columnNames
-                          .asMap()
-                          .entries
-                          .where(
-                              (entry) => !_collapsedColumns.contains(entry.key))
-                          .map((entry) {
-                        final title = entry.value;
-                        double columnWidth;
-                        switch (entry.key) {
-                          case 0:
-                            columnWidth = 100;
-                            break;
-                          case 1:
-                            columnWidth = 80;
-                            break;
-                          case 2:
-                            columnWidth = 200;
-                            break;
-                          case 3:
-                            columnWidth = 80;
-                            break;
-                          case 4:
-                            columnWidth = 120;
-                            break;
-                          default:
-                            columnWidth = 100;
-                        }
-                        return DataColumn(
-                          label: SizedBox(
-                            width: columnWidth,
-                            child: Center(
-                              child: Text(
-                                title,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 14),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      rows: records.reversed.map((record) {
-                        final dateStr =
-                            DateFormat('yyyy-MM-dd').format(record.date);
-                        final details = record.projects
-                            .map((p) => p.name.isNotEmpty
-                                ? '${p.name} (${p.part}): ${p.sets}组×${p.repsPerSet}个, ${p.weight}kg'
-                                : '')
-                            .where((d) => d.isNotEmpty)
-                            .join('\n');
-                        final cells = <DataCell>[];
-                        if (!_collapsedColumns.contains(0)) {
-                          cells.add(DataCell(
-                            SizedBox(
-                              width: 110,
-                              child: Center(
-                                  child: Text(dateStr,
-                                      textAlign: TextAlign.center)),
-                            ),
-                          ));
-                        }
-                        if (!_collapsedColumns.contains(1)) {
-                          cells.add(DataCell(
-                            SizedBox(
-                              width: 85,
-                              child: Center(
-                                child: Text(
-                                  record.sessionNumber != null
-                                      ? '第${record.sessionNumber}次'
-                                      : '-',
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            ),
-                          ));
-                        }
-                        if (!_collapsedColumns.contains(2)) {
-                          cells.add(DataCell(
-                            SizedBox(
-                              width: 220,
-                              child: Center(
-                                child: Tooltip(
-                                  message: details,
-                                  child: Text(details,
-                                      softWrap: true,
-                                      overflow: TextOverflow.visible,
-                                      textAlign: TextAlign.center),
-                                ),
-                              ),
-                            ),
-                          ));
-                        }
-                        if (!_collapsedColumns.contains(3)) {
-                          cells.add(DataCell(
-                            SizedBox(
-                              width: 110,
-                              child: Center(
-                                child: Text(
-                                  '${(record.totalWork / 1000).toStringAsFixed(1)}千焦',
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            ),
-                          ));
-                        }
-                        if (!_collapsedColumns.contains(4)) {
-                          cells.add(DataCell(
-                            SizedBox(
-                              width: 150,
-                              child: Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit,
-                                          size: 20, color: Colors.blue),
-                                      onPressed: () => _editRecord(record),
-                                      tooltip: '编辑',
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete,
-                                          size: 20, color: Colors.red),
-                                      onPressed: () =>
-                                          _deleteRecord(context, record),
-                                      tooltip: '删除',
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.merge_type,
-                                          size: 20),
-                                      onPressed: _mergeSameDayRecords,
-                                      tooltip: '整合同一天记录',
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ));
-                        }
-                        return DataRow(
-                          onLongPress: () => _showContextMenu(context, record),
-                          cells: cells,
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-    );
-  }
-
-  Widget _buildCollapseIcon(int columnIndex, bool isCollapsed) {
-    bool isHovering = false;
-    bool isHoveringIcon = false;
-    return StatefulBuilder(
-      builder: (context, setState) {
-        return MouseRegion(
-          onEnter: (_) => setState(() => isHovering = true),
-          onExit: (_) => setState(() => isHovering = false),
-          child: GestureDetector(
-            onTap: () => _toggleColumn(columnIndex),
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isHoveringIcon
-                      ? Colors.grey.shade300.withValues(alpha: 0.5)
-                      : Colors.transparent),
-              child: MouseRegion(
-                onEnter: (_) => setState(() => isHoveringIcon = true),
-                onExit: (_) => setState(() => isHoveringIcon = false),
-                child: Text('↩',
-                    style: TextStyle(
-                        fontSize: 14,
-                        color: isHovering
-                            ? Theme.of(context).primaryColor
-                            : Colors.grey,
-                        fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }
@@ -3146,41 +1905,57 @@ class _ProjectCard extends StatefulWidget {
   final TextEditingController repsController;
   final TextEditingController feelingController;
   final TextEditingController supplementController;
-  const _ProjectCard(
-      {super.key,
-      required this.index,
-      required this.partNotifier,
-      required this.nameController,
-      required this.weightController,
-      required this.setsController,
-      required this.repsController,
-      required this.feelingController,
-      required this.supplementController});
+  final bool canRemove;
+  final VoidCallback onRemove;
+
+  const _ProjectCard({
+    super.key,
+    required this.index,
+    required this.partNotifier,
+    required this.nameController,
+    required this.weightController,
+    required this.setsController,
+    required this.repsController,
+    required this.feelingController,
+    required this.supplementController,
+    required this.canRemove,
+    required this.onRemove,
+  });
+
   @override
   State<_ProjectCard> createState() => _ProjectCardState();
 }
 
 class _ProjectCardState extends State<_ProjectCard> {
-  String _part = '胸';
+  late String _part;
+
+  static const List<String> _parts = ['胸', '背', '腿', '肩', '腹'];
 
   @override
   void initState() {
     super.initState();
     _part = widget.partNotifier.value;
     widget.partNotifier.addListener(_onPartChanged);
+    widget.weightController.addListener(_refresh);
+    widget.setsController.addListener(_refresh);
+    widget.repsController.addListener(_refresh);
   }
 
   void _onPartChanged() {
-    if (mounted) {
-      setState(() {
-        _part = widget.partNotifier.value;
-      });
-    }
+    if (!mounted) return;
+    setState(() => _part = widget.partNotifier.value);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     widget.partNotifier.removeListener(_onPartChanged);
+    widget.weightController.removeListener(_refresh);
+    widget.setsController.removeListener(_refresh);
+    widget.repsController.removeListener(_refresh);
     super.dispose();
   }
 
@@ -3191,107 +1966,343 @@ class _ProjectCardState extends State<_ProjectCard> {
     const travelDistances = {'肩': 0.6, '背': 0.6, '腿': 0.7, '胸': 0.6, '腹': 0};
     if (_part == '腹') return (sets * reps * 65 * 9.8 * 0.3).toDouble();
     final distance = travelDistances[_part] ?? 0;
-    return (weight * 9.8 * distance * sets * reps);
+    return weight * 9.8 * distance * sets * reps;
+  }
+
+  Widget _label(String text, AppThemeSpec spec) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 2, bottom: 6),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: spec.textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _numberField(
+    AppThemeSpec spec,
+    TextEditingController controller,
+    String label,
+    String hint, {
+    String? suffix,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _label(label, spec),
+        TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: spec.textPrimary,
+            fontWeight: FontWeight.w800,
+            fontSize: 16,
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            suffixText: suffix,
+            suffixStyle: TextStyle(
+              color: spec.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+            isDense: true,
+            filled: true,
+            fillColor: spec.textPrimary.withValues(alpha: .04),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide(
+                color: spec.textPrimary.withValues(alpha: .08),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide(
+                color: spec.textPrimary.withValues(alpha: .08),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide(
+                color: spec.primary.withValues(alpha: .7),
+                width: 1.4,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _textField(
+    AppThemeSpec spec,
+    TextEditingController controller,
+    String label,
+    String hint,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _label(label, spec),
+        TextField(
+          controller: controller,
+          style: TextStyle(color: spec.textPrimary, fontSize: 13.5),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(color: spec.textSecondary, fontSize: 12),
+            isDense: true,
+            filled: true,
+            fillColor: spec.textPrimary.withValues(alpha: .04),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide(
+                color: spec.textPrimary.withValues(alpha: .08),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide(
+                color: spec.textPrimary.withValues(alpha: .08),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: BorderSide(
+                color: spec.primary.withValues(alpha: .7),
+                width: 1.4,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _partChip(String part, AppThemeSpec spec) {
+    final active = part == _part;
+    return GestureDetector(
+      onTap: () {
+        widget.partNotifier.value = part;
+        setState(() => _part = part);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+        decoration: BoxDecoration(
+          color: active
+              ? spec.primary.withValues(alpha: .18)
+              : spec.textPrimary.withValues(alpha: .035),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: active
+                ? spec.primary.withValues(alpha: .45)
+                : spec.textPrimary.withValues(alpha: .07),
+          ),
+        ),
+        child: Text(
+          part,
+          style: TextStyle(
+            color: active ? spec.primary : spec.textSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final spec = context.watch<ThemeProvider>().currentSpec;
     final work = _calculateWork();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+    return GlassPanel(
+      margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-            color: Theme.of(context).primaryColor.withValues(alpha: 0.3)),
-      ),
+      radius: 22,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Text('项目 ${widget.index + 1}',
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))
-          ]),
-          const SizedBox(height: 12),
           Row(
             children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  gradient: spec.heroGradient,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                  child: Text(
+                    '${widget.index + 1}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
-                  child: TextField(
-                      controller: widget.nameController,
-                      decoration: const InputDecoration(
-                          labelText: '项目名称', border: OutlineInputBorder()))),
-              const SizedBox(width: 16),
+                child: TextField(
+                  controller: widget.nameController,
+                  textCapitalization: TextCapitalization.none,
+                  style: TextStyle(
+                    color: spec.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '动作名称，例如：卧推',
+                    hintStyle: TextStyle(
+                      color: spec.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    isDense: true,
+                    filled: true,
+                    fillColor: spec.textPrimary.withValues(alpha: .04),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: BorderSide(
+                        color: spec.textPrimary.withValues(alpha: .08),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: BorderSide(
+                        color: spec.textPrimary.withValues(alpha: .08),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: BorderSide(
+                        color: spec.primary.withValues(alpha: .7),
+                        width: 1.4,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (widget.canRemove) ...[
+                const SizedBox(width: 2),
+                IconButton(
+                  onPressed: widget.onRemove,
+                  tooltip: '删除这个动作',
+                  icon: Icon(
+                    Icons.close_rounded,
+                    color: spec.textSecondary,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              for (final part in _parts) _partChip(part, spec),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: _part,
-                  decoration: const InputDecoration(
-                      labelText: '锻炼部位', border: OutlineInputBorder()),
-                  items: const ['胸', '背', '腿', '肩', '腹']
-                      .map((part) =>
-                          DropdownMenuItem(value: part, child: Text(part)))
-                      .toList(),
-                  onChanged: (value) {
-                    if (value != null) widget.partNotifier.value = value;
-                  },
+                child: _numberField(
+                  spec,
+                  widget.weightController,
+                  '重量',
+                  '0',
+                  suffix: 'kg',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _numberField(
+                  spec,
+                  widget.setsController,
+                  '组数',
+                  '0',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _numberField(
+                  spec,
+                  widget.repsController,
+                  '每组次数',
+                  '0',
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                  child: TextField(
-                      controller: widget.weightController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: '重量 (kg)',
-                          border: OutlineInputBorder(),
-                          suffixText: 'kg'))),
-              const SizedBox(width: 16),
+                child: _textField(
+                  spec,
+                  widget.feelingController,
+                  '训练感受',
+                  '状态、力竭程度…',
+                ),
+              ),
+              const SizedBox(width: 8),
               Expanded(
-                  child: TextField(
-                      controller: widget.setsController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: '组数', border: OutlineInputBorder()))),
-              const SizedBox(width: 16),
-              Expanded(
-                  child: TextField(
-                      controller: widget.repsController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: '每组数量', border: OutlineInputBorder()))),
+                child: _textField(
+                  spec,
+                  widget.supplementController,
+                  '补剂 / 备注',
+                  '可选',
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              const Icon(Icons.bar_chart, color: Colors.orange),
-              const SizedBox(width: 8),
-              const Text('做功:', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(width: 8),
-              Text('${work.toStringAsFixed(0)} J',
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                  child: TextField(
-                      controller: widget.feelingController,
-                      decoration: const InputDecoration(
-                          labelText: '感受', border: OutlineInputBorder()))),
-              const SizedBox(width: 16),
-              Expanded(
-                  child: TextField(
-                      controller: widget.supplementController,
-                      decoration: const InputDecoration(
-                          labelText: '补剂', border: OutlineInputBorder()))),
-            ],
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: spec.primary.withValues(alpha: .07),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.bolt_rounded, size: 16, color: spec.primary),
+                const SizedBox(width: 5),
+                Text(
+                  '预计做功',
+                  style: TextStyle(
+                    color: spec.textSecondary,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${formatCompact(work)} J',
+                  style: TextStyle(
+                    color: spec.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
