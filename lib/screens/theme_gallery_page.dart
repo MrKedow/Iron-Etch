@@ -17,8 +17,7 @@ class ThemeGalleryPage extends StatelessWidget {
     final themeProvider = context.watch<ThemeProvider>();
     final spec = themeProvider.currentSpec;
     final customPath = themeProvider.customBackgroundPath;
-    final hasCustom =
-        customPath != null && File(customPath).existsSync();
+    final hasCustom = customPath != null && File(customPath).existsSync();
 
     return Scaffold(
       appBar: AppBar(
@@ -59,8 +58,8 @@ class ThemeGalleryPage extends StatelessWidget {
                           children: [
                             Text(
                               spec.name,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: spec.onHero,
                                 fontSize: 22,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -69,7 +68,7 @@ class ThemeGalleryPage extends StatelessWidget {
                             Text(
                               spec.subtitle,
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: .72),
+                                color: spec.onHeroMuted,
                                 fontSize: 12,
                               ),
                             ),
@@ -78,7 +77,7 @@ class ThemeGalleryPage extends StatelessWidget {
                       ),
                       Pill(
                         label: spec.isDark ? '深色' : '浅色',
-                        color: Colors.white,
+                        color: spec.onHero,
                         icon: Icons.contrast_rounded,
                       ),
                     ],
@@ -86,15 +85,15 @@ class ThemeGalleryPage extends StatelessWidget {
                   const SizedBox(height: 18),
                   Row(
                     children: [
-                      _colorDot(spec.primary),
-                      _colorDot(spec.secondary),
-                      _colorDot(spec.accent),
-                      _colorDot(spec.card),
+                      _colorDot(spec, spec.primary),
+                      _colorDot(spec, spec.secondary),
+                      _colorDot(spec, spec.accent),
+                      _colorDot(spec, spec.card),
                       const Spacer(),
                       Text(
                         hasCustom ? '叠加自定义背景' : '点击下方主题实时切换',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: .6),
+                          color: spec.onHero.withValues(alpha: .62),
                           fontSize: 10.5,
                         ),
                       ),
@@ -207,8 +206,7 @@ class ThemeGalleryPage extends StatelessWidget {
                             await themeProvider.setCustomBackground(target);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('图片主题已应用')),
+                                const SnackBar(content: Text('图片主题已应用')),
                               );
                             }
                           },
@@ -248,7 +246,7 @@ class ThemeGalleryPage extends StatelessWidget {
     );
   }
 
-  Widget _colorDot(Color color) {
+  Widget _colorDot(AppThemeSpec spec, Color color) {
     return Container(
       width: 22,
       height: 22,
@@ -256,7 +254,7 @@ class ThemeGalleryPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withValues(alpha: .35)),
+        border: Border.all(color: spec.onHero.withValues(alpha: .35)),
       ),
     );
   }
@@ -288,9 +286,8 @@ class _ThemeCard extends StatelessWidget {
             end: Alignment.bottomRight,
           ),
           border: Border.all(
-            color: selected
-                ? spec.primary
-                : Colors.white.withValues(alpha: .08),
+            color:
+                selected ? spec.primary : Colors.white.withValues(alpha: .08),
             width: selected ? 2.2 : 1,
           ),
           boxShadow: selected

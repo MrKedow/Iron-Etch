@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../data/exercise_library.dart';
 import '../main.dart';
 import '../providers/app_providers.dart';
 
@@ -12,12 +13,14 @@ class PartStat {
   final int sessions;
   final int sets;
   final double work;
+  final double minutes;
 
   const PartStat({
     required this.part,
     required this.sessions,
     required this.sets,
     required this.work,
+    this.minutes = 0,
   });
 }
 
@@ -28,6 +31,9 @@ class ExerciseProgress {
   final double? previousWeight;
   final int sets;
   final int reps;
+  final String category;
+  final double durationMinutes;
+  final double distanceKm;
 
   const ExerciseProgress({
     required this.name,
@@ -36,7 +42,13 @@ class ExerciseProgress {
     required this.previousWeight,
     required this.sets,
     required this.reps,
+    this.category = '力量',
+    this.durationMinutes = 0,
+    this.distanceKm = 0,
   });
+
+  bool get isTimeBased =>
+      category == '有氧' || category == '柔韧' || category == '专项';
 
   double? get diff =>
       previousWeight == null ? null : currentWeight - previousWeight!;
@@ -80,7 +92,14 @@ class CoachInsights {
   double get totalWork =>
       records.fold(0.0, (sum, r) => sum + r.totalWork);
 
-  int get totalCalories => (totalWork / 4184).round();
+  double get totalDurationMinutes =>
+      records.fold(0.0, (sum, r) => sum + r.totalDurationMinutes);
+
+  double get totalDistanceKm =>
+      records.fold(0.0, (sum, r) => sum + r.totalDistanceKm);
+
+  int get totalCalories =>
+      records.fold(0.0, (sum, r) => sum + r.totalCalories).round();
 
   double get lastWork => lastRecord?.totalWork ?? 0;
   double get previousWork => previousRecord?.totalWork ?? 0;
@@ -163,6 +182,7 @@ class CoachInsights {
     final sessions = <String, Set<String>>{};
     final sets = <String, int>{};
     final work = <String, double>{};
+    final minutes = <String, double>{};
     for (final record in records) {
       final recordKey = DateFormat('yyyy-MM-dd').format(record.date);
       for (final project in record.projects) {
@@ -171,16 +191,23 @@ class CoachInsights {
         sets[project.part] = (sets[project.part] ?? 0) + project.sets;
         work[project.part] =
             (work[project.part] ?? 0) + project.calculateWork();
+        minutes[project.part] =
+            (minutes[project.part] ?? 0) + project.durationMinutes;
       }
     }
     final parts = <String>{...sessions.keys, ...sets.keys, ...work.keys}.toList()
-      ..sort((a, b) => (work[b] ?? 0).compareTo(work[a] ?? 0));
+      ..sort((a, b) {
+        final byWork = (work[b] ?? 0).compareTo(work[a] ?? 0);
+        if (byWork != 0) return byWork;
+        return (minutes[b] ?? 0).compareTo(minutes[a] ?? 0);
+      });
     return parts
         .map((part) => PartStat(
               part: part,
               sessions: sessions[part]?.length ?? 0,
               sets: sets[part] ?? 0,
               work: work[part] ?? 0,
+              minutes: minutes[part] ?? 0,
             ))
         .toList();
   }
@@ -196,7 +223,7 @@ class CoachInsights {
 
   List<String> get missingPartsLast {
     final had = lastParts.toSet();
-    return const ['胸', '背', '腿', '肩', '腹']
+    return ExerciseLibrary.trainingParts
         .where((part) => !had.contains(part))
         .toList();
   }
@@ -213,7 +240,7 @@ class CoachInsights {
     return parts.toList();
   }
 
-  List<String> get missingPartsWeek => const ['胸', '背', '腿', '肩', '腹']
+  List<String> get missingPartsWeek => ExerciseLibrary.trainingParts
       .where((part) => !weekParts.contains(part))
       .toList();
 
@@ -235,6 +262,9 @@ class CoachInsights {
         previousWeight: previous?.weight,
         sets: project.sets,
         reps: project.repsPerSet,
+        category: project.category,
+        durationMinutes: project.durationMinutes,
+        distanceKm: project.distanceKm,
       ));
     }
     return result;
@@ -309,7 +339,7 @@ class CoachInsights {
     buffer.writeln();
     buffer.writeln('【总体数据】');
     buffer.writeln(
-        '累计训练：$totalSessions次；总组数：$totalSets组；总做功：${(totalWork / 1000).toStringAsFixed(1)}千焦；估算消耗：$totalCalories千卡；训练天数：$trainingDays天。');
+        '累计训练：$totalSessions次；总组数：$totalSets组；总做功：${(totalWork / 1000).toStringAsFixed(1)}千焦；估算消耗：$totalCalories千卡；有氧时长：${totalDurationMinutes.toStringAsFixed(0)}分钟；有氧距离：${totalDistanceKm.toStringAsFixed(1)}公里；训练天数：$trainingDays天。');
     buffer.writeln('本周训练：$thisWeekSessions次；上周：$lastWeekSessions次。');
     buffer.writeln(
         '最近7天做功：${(lastWeekWork / 1000).toStringAsFixed(1)}千焦；前7天：${(prevWeekWork / 1000).toStringAsFixed(1)}千焦。');
@@ -322,7 +352,7 @@ class CoachInsights {
     buffer.writeln('【部位分布】');
     for (final stat in partStats) {
       buffer.writeln(
-          '${stat.part}：${stat.sessions}次，${stat.sets}组，${(stat.work / 1000).toStringAsFixed(1)}千焦');
+          '${stat.part}：${stat.sessions}次，${stat.sets}组，${(stat.work / 1000).toStringAsFixed(1)}千焦${stat.minutes > 0 ? '，${stat.minutes.toStringAsFixed(0)}分钟' : ''}');
     }
     buffer.writeln();
     buffer.writeln('【最近训练】');
@@ -330,11 +360,15 @@ class CoachInsights {
     for (final record in recent) {
       final projects = record.projects
           .where((p) => p.name.trim().isNotEmpty)
-          .map((p) =>
-              '${p.name}(${p.part}) ${p.weight}kg×${p.sets}组×${p.repsPerSet}次${p.feeling.trim().isEmpty ? '' : ' 感受:${p.feeling}'}')
+          .map((p) {
+            final detail = p.isTimeBased
+                ? '${p.durationMinutes.toStringAsFixed(0)}分钟${p.distanceKm > 0 ? ' ${p.distanceKm.toStringAsFixed(1)}公里' : ''} 约${p.estimatedCalories().round()}千卡'
+                : '${p.weight}kg×${p.sets}组×${p.repsPerSet}次';
+            return '${p.name}(${p.part}) $detail${p.feeling.trim().isEmpty ? '' : ' 感受:${p.feeling}'}';
+          })
           .join('；');
       buffer.writeln(
-          '${DateFormat('yyyy-MM-dd').format(record.date)} 第${record.sessionNumber ?? '-'}次：$projects。总做功${(record.totalWork / 1000).toStringAsFixed(1)}千焦。');
+          '${DateFormat('yyyy-MM-dd').format(record.date)} 第${record.sessionNumber ?? '-'}次：$projects。总做功${(record.totalWork / 1000).toStringAsFixed(1)}千焦，有氧${record.totalDurationMinutes.toStringAsFixed(0)}分钟。');
     }
     buffer.writeln();
     buffer.writeln('【最近一次与上次的重量对比】');

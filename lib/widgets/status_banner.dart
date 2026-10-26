@@ -178,6 +178,21 @@ class _StatusBannerState extends State<StatusBanner>
                 );
               },
             ),
+            if (!spec.isDark)
+              IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.black.withValues(alpha: .32),
+                        Colors.black.withValues(alpha: .2),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(

@@ -39,6 +39,12 @@ class AppThemeSpec {
 
   bool get isDark => brightness == Brightness.dark;
 
+  /// 渐变主视觉上的前景色：浅色主题用深色字，深色主题用白字。
+  Color get onHero => isDark ? Colors.white : textPrimary;
+
+  Color get onHeroMuted =>
+      isDark ? Colors.white.withValues(alpha: .72) : textSecondary;
+
   LinearGradient get heroGradient => LinearGradient(
         colors: gradient,
         begin: Alignment.topLeft,
@@ -128,10 +134,9 @@ class AppThemeSpec {
           foregroundColor: _onColor(primary),
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 22),
-          textStyle:
-              const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -139,8 +144,8 @@ class AppThemeSpec {
           backgroundColor: primary,
           foregroundColor: _onColor(primary),
           padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 22),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -148,8 +153,8 @@ class AppThemeSpec {
           foregroundColor: textPrimary,
           side: BorderSide(color: textPrimary.withValues(alpha: 0.16)),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -160,7 +165,7 @@ class AppThemeSpec {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: textPrimary.withValues(alpha: isDark ? 0.055 : 0.045),
+        fillColor: textPrimary.withValues(alpha: isDark ? 0.055 : 0.065),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         border: border,
@@ -172,30 +177,24 @@ class AppThemeSpec {
           borderSide: const BorderSide(color: Color(0xFFFF5A5F)),
         ),
         labelStyle: TextStyle(color: textSecondary, fontSize: 13),
-        hintStyle:
-            TextStyle(color: textSecondary.withValues(alpha: 0.65)),
+        hintStyle: TextStyle(
+            color: textSecondary.withValues(alpha: isDark ? 0.65 : 0.8)),
         suffixStyle: TextStyle(color: textSecondary),
         prefixIconColor: textSecondary,
       ),
       textTheme: base.textTheme
           .apply(bodyColor: textPrimary, displayColor: textPrimary)
           .copyWith(
-            bodyLarge: TextStyle(
-                color: textPrimary, fontSize: 15, height: 1.55),
-            bodyMedium: TextStyle(
-                color: textSecondary, fontSize: 13.5, height: 1.55),
+            bodyLarge:
+                TextStyle(color: textPrimary, fontSize: 15, height: 1.55),
+            bodyMedium:
+                TextStyle(color: textSecondary, fontSize: 13.5, height: 1.55),
             titleLarge: TextStyle(
-                color: textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w800),
+                color: textPrimary, fontSize: 20, fontWeight: FontWeight.w800),
             titleMedium: TextStyle(
-                color: textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w700),
+                color: textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
             labelLarge: TextStyle(
-                color: textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w700),
+                color: textPrimary, fontSize: 14, fontWeight: FontWeight.w700),
           ),
       chipTheme: base.chipTheme.copyWith(
         backgroundColor: textPrimary.withValues(alpha: 0.06),
@@ -203,20 +202,17 @@ class AppThemeSpec {
         side: BorderSide(color: textPrimary.withValues(alpha: 0.06)),
         labelStyle: TextStyle(
             color: textPrimary, fontSize: 12.5, fontWeight: FontWeight.w600),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: isDark ? const Color(0xFF252B36) : Colors.black87,
         contentTextStyle: const TextStyle(color: Colors.white),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
       dividerTheme:
           DividerThemeData(color: textPrimary.withValues(alpha: 0.07)),
-      progressIndicatorTheme:
-          ProgressIndicatorThemeData(color: primary),
+      progressIndicatorTheme: ProgressIndicatorThemeData(color: primary),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -234,14 +230,15 @@ class AppThemeSpec {
         surfaceTintColor: Colors.transparent,
         headerBackgroundColor: primary,
         headerForegroundColor: _onColor(primary),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(26)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
       ),
     );
   }
 
   static Color _onColor(Color color) {
-    return color.computeLuminance() > .6 ? const Color(0xFF101216) : Colors.white;
+    return color.computeLuminance() > .6
+        ? const Color(0xFF101216)
+        : Colors.white;
   }
 }
 
@@ -320,14 +317,14 @@ class AppThemes {
     subtitle: '奶油粉白 · 温柔但有力量',
     emoji: '🌸',
     brightness: Brightness.light,
-    primary: Color(0xFFD96C8A),
-    secondary: Color(0xFF9B7EDE),
-    accent: Color(0xFF4ECDC4),
+    primary: Color(0xFFB44B6E),
+    secondary: Color(0xFF7657BF),
+    accent: Color(0xFF16867C),
     background: Color(0xFFFFF7F8),
     surface: Color(0xFFFFFFFF),
     card: Color(0xFFFFFFFF),
-    textPrimary: Color(0xFF2B2228),
-    textSecondary: Color(0xFF8A7A82),
+    textPrimary: Color(0xFF241C22),
+    textSecondary: Color(0xFF4E4148),
     gradient: [Color(0xFFFFE4EC), Color(0xFFFFF8FA), Color(0xFFEDE7FF)],
   );
 
@@ -337,14 +334,14 @@ class AppThemes {
     subtitle: '汉白玉渐变 · 温润护眼',
     emoji: '🤍',
     brightness: Brightness.light,
-    primary: Color(0xFF3F6CA8),
-    secondary: Color(0xFF6B8FC7),
-    accent: Color(0xFFE0A458),
+    primary: Color(0xFF315A8F),
+    secondary: Color(0xFF4E6FA3),
+    accent: Color(0xFF9B6420),
     background: Color(0xFFF5F6F8),
     surface: Color(0xFFFFFFFF),
     card: Color(0xFFFFFFFF),
-    textPrimary: Color(0xFF1D2530),
-    textSecondary: Color(0xFF6B7688),
+    textPrimary: Color(0xFF171E27),
+    textSecondary: Color(0xFF3F4A5A),
     gradient: [Color(0xFFFDFBF7), Color(0xFFF1F4F9), Color(0xFFE4EDF9)],
   );
 
@@ -371,14 +368,14 @@ class AppThemes {
     subtitle: 'Material 3 · 开源调色板',
     emoji: '🎨',
     brightness: Brightness.light,
-    primary: Color(0xFF386A5C),
-    secondary: Color(0xFF7A8F6B),
-    accent: Color(0xFF9C6B4E),
+    primary: Color(0xFF2A574A),
+    secondary: Color(0xFF5C7350),
+    accent: Color(0xFF8A5738),
     background: Color(0xFFF7FBF7),
     surface: Color(0xFFFFFFFF),
     card: Color(0xFFFFFFFF),
-    textPrimary: Color(0xFF191C1A),
-    textSecondary: Color(0xFF5F6B64),
+    textPrimary: Color(0xFF141715),
+    textSecondary: Color(0xFF37423B),
     gradient: [Color(0xFFDCEFE6), Color(0xFFFDFBF4), Color(0xFFE8E3F7)],
   );
 

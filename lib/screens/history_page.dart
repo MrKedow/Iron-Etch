@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../data/exercise_library.dart';
 import '../main.dart';
 import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
@@ -23,7 +24,18 @@ class _HistoryPageState extends State<HistoryPage> {
   String _query = '';
   String _part = '全部';
 
-  static const List<String> _parts = ['全部', '胸', '背', '腿', '肩', '腹'];
+  static const List<String> _parts = [
+    '全部',
+    '胸',
+    '背',
+    '肩',
+    '手臂',
+    '腿',
+    '臀',
+    '核心',
+    '有氧',
+    '柔韧',
+  ];
 
   @override
   void dispose() {
@@ -171,8 +183,9 @@ class _HistoryPageState extends State<HistoryPage> {
 
   Widget _recordCard(WorkoutRecord record, AppThemeSpec spec) {
     final expanded = _expanded.contains(record.id);
-    final parts = record.projects.map((p) => p.part).toSet().toList();
-    final names = record.projects
+    final recordProjects = dedupeWorkoutProjects(record.projects);
+    final parts = recordProjects.map((p) => p.part).toSet().toList();
+    final names = recordProjects
         .map((p) => p.name)
         .where((name) => name.trim().isNotEmpty)
         .toList();
@@ -275,10 +288,18 @@ class _HistoryPageState extends State<HistoryPage> {
                     const SizedBox(height: 5),
                     Row(
                       children: [
-                        Icon(Icons.bolt_rounded, size: 13, color: spec.primary),
+                        Icon(
+                          record.totalWork > 0
+                              ? Icons.bolt_rounded
+                              : Icons.timer_outlined,
+                          size: 13,
+                          color: spec.primary,
+                        ),
                         const SizedBox(width: 2),
                         Text(
-                          '${formatCompact(record.totalWork)} J',
+                          record.totalWork > 0
+                              ? '${formatCompact(record.totalWork)} J'
+                              : '${record.totalDurationMinutes.toStringAsFixed(0)} 分钟',
                           style: TextStyle(
                             color: spec.primary,
                             fontSize: 11.5,
@@ -287,7 +308,9 @@ class _HistoryPageState extends State<HistoryPage> {
                         ),
                         const SizedBox(width: 10),
                         Text(
-                          '${record.projects.length} 个动作',
+                          record.totalDistanceKm > 0
+                              ? '${record.totalDistanceKm.toStringAsFixed(1)} km'
+                              : '${recordProjects.length} 个动作',
                           style: TextStyle(
                             color: spec.textSecondary,
                             fontSize: 11,
@@ -343,7 +366,7 @@ class _HistoryPageState extends State<HistoryPage> {
                 children: [
                   Divider(color: spec.textPrimary.withValues(alpha: .07)),
                   const SizedBox(height: 4),
-                  for (final project in record.projects)
+                  for (final project in recordProjects)
                     _ProjectDetail(project: project, spec: spec),
                   const SizedBox(height: 2),
                   Row(
@@ -598,14 +621,14 @@ class _ProjectDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final weight = project.weight % 1 == 0
-        ? project.weight.toStringAsFixed(0)
-        : project.weight.toStringAsFixed(1);
     final notes = [
       if (project.feeling.trim().isNotEmpty) '感受：${project.feeling.trim()}',
       if (project.supplement.trim().isNotEmpty)
         '备注：${project.supplement.trim()}',
     ];
+    final metric = project.isTimeBased
+        ? '${project.inputSummary}  ·  ${project.estimatedCalories().round()} kcal'
+        : '${project.inputSummary}  ·  ${formatCompact(project.calculateWork())} J';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(11),
@@ -636,8 +659,7 @@ class _ProjectDetail extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           Text(
-            '$weight kg × ${project.sets} 组 × ${project.repsPerSet} 次'
-            '  ·  ${formatCompact(project.calculateWork())} J',
+            metric,
             style: TextStyle(
               color: spec.textSecondary,
               fontSize: 11.5,
@@ -668,6 +690,8 @@ class _EditDraft {
   final TextEditingController reps;
   final TextEditingController feeling;
   final TextEditingController supplement;
+  final TextEditingController duration;
+  final TextEditingController distance;
   String part;
 
   _EditDraft({
@@ -677,6 +701,8 @@ class _EditDraft {
     required this.reps,
     required this.feeling,
     required this.supplement,
+    required this.duration,
+    required this.distance,
     required this.part,
   });
 
@@ -694,6 +720,14 @@ class _EditDraft {
       ),
       feeling: TextEditingController(text: project.feeling),
       supplement: TextEditingController(text: project.supplement),
+      duration: TextEditingController(
+        text: project.durationMinutes == 0
+            ? ''
+            : project.durationMinutes.toString(),
+      ),
+      distance: TextEditingController(
+        text: project.distanceKm == 0 ? '' : project.distanceKm.toString(),
+      ),
       part: project.part,
     );
   }
@@ -706,6 +740,8 @@ class _EditDraft {
       reps: TextEditingController(),
       feeling: TextEditingController(),
       supplement: TextEditingController(),
+      duration: TextEditingController(),
+      distance: TextEditingController(),
       part: '胸',
     );
   }
@@ -717,6 +753,8 @@ class _EditDraft {
     reps.dispose();
     feeling.dispose();
     supplement.dispose();
+    duration.dispose();
+    distance.dispose();
   }
 }
 
@@ -730,7 +768,19 @@ class _EditRecordSheet extends StatefulWidget {
 }
 
 class _EditRecordSheetState extends State<_EditRecordSheet> {
-  static const List<String> _parts = ['胸', '背', '腿', '肩', '腹'];
+  static const List<String> _parts = [
+    '胸',
+    '背',
+    '肩',
+    '手臂',
+    '腿',
+    '臀',
+    '核心',
+    '有氧',
+    '柔韧',
+    '全身',
+    '专项',
+  ];
 
   late DateTime _date;
   late final List<_EditDraft> _drafts;
@@ -782,14 +832,28 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
     final projects = <WorkoutProject>[];
     for (final draft in _drafts) {
       if (draft.name.text.trim().isEmpty) continue;
+      final name = draft.name.text.trim();
+      final definition = ExerciseLibrary.findByName(name);
+      final category = definition?.kind.label ??
+          (draft.part == '有氧'
+              ? '有氧'
+              : draft.part == '柔韧'
+                  ? '柔韧'
+                  : draft.part == '专项'
+                      ? '专项'
+                      : '力量');
       projects.add(WorkoutProject(
-        name: draft.name.text.trim(),
+        name: name,
         part: draft.part,
         weight: double.tryParse(draft.weight.text) ?? 0,
         sets: int.tryParse(draft.sets.text) ?? 0,
         repsPerSet: int.tryParse(draft.reps.text) ?? 0,
         feeling: draft.feeling.text.trim(),
         supplement: draft.supplement.text.trim(),
+        category: category,
+        durationMinutes: double.tryParse(draft.duration.text.trim()) ?? 0,
+        distanceKm: double.tryParse(draft.distance.text.trim()) ?? 0,
+        met: definition?.met ?? 0,
       ));
     }
     if (projects.isEmpty) {
@@ -1002,6 +1066,47 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
             ],
           ),
           const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('时长（有氧/柔韧）', spec),
+                    _field(
+                      spec,
+                      draft.duration,
+                      '0',
+                      suffix: '分钟',
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('距离（有氧）', spec),
+                    _field(
+                      spec,
+                      draft.distance,
+                      '0',
+                      suffix: 'km',
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           _label('训练感受', spec),
           _field(spec, draft.feeling, '状态、力竭程度…'),
           const SizedBox(height: 10),
@@ -1137,11 +1242,11 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
                     ),
                   ],
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
                     '保存修改',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: spec.onHero,
                       fontSize: 15,
                       fontWeight: FontWeight.w900,
                     ),

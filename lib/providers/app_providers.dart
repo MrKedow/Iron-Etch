@@ -53,8 +53,13 @@ class ThemeProvider extends ChangeNotifier {
 
 class SettingsProvider extends ChangeNotifier {
   static const String defaultAiEndpoint =
+      'https://blockrun.ai/api/v1/chat/completions';
+  static const String defaultAiModel = 'nvidia/gpt-oss-20b';
+  static const String legacyAiEndpoint =
       'https://opencode.ai/inference/openai/v1/chat/completions';
-  static const String defaultAiModel = 'big-pickle';
+  static const String legacyAiModel = 'big-pickle';
+  static const String legacyPollinationsEndpoint =
+      'https://text.pollinations.ai/openai';
 
   static const List<String> quotes = [
     '每一次努力都值得记录',
@@ -107,6 +112,7 @@ class SettingsProvider extends ChangeNotifier {
   String? _statusImagePath;
   int _statusTone = 0;
   int _statusMotion = 0;
+  String? _avatarPath;
 
   String get nickname => _nickname;
   String get trainingGoal => _trainingGoal;
@@ -130,6 +136,8 @@ class SettingsProvider extends ChangeNotifier {
   String? get statusImagePath => _statusImagePath;
   int get statusTone => _statusTone;
   int get statusMotion => _statusMotion;
+  String? get avatarPath => _avatarPath;
+  bool get hasAvatar => _avatarPath != null && _avatarPath!.trim().isNotEmpty;
 
   String get todayQuote {
     final index =
@@ -155,8 +163,29 @@ class SettingsProvider extends ChangeNotifier {
     _reminderTime = prefs.getString('reminder_time') ?? '20:00';
 
     _aiEnabled = prefs.getBool('ai_enabled') ?? true;
-    _aiEndpoint = prefs.getString('ai_endpoint') ?? defaultAiEndpoint;
-    _aiModel = prefs.getString('ai_model') ?? defaultAiModel;
+    var savedEndpoint = prefs.getString('ai_endpoint');
+    var savedModel = prefs.getString('ai_model');
+    final defaultsVersion = prefs.getInt('ai_defaults_version') ?? 0;
+    if (defaultsVersion < 4) {
+      final endpointMigrated = savedEndpoint == null ||
+          savedEndpoint == legacyAiEndpoint ||
+          savedEndpoint == legacyPollinationsEndpoint;
+      if (endpointMigrated) {
+        savedEndpoint = defaultAiEndpoint;
+        await prefs.setString('ai_endpoint', savedEndpoint);
+      }
+      if (endpointMigrated ||
+          savedModel == null ||
+          savedModel == legacyAiModel ||
+          savedModel == 'openai' ||
+          savedModel == 'gpt-oss-20b') {
+        savedModel = defaultAiModel;
+        await prefs.setString('ai_model', savedModel);
+      }
+      await prefs.setInt('ai_defaults_version', 4);
+    }
+    _aiEndpoint = savedEndpoint ?? defaultAiEndpoint;
+    _aiModel = savedModel ?? defaultAiModel;
     _aiApiKey = prefs.getString('ai_api_key') ?? '';
 
     _statusEmoji = prefs.getString('status_emoji') ?? '🔥';
@@ -164,6 +193,7 @@ class SettingsProvider extends ChangeNotifier {
     _statusImagePath = prefs.getString('status_image_path');
     _statusTone = prefs.getInt('status_tone') ?? 0;
     _statusMotion = prefs.getInt('status_motion') ?? 0;
+    _avatarPath = prefs.getString('profile_avatar_path');
     notifyListeners();
   }
 
@@ -300,6 +330,18 @@ class SettingsProvider extends ChangeNotifier {
       _statusMotion = motion;
       await _persist('status_motion', motion);
     }
+    notifyListeners();
+  }
+
+  Future<void> setAvatarPath(String path) async {
+    _avatarPath = path.trim().isEmpty ? null : path.trim();
+    await _persist('profile_avatar_path', _avatarPath);
+    notifyListeners();
+  }
+
+  Future<void> clearAvatar() async {
+    _avatarPath = null;
+    await _persist('profile_avatar_path', null);
     notifyListeners();
   }
 }

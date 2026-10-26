@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../main.dart';
 import '../providers/app_providers.dart';
 import '../services/ai_coach_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
 import '../widgets/status_banner.dart';
 import 'theme_gallery_page.dart';
@@ -51,6 +56,99 @@ class _SettingsPageState extends State<SettingsPage> {
     controller.dispose();
     if (result == null || !mounted) return;
     await context.read<SettingsProvider>().setNickname(result);
+  }
+
+  Future<void> _chooseAvatar(SettingsProvider settings) async {
+    if (!settings.hasAvatar) {
+      await _pickAvatar(settings);
+      return;
+    }
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) {
+        final spec = sheetContext.watch<ThemeProvider>().currentSpec;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: spec.textSecondary.withValues(alpha: .25),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading:
+                      Icon(Icons.photo_library_outlined, color: spec.primary),
+                  title: const Text('更换头像'),
+                  onTap: () => Navigator.pop(sheetContext, 'pick'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded,
+                      color: Color(0xFFEF4444)),
+                  title: const Text(
+                    '移除头像',
+                    style: TextStyle(color: Color(0xFFEF4444)),
+                  ),
+                  onTap: () => Navigator.pop(sheetContext, 'remove'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted) return;
+    if (action == 'pick') {
+      await _pickAvatar(settings);
+    } else if (action == 'remove') {
+      final previousPath = settings.avatarPath;
+      await settings.clearAvatar();
+      if (previousPath != null && previousPath.isNotEmpty) {
+        try {
+          final previousFile = File(previousPath);
+          if (await previousFile.exists()) await previousFile.delete();
+        } catch (_) {}
+      }
+      if (mounted) _showSnack('头像已移除');
+    }
+  }
+
+  Future<void> _pickAvatar(SettingsProvider settings) async {
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        imageQuality: 88,
+      );
+      if (picked == null || !mounted) return;
+      final directory = await getApplicationDocumentsDirectory();
+      final dot = picked.name.lastIndexOf('.');
+      final extension =
+          dot >= 0 ? picked.name.substring(dot).toLowerCase() : '.jpg';
+      final target = File(
+        '${directory.path}/profile_avatar_${DateTime.now().millisecondsSinceEpoch}$extension',
+      );
+      await File(picked.path).copy(target.path);
+      final previousPath = settings.avatarPath;
+      await settings.setAvatarPath(target.path);
+      if (previousPath != null &&
+          previousPath.isNotEmpty &&
+          previousPath != target.path) {
+        try {
+          final previousFile = File(previousPath);
+          if (await previousFile.exists()) await previousFile.delete();
+        } catch (_) {}
+      }
+      if (mounted) _showSnack('头像已更新');
+    } catch (error) {
+      if (mounted) _showSnack('头像设置失败：$error');
+    }
   }
 
   Future<String?> _showChoiceDialog({
@@ -291,7 +389,7 @@ class _SettingsPageState extends State<SettingsPage> {
         builder: (context, setDialogState) {
           final spec = context.watch<ThemeProvider>().currentSpec;
           return AlertDialog(
-            title: const Text('OpenCode AI 配置'),
+            title: const Text('AI 配置'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -304,14 +402,50 @@ class _SettingsPageState extends State<SettingsPage> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '铁镌通过 OpenCode Zen 的 OpenAI 兼容接口调用真实大模型。'
-                      '不填 API Key 时会尝试免费通道，可能受到限流。',
+                      '默认使用 BlockRun 的免费 GPT-OSS 通道；失败时自动回退到 '
+                      'Pollinations 与 OpenCode Zen。'
+                      '也可以填写任意 OpenAI 兼容服务的 API Key。',
                       style: TextStyle(
                         color: spec.textSecondary,
                         fontSize: 11.5,
                         height: 1.55,
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      ActionChip(
+                        label: const Text('BlockRun 免费'),
+                        onPressed: () {
+                          endpointController.text =
+                              SettingsProvider.defaultAiEndpoint;
+                          modelController.text =
+                              SettingsProvider.defaultAiModel;
+                          setDialogState(() {});
+                        },
+                      ),
+                      ActionChip(
+                        label: const Text('Pollinations 免费'),
+                        onPressed: () {
+                          endpointController.text =
+                              SettingsProvider.legacyPollinationsEndpoint;
+                          modelController.text = 'gpt-oss-20b';
+                          setDialogState(() {});
+                        },
+                      ),
+                      ActionChip(
+                        label: const Text('OpenCode Zen'),
+                        onPressed: () {
+                          endpointController.text =
+                              SettingsProvider.legacyAiEndpoint;
+                          modelController.text = 'big-pickle';
+                          setDialogState(() {});
+                        },
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 14),
                   TextField(
@@ -409,7 +543,7 @@ class _SettingsPageState extends State<SettingsPage> {
         content: Text(
           reply.success
               ? '${reply.content}\n\n模型：${settings.aiModel}'
-              : '${reply.error ?? '未知错误'}\n\n提示：可在设置中填写 OpenCode API Key，或稍后重试免费通道。',
+              : '${reply.error ?? '未知错误'}\n\n提示：免费通道可能限流，可在配置中填写 API Key 或稍后重试。',
           style: const TextStyle(height: 1.5),
         ),
         actions: [
@@ -508,8 +642,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 gradient: spec.heroGradient,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.fitness_center_rounded,
-                  size: 18, color: Colors.white),
+              child: Icon(Icons.fitness_center_rounded,
+                  size: 18, color: spec.onHero),
             ),
             const SizedBox(width: 10),
             const Text('关于铁镌'),
@@ -573,6 +707,76 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Widget _profileAvatar(SettingsProvider settings, AppThemeSpec spec) {
+    final path = settings.avatarPath;
+    final avatarFile =
+        path != null && path.trim().isNotEmpty && File(path).existsSync()
+            ? File(path)
+            : null;
+    final nickname = settings.nickname.trim();
+    final initial = nickname.isEmpty ? '铁' : nickname.characters.first;
+    return GestureDetector(
+      onTap: () => _chooseAvatar(settings),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              gradient: spec.heroGradient,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: avatarFile != null
+                ? Image.file(
+                    avatarFile,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Text(
+                        initial,
+                        style: TextStyle(
+                          color: spec.onHero,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Text(
+                      initial,
+                      style: TextStyle(
+                        color: spec.onHero,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+          ),
+          Positioned(
+            right: -5,
+            bottom: -5,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: spec.primary,
+                shape: BoxShape.circle,
+                border: Border.all(color: spec.background, width: 2),
+              ),
+              child: Icon(
+                Icons.photo_camera_rounded,
+                size: 12,
+                color: spec.isDark ? spec.background : spec.onHero,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
@@ -600,24 +804,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   padding: const EdgeInsets.all(16),
                   child: Row(
                     children: [
-                      Container(
-                        width: 58,
-                        height: 58,
-                        decoration: BoxDecoration(
-                          gradient: spec.heroGradient,
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Center(
-                          child: Text(
-                            settings.nickname.characters.first,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ),
+                      _profileAvatar(settings, spec),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
@@ -686,6 +873,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 _SettingsGroup(
                   children: [
+                    _SettingsTile(
+                      icon: Icons.account_circle_outlined,
+                      title: '头像',
+                      subtitle: settings.hasAvatar
+                          ? '已设置 · 点击更换或移除'
+                          : '未设置 · 点击从相册选择',
+                      onTap: () => _chooseAvatar(settings),
+                    ),
                     _SettingsTile(
                       icon: Icons.flag_rounded,
                       title: '训练目标',
@@ -770,7 +965,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SectionHeader(
                   title: 'AI 教练',
-                  subtitle: 'OpenCode Zen · 真实大模型驱动',
+                  subtitle: '免费多通道 · 自动回退 · 真实大模型驱动',
                 ),
                 _SettingsGroup(
                   children: [
@@ -812,8 +1007,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ? Icons.hourglass_top_rounded
                           : Icons.network_check_rounded,
                       title: '测试连接',
-                      subtitle:
-                          _testingAi ? '正在连接 OpenCode…' : '检查 Key 与网络是否可用',
+                      subtitle: _testingAi ? '正在测试 AI 通道…' : '检查免费通道或 Key 是否可用',
                       trailing: _testingAi
                           ? const SizedBox(
                               width: 20,

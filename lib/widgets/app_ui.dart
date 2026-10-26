@@ -119,23 +119,24 @@ class GlassPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ??
             (gradient == null
-                ? spec.card.withValues(alpha: spec.glass ? .62 : .92)
+                ? spec.card.withValues(alpha: spec.glass ? .62 : .96)
                 : null),
         gradient: gradient,
         borderRadius: BorderRadius.circular(radius),
         border: border ??
             Border.all(
-              color: spec.textPrimary.withValues(alpha: isDark ? .075 : .06),
+              color: spec.textPrimary
+                  .withValues(alpha: isDark ? .075 : .11),
             ),
         boxShadow: shadows ??
             [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? .32 : .08),
+                color: Colors.black.withValues(alpha: isDark ? .32 : .07),
                 blurRadius: 26,
                 offset: const Offset(0, 14),
               ),
               BoxShadow(
-                color: spec.primary.withValues(alpha: isDark ? .055 : .04),
+                color: spec.primary.withValues(alpha: isDark ? .055 : .055),
                 blurRadius: 40,
                 spreadRadius: -8,
                 offset: const Offset(0, 4),
@@ -304,11 +305,11 @@ class StatTile extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: gradient,
         color: gradient == null
-            ? spec.textPrimary.withValues(alpha: spec.isDark ? .045 : .035)
+            ? spec.textPrimary.withValues(alpha: spec.isDark ? .045 : .055)
             : null,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: spec.textPrimary.withValues(alpha: .055),
+          color: spec.textPrimary.withValues(alpha: spec.isDark ? .055 : .1),
         ),
       ),
       child: Column(
@@ -327,29 +328,34 @@ class StatTile extends StatelessWidget {
               ),
               const SizedBox(width: 7),
               Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: spec.textSecondary,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: spec.textSecondary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Flexible(
-                child: Text(
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
                   value,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: spec.textPrimary,
                     fontSize: 21,
@@ -358,19 +364,19 @@ class StatTile extends StatelessWidget {
                     letterSpacing: -.4,
                   ),
                 ),
-              ),
-              if (unit != null) ...[
-                const SizedBox(width: 4),
-                Text(
-                  unit!,
-                  style: TextStyle(
-                    color: spec.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                if (unit != null) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    unit!,
+                    style: TextStyle(
+                      color: spec.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         ],
       ),

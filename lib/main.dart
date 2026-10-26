@@ -9,8 +9,10 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:excel/excel.dart' hide Border;
+import 'package:fitness_tracker/data/exercise_library.dart';
 import 'package:fitness_tracker/screens/settings_page.dart';
 import 'package:fitness_tracker/screens/coach_analysis_page.dart';
+import 'package:fitness_tracker/screens/exercise_library_page.dart';
 import 'package:fitness_tracker/screens/history_page.dart';
 import 'package:fitness_tracker/screens/splash_screen.dart';
 import 'package:fitness_tracker/screens/theme_gallery_page.dart';
@@ -70,6 +72,15 @@ class WorkoutRecord {
   double get totalWork {
     return projects.fold(0.0, (sum, project) => sum + project.calculateWork());
   }
+
+  double get totalDurationMinutes =>
+      projects.fold(0.0, (sum, project) => sum + project.durationMinutes);
+
+  double get totalDistanceKm =>
+      projects.fold(0.0, (sum, project) => sum + project.distanceKm);
+
+  double get totalCalories =>
+      projects.fold(0.0, (sum, project) => sum + project.estimatedCalories());
 }
 
 class WorkoutProject {
@@ -80,6 +91,10 @@ class WorkoutProject {
   int repsPerSet;
   String feeling;
   String supplement;
+  String category;
+  double durationMinutes;
+  double distanceKm;
+  double met;
 
   WorkoutProject({
     required this.name,
@@ -89,6 +104,10 @@ class WorkoutProject {
     required this.repsPerSet,
     required this.feeling,
     required this.supplement,
+    this.category = '力量',
+    this.durationMinutes = 0,
+    this.distanceKm = 0,
+    this.met = 0,
   });
 
   factory WorkoutProject.empty() {
@@ -103,6 +122,33 @@ class WorkoutProject {
     );
   }
 
+  factory WorkoutProject.fromJson(Map<String, dynamic> json) {
+    final name = json['name']?.toString() ?? '';
+    final part = json['part']?.toString() ?? '胸';
+    final definition = ExerciseLibrary.findByName(name);
+    return WorkoutProject(
+      name: name,
+      part: part,
+      weight: (json['weight'] as num?)?.toDouble() ?? 0,
+      sets: (json['sets'] as num?)?.toInt() ?? 0,
+      repsPerSet: (json['repsPerSet'] as num?)?.toInt() ?? 0,
+      feeling: json['feeling']?.toString() ?? '',
+      supplement: json['supplement']?.toString() ?? '',
+      category: json['category']?.toString() ??
+          definition?.kind.label ??
+          (part == '有氧'
+              ? '有氧'
+              : part == '柔韧'
+                  ? '柔韧'
+                  : part == '专项'
+                      ? '专项'
+                      : '力量'),
+      durationMinutes: (json['durationMinutes'] as num?)?.toDouble() ?? 0,
+      distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0,
+      met: (json['met'] as num?)?.toDouble() ?? definition?.met ?? 0,
+    );
+  }
+
   WorkoutProject copy() {
     return WorkoutProject(
       name: name,
@@ -112,25 +158,147 @@ class WorkoutProject {
       repsPerSet: repsPerSet,
       feeling: feeling,
       supplement: supplement,
+      category: category,
+      durationMinutes: durationMinutes,
+      distanceKm: distanceKm,
+      met: met,
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'part': part,
+      'weight': weight,
+      'sets': sets,
+      'repsPerSet': repsPerSet,
+      'feeling': feeling,
+      'supplement': supplement,
+      'category': category,
+      'durationMinutes': durationMinutes,
+      'distanceKm': distanceKm,
+      'met': met,
+    };
+  }
+
+  bool get isCardio => category == '有氧' || category == '专项';
+
+  bool get isTimeBased => isCardio || category == '柔韧';
+
+  bool get usesDistance => isCardio;
+
+  double get volumeLoad => weight * sets * repsPerSet;
+
   double calculateWork() {
+    if (category == '有氧' || category == '柔韧' || category == '专项') {
+      return 0;
+    }
     const travelDistances = {
       '肩': 0.6,
       '背': 0.6,
       '腿': 0.7,
       '胸': 0.6,
-      '腹': 0,
+      '核心': 0.3,
+      '手臂': 0.55,
+      '前臂': 0.4,
+      '臀': 0.7,
+      '小腿': 0.45,
+      '全身': 0.6,
     };
 
-    if (part == '腹') {
+    if (part == '核心' || part == '腹') {
       return (sets * repsPerSet * 65 * 9.8 * 0.3).toDouble();
-    } else {
-      final distance = travelDistances[part] ?? 0;
-      return (weight * 9.8 * distance * sets * repsPerSet);
     }
+    final distance = travelDistances[part] ?? 0.6;
+    return weight * 9.8 * distance * sets * repsPerSet;
   }
+
+  double estimatedCalories({double bodyWeight = 70}) {
+    if ((isCardio || category == '柔韧' || category == '功能') &&
+        durationMinutes > 0) {
+      final intensity = met > 0 ? met : (category == '柔韧' ? 2.5 : 6.5);
+      return intensity * 3.5 * bodyWeight / 200 * durationMinutes;
+    }
+    return calculateWork() / 4184;
+  }
+
+  String get inputSummary {
+    if (isCardio) {
+      final parts = <String>[];
+      if (durationMinutes > 0) {
+        parts.add('${_trimNumber(durationMinutes)} 分钟');
+      }
+      if (distanceKm > 0) {
+        parts.add('${_trimNumber(distanceKm)} km');
+      }
+      if (parts.isEmpty) parts.add('有氧训练');
+      return parts.join(' · ');
+    }
+    if (category == '柔韧' || category == '功能') {
+      final minutes = durationMinutes > 0
+          ? '${_trimNumber(durationMinutes)} 分钟'
+          : '${sets} 组 × ${repsPerSet} 次';
+      if (weight > 0) {
+        return '$minutes · ${_trimNumber(weight)} kg';
+      }
+      return minutes;
+    }
+    final weightText =
+        weight % 1 == 0 ? weight.toStringAsFixed(0) : weight.toStringAsFixed(1);
+    return '$weightText kg × $sets 组 × $repsPerSet 次';
+  }
+
+  static String _trimNumber(double value) {
+    return value % 1 == 0 ? value.toStringAsFixed(0) : value.toStringAsFixed(1);
+  }
+
+  String get fingerprint => [
+        name.trim(),
+        part,
+        weight.toStringAsFixed(3),
+        sets,
+        repsPerSet,
+        feeling.trim(),
+        supplement.trim(),
+        category,
+        durationMinutes.toStringAsFixed(2),
+        distanceKm.toStringAsFixed(3),
+        met.toStringAsFixed(2),
+      ].join('|');
+}
+
+/// 同一天多次保存或云同步时可能把相同动作重复合并，展示与统计前统一去重。
+List<WorkoutProject> dedupeWorkoutProjects(Iterable<WorkoutProject> projects) {
+  final seen = <String>{};
+  final result = <WorkoutProject>[];
+  for (final project in projects) {
+    if (seen.add(project.fingerprint)) result.add(project);
+  }
+  return result;
+}
+
+List<WorkoutRecord> normalizeWorkoutRecords(Iterable<WorkoutRecord> records) {
+  final seenIds = <String>{};
+  final seenContent = <String>{};
+  final result = <WorkoutRecord>[];
+  for (final record in records) {
+    final projects = dedupeWorkoutProjects(record.projects);
+    final id = record.id.trim();
+    if (id.isNotEmpty && !seenIds.add(id)) continue;
+    final contentKey = [
+      DateFormat('yyyy-MM-dd').format(record.date),
+      ...projects.map((project) => project.fingerprint),
+    ].join('||');
+    if (!seenContent.add(contentKey)) continue;
+    result.add(WorkoutRecord(
+      id: record.id,
+      date: record.date,
+      sessionNumber: record.sessionNumber,
+      projects: projects,
+      timestamp: record.timestamp,
+    ));
+  }
+  return result;
 }
 
 // ==================== JSON 存储服务 ====================
@@ -182,17 +350,7 @@ class JsonStorageService {
       'id': r.id,
       'date': r.date.toIso8601String(),
       'sessionNumber': r.sessionNumber,
-      'projects': r.projects
-          .map((p) => {
-                'name': p.name,
-                'part': p.part,
-                'weight': p.weight,
-                'sets': p.sets,
-                'repsPerSet': p.repsPerSet,
-                'feeling': p.feeling,
-                'supplement': p.supplement,
-              })
-          .toList(),
+      'projects': r.projects.map((p) => p.toJson()).toList(),
       'timestamp': r.timestamp.toIso8601String(),
     };
   }
@@ -203,14 +361,8 @@ class JsonStorageService {
       date: DateTime.parse(json['date']),
       sessionNumber: json['sessionNumber'],
       projects: (json['projects'] as List)
-          .map((p) => WorkoutProject(
-                name: p['name'],
-                part: p['part'],
-                weight: (p['weight'] as num).toDouble(),
-                sets: p['sets'],
-                repsPerSet: p['repsPerSet'],
-                feeling: p['feeling'] ?? '',
-                supplement: p['supplement'] ?? '',
+          .map((p) => WorkoutProject.fromJson(
+                Map<String, dynamic>.from(p as Map),
               ))
           .toList(),
       timestamp: DateTime.parse(json['timestamp']),
@@ -252,7 +404,10 @@ class WorkoutProvider extends ChangeNotifier {
         _records.indexWhere((r) => isSameDay(r.date, newRecord.date));
     if (existingIndex != -1) {
       final existing = _records[existingIndex];
-      final mergedProjects = [...existing.projects, ...newRecord.projects];
+      final mergedProjects = dedupeWorkoutProjects([
+        ...existing.projects,
+        ...newRecord.projects,
+      ]);
       final updatedRecord = WorkoutRecord(
         id: existing.id,
         date: existing.date,
@@ -262,7 +417,13 @@ class WorkoutProvider extends ChangeNotifier {
       );
       _records[existingIndex] = updatedRecord;
     } else {
-      _records.add(newRecord);
+      _records.add(WorkoutRecord(
+        id: newRecord.id,
+        date: newRecord.date,
+        sessionNumber: newRecord.sessionNumber,
+        projects: dedupeWorkoutProjects(newRecord.projects),
+        timestamp: newRecord.timestamp,
+      ));
     }
     recalculateSessionNumbers();
   }
@@ -270,7 +431,13 @@ class WorkoutProvider extends ChangeNotifier {
   void updateRecord(String id, WorkoutRecord updatedRecord) {
     final index = _records.indexWhere((record) => record.id == id);
     if (index != -1) {
-      _records[index] = updatedRecord;
+      _records[index] = WorkoutRecord(
+        id: updatedRecord.id,
+        date: updatedRecord.date,
+        sessionNumber: updatedRecord.sessionNumber,
+        projects: dedupeWorkoutProjects(updatedRecord.projects),
+        timestamp: updatedRecord.timestamp,
+      );
       recalculateSessionNumbers();
     }
   }
@@ -281,7 +448,7 @@ class WorkoutProvider extends ChangeNotifier {
   }
 
   void loadRecords(List<WorkoutRecord> newRecords) {
-    _records = newRecords;
+    _records = normalizeWorkoutRecords(newRecords);
     recalculateSessionNumbers();
   }
 
@@ -336,7 +503,10 @@ class WorkoutProvider extends ChangeNotifier {
       final key = DateFormat('yyyy-MM-dd').format(record.date);
       if (merged.containsKey(key)) {
         final existing = merged[key]!;
-        existing.projects.addAll(record.projects);
+        existing.projects = dedupeWorkoutProjects([
+          ...existing.projects,
+          ...record.projects,
+        ]);
         if (record.sessionNumber != null &&
             (existing.sessionNumber == null ||
                 record.sessionNumber! > existing.sessionNumber!)) {
@@ -408,7 +578,7 @@ class WorkoutProvider extends ChangeNotifier {
   Future<void> loadSavedRecords() async {
     if (_jsonService != null) {
       final records = await _jsonService!.loadRecords();
-      _records = records;
+      _records = normalizeWorkoutRecords(records);
     } else {
       final prefs = await SharedPreferences.getInstance();
       final recordsJson = prefs.getString('workout_records');
@@ -420,17 +590,11 @@ class WorkoutProvider extends ChangeNotifier {
               id: item['id'],
               date: DateTime.parse(item['date']),
               sessionNumber: item['sessionNumber'],
-              projects: (item['projects'] as List).map((project) {
-                return WorkoutProject(
-                  name: project['name'],
-                  part: project['part'],
-                  weight: project['weight']?.toDouble() ?? 0,
-                  sets: project['sets']?.toInt() ?? 0,
-                  repsPerSet: project['repsPerSet']?.toInt() ?? 0,
-                  feeling: project['feeling'] ?? '',
-                  supplement: project['supplement'] ?? '',
-                );
-              }).toList(),
+              projects: (item['projects'] as List)
+                  .map((project) => WorkoutProject.fromJson(
+                        Map<String, dynamic>.from(project as Map),
+                      ))
+                  .toList(),
               timestamp: DateTime.parse(item['timestamp']),
             );
           }).toList();
@@ -439,7 +603,8 @@ class WorkoutProvider extends ChangeNotifier {
         }
       }
     }
-    notifyListeners();
+    _records = normalizeWorkoutRecords(_records);
+    recalculateSessionNumbers();
   }
 }
 
@@ -847,6 +1012,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   final List<TextEditingController> repsControllers = [];
   final List<TextEditingController> feelingControllers = [];
   final List<TextEditingController> supplementControllers = [];
+  final List<TextEditingController> durationControllers = [];
+  final List<TextEditingController> distanceControllers = [];
   final List<ValueNotifier<String>> partNotifiers = [];
 
   bool _isLoading = false;
@@ -916,14 +1083,29 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final validProjects = <WorkoutProject>[];
     for (var i = 0; i < projects.length; i++) {
       if (nameControllers[i].text.trim().isNotEmpty) {
+        final name = nameControllers[i].text.trim();
+        final definition = ExerciseLibrary.findByName(name);
+        final category = definition?.kind.label ??
+            (partNotifiers[i].value == '有氧'
+                ? '有氧'
+                : partNotifiers[i].value == '柔韧'
+                    ? '柔韧'
+                    : partNotifiers[i].value == '专项'
+                        ? '专项'
+                        : '力量');
         validProjects.add(WorkoutProject(
-          name: nameControllers[i].text.trim(),
+          name: name,
           part: partNotifiers[i].value,
           weight: double.tryParse(weightControllers[i].text) ?? 0,
           sets: int.tryParse(setsControllers[i].text) ?? 0,
           repsPerSet: int.tryParse(repsControllers[i].text) ?? 0,
           feeling: feelingControllers[i].text.trim(),
           supplement: supplementControllers[i].text.trim(),
+          category: category,
+          durationMinutes:
+              double.tryParse(durationControllers[i].text.trim()) ?? 0,
+          distanceKm: double.tryParse(distanceControllers[i].text.trim()) ?? 0,
+          met: definition?.met ?? 0,
         ));
       }
     }
@@ -1072,10 +1254,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 id: merged[index].id,
                 date: merged[index].date,
                 sessionNumber: merged[index].sessionNumber,
-                projects: [
+                projects: dedupeWorkoutProjects([
                   ...merged[index].projects,
                   ...record.projects,
-                ],
+                ]),
                 timestamp: DateTime.now(),
               );
             }
@@ -1234,6 +1416,181 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+  void _showRecordDetail(BuildContext context, WorkoutRecord record) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final spec = sheetContext.watch<ThemeProvider>().currentSpec;
+        final projects = dedupeWorkoutProjects(record.projects)
+            .where((project) => project.name.trim().isNotEmpty)
+            .toList();
+        return FractionallySizedBox(
+          heightFactor: .78,
+          child: Container(
+            decoration: BoxDecoration(
+              color: spec.background,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border.all(
+                color: spec.textPrimary.withValues(alpha: .08),
+              ),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 12, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${DateFormat('M月d日').format(record.date)} · ${weekdayLabel(record.date)}',
+                              style: TextStyle(
+                                color: spec.textPrimary,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '第 ${record.sessionNumber ?? '—'} 次训练 · '
+                              '${projects.length} 个动作'
+                              '${record.totalDurationMinutes > 0 ? ' · ${record.totalDurationMinutes.toStringAsFixed(0)} 分钟' : ''}',
+                              style: TextStyle(
+                                color: spec.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        icon: Icon(
+                          Icons.close_rounded,
+                          color: spec.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
+                    children: [
+                      for (final project in projects)
+                        GlassPanel(
+                          margin: const EdgeInsets.only(bottom: 9),
+                          padding: const EdgeInsets.all(14),
+                          radius: 17,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      project.name,
+                                      style: TextStyle(
+                                        color: spec.textPrimary,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  Pill(
+                                    label: project.part,
+                                    color: spec.secondary,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 7),
+                              Text(
+                                project.inputSummary,
+                                style: TextStyle(
+                                  color: spec.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                project.isTimeBased
+                                    ? '估算消耗 ${project.estimatedCalories().round()} kcal'
+                                    : '做功 ${formatCompact(project.calculateWork())} J'
+                                        ' · 估算 ${project.estimatedCalories().round()} kcal',
+                                style: TextStyle(
+                                  color: spec.primary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (project.feeling.trim().isNotEmpty ||
+                                  project.supplement.trim().isNotEmpty) ...[
+                                const SizedBox(height: 5),
+                                Text(
+                                  [
+                                    if (project.feeling.trim().isNotEmpty)
+                                      '感受：${project.feeling.trim()}',
+                                    if (project.supplement.trim().isNotEmpty)
+                                      '备注：${project.supplement.trim()}',
+                                  ].join('  ·  '),
+                                  style: TextStyle(
+                                    color: spec.textSecondary,
+                                    fontSize: 11,
+                                    height: 1.45,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      if (projects.isEmpty)
+                        Text(
+                          '这条记录还没有动作明细。',
+                          style: TextStyle(
+                            color: spec.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(sheetContext);
+                        _showHistory(context);
+                      },
+                      icon: const Icon(Icons.history_rounded, size: 18),
+                      label: const Text('查看全部训练记录'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(46),
+                        foregroundColor: spec.primary,
+                        side: BorderSide(
+                          color: spec.primary.withValues(alpha: .3),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _showHistory(BuildContext context) {
     Navigator.push(
       context,
@@ -1282,6 +1639,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       repsController: repsControllers[index],
       feelingController: feelingControllers[index],
       supplementController: supplementControllers[index],
+      durationController: durationControllers[index],
+      distanceController: distanceControllers[index],
       canRemove: projects.length > 1,
       onRemove: () => _removeProjectAt(index),
     );
@@ -1296,6 +1655,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       repsControllers.add(TextEditingController());
       feelingControllers.add(TextEditingController());
       supplementControllers.add(TextEditingController());
+      durationControllers.add(TextEditingController());
+      distanceControllers.add(TextEditingController());
       partNotifiers.add(ValueNotifier<String>('胸'));
     });
   }
@@ -1310,6 +1671,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       repsControllers.removeAt(index).dispose();
       feelingControllers.removeAt(index).dispose();
       supplementControllers.removeAt(index).dispose();
+      durationControllers.removeAt(index).dispose();
+      distanceControllers.removeAt(index).dispose();
       partNotifiers.removeAt(index).dispose();
     });
   }
@@ -1330,6 +1693,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       feelingControllers.add(TextEditingController(text: project.feeling));
       supplementControllers
           .add(TextEditingController(text: project.supplement));
+      durationControllers.add(TextEditingController(
+        text: project.durationMinutes == 0
+            ? ''
+            : project.durationMinutes.toString(),
+      ));
+      distanceControllers.add(TextEditingController(
+        text: project.distanceKm == 0 ? '' : project.distanceKm.toString(),
+      ));
       partNotifiers.add(ValueNotifier<String>(project.part));
     }
   }
@@ -1353,6 +1724,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     for (final c in supplementControllers) {
       c.dispose();
     }
+    for (final c in durationControllers) {
+      c.dispose();
+    }
+    for (final c in distanceControllers) {
+      c.dispose();
+    }
     for (final n in partNotifiers) {
       n.dispose();
     }
@@ -1362,6 +1739,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     repsControllers.clear();
     feelingControllers.clear();
     supplementControllers.clear();
+    durationControllers.clear();
+    distanceControllers.clear();
     partNotifiers.clear();
   }
 
@@ -1548,8 +1927,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   ),
                 ],
               ),
-              child: const Icon(Icons.fitness_center_rounded,
-                  color: Colors.white, size: 20),
+              child: Icon(Icons.fitness_center_rounded,
+                  color: spec.onHero, size: 20),
             ),
             const SizedBox(width: 10),
             Column(
@@ -1709,16 +2088,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                         ),
                       ],
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.check_circle_rounded,
-                            color: Colors.white, size: 22),
-                        SizedBox(width: 9),
+                            color: spec.onHero, size: 22),
+                        const SizedBox(width: 9),
                         Text(
                           '保存训练记录',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: spec.onHero,
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             letterSpacing: .4,
@@ -1767,7 +2146,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   for (final record in recent)
                     _RecentRecordCard(
                       record: record,
-                      onTap: () => _showHistory(context),
+                      onTap: () => _showRecordDetail(context, record),
                     ),
               ],
             ),
@@ -1876,7 +2255,9 @@ class _RecentRecordCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                formatCompact(record.totalWork),
+                record.totalWork > 0
+                    ? formatCompact(record.totalWork)
+                    : record.totalDurationMinutes.toStringAsFixed(0),
                 style: TextStyle(
                   color: spec.primary,
                   fontWeight: FontWeight.w900,
@@ -1884,7 +2265,11 @@ class _RecentRecordCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '焦耳',
+                record.totalWork > 0
+                    ? '焦耳'
+                    : record.totalDistanceKm > 0
+                        ? '分钟 · ${record.totalDistanceKm.toStringAsFixed(1)} km'
+                        : '分钟',
                 style: TextStyle(color: spec.textSecondary, fontSize: 9),
               ),
             ],
@@ -1905,6 +2290,8 @@ class _ProjectCard extends StatefulWidget {
   final TextEditingController repsController;
   final TextEditingController feelingController;
   final TextEditingController supplementController;
+  final TextEditingController durationController;
+  final TextEditingController distanceController;
   final bool canRemove;
   final VoidCallback onRemove;
 
@@ -1918,6 +2305,8 @@ class _ProjectCard extends StatefulWidget {
     required this.repsController,
     required this.feelingController,
     required this.supplementController,
+    required this.durationController,
+    required this.distanceController,
     required this.canRemove,
     required this.onRemove,
   });
@@ -1928,22 +2317,51 @@ class _ProjectCard extends StatefulWidget {
 
 class _ProjectCardState extends State<_ProjectCard> {
   late String _part;
+  ExerciseDefinition? _definition;
 
-  static const List<String> _parts = ['胸', '背', '腿', '肩', '腹'];
+  static const List<String> _parts = [
+    '胸',
+    '背',
+    '肩',
+    '手臂',
+    '腿',
+    '臀',
+    '核心',
+    '有氧',
+    '柔韧',
+    '全身',
+    '专项',
+  ];
 
   @override
   void initState() {
     super.initState();
     _part = widget.partNotifier.value;
+    _definition = ExerciseLibrary.findByName(widget.nameController.text);
     widget.partNotifier.addListener(_onPartChanged);
+    widget.nameController.addListener(_onNameChanged);
     widget.weightController.addListener(_refresh);
     widget.setsController.addListener(_refresh);
     widget.repsController.addListener(_refresh);
+    widget.durationController.addListener(_refresh);
+    widget.distanceController.addListener(_refresh);
   }
 
   void _onPartChanged() {
     if (!mounted) return;
     setState(() => _part = widget.partNotifier.value);
+  }
+
+  void _onNameChanged() {
+    if (!mounted) return;
+    final definition = ExerciseLibrary.findByName(widget.nameController.text);
+    setState(() {
+      _definition = definition;
+      if (definition != null && definition.group != _part) {
+        _part = definition.group;
+        widget.partNotifier.value = definition.group;
+      }
+    });
   }
 
   void _refresh() {
@@ -1953,20 +2371,67 @@ class _ProjectCardState extends State<_ProjectCard> {
   @override
   void dispose() {
     widget.partNotifier.removeListener(_onPartChanged);
+    widget.nameController.removeListener(_onNameChanged);
     widget.weightController.removeListener(_refresh);
     widget.setsController.removeListener(_refresh);
     widget.repsController.removeListener(_refresh);
+    widget.durationController.removeListener(_refresh);
+    widget.distanceController.removeListener(_refresh);
     super.dispose();
   }
 
+  String get _category =>
+      _definition?.kind.label ??
+      (_part == '有氧'
+          ? '有氧'
+          : _part == '柔韧'
+              ? '柔韧'
+              : '力量');
+
+  bool get _isCardio => _category == '有氧' || _category == '专项';
+
+  bool get _isTimeBased => _isCardio || _category == '柔韧';
+
   double _calculateWork() {
+    if (_category == '有氧' || _category == '柔韧' || _category == '专项') {
+      return 0;
+    }
     final weight = double.tryParse(widget.weightController.text) ?? 0;
     final sets = int.tryParse(widget.setsController.text) ?? 0;
     final reps = int.tryParse(widget.repsController.text) ?? 0;
-    const travelDistances = {'肩': 0.6, '背': 0.6, '腿': 0.7, '胸': 0.6, '腹': 0};
-    if (_part == '腹') return (sets * reps * 65 * 9.8 * 0.3).toDouble();
-    final distance = travelDistances[_part] ?? 0;
+    const travelDistances = {
+      '肩': 0.6,
+      '背': 0.6,
+      '腿': 0.7,
+      '胸': 0.6,
+      '核心': 0.3,
+      '手臂': 0.55,
+      '前臂': 0.4,
+      '臀': 0.7,
+      '小腿': 0.45,
+      '全身': 0.6,
+    };
+    if (_part == '核心' || _part == '腹') {
+      return (sets * reps * 65 * 9.8 * 0.3).toDouble();
+    }
+    final distance = travelDistances[_part] ?? 0.6;
     return weight * 9.8 * distance * sets * reps;
+  }
+
+  Future<void> _pickExercise() async {
+    final selected = await Navigator.push<ExerciseDefinition>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ExerciseLibraryPage(initialKind: _definition?.kind),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _definition = selected;
+      _part = selected.group;
+      widget.partNotifier.value = selected.group;
+      widget.nameController.text = selected.name;
+    });
   }
 
   Widget _label(String text, AppThemeSpec spec) {
@@ -2124,6 +2589,10 @@ class _ProjectCardState extends State<_ProjectCard> {
   Widget build(BuildContext context) {
     final spec = context.watch<ThemeProvider>().currentSpec;
     final work = _calculateWork();
+    final duration = double.tryParse(widget.durationController.text) ?? 0;
+    final met = _definition?.met ?? 0;
+    final kcal =
+        duration <= 0 ? 0 : (met > 0 ? met : 6.5) * 3.5 * 70 / 200 * duration;
     return GlassPanel(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
@@ -2143,8 +2612,8 @@ class _ProjectCardState extends State<_ProjectCard> {
                 child: Center(
                   child: Text(
                     '${widget.index + 1}',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: spec.onHero,
                       fontSize: 14,
                       fontWeight: FontWeight.w900,
                     ),
@@ -2195,6 +2664,15 @@ class _ProjectCardState extends State<_ProjectCard> {
                   ),
                 ),
               ),
+              IconButton(
+                onPressed: _pickExercise,
+                tooltip: '从动作库选择',
+                icon: Icon(
+                  Icons.menu_book_rounded,
+                  color: spec.primary,
+                  size: 20,
+                ),
+              ),
               if (widget.canRemove) ...[
                 const SizedBox(width: 2),
                 IconButton(
@@ -2209,6 +2687,39 @@ class _ProjectCardState extends State<_ProjectCard> {
               ],
             ],
           ),
+          if (_definition != null) ...[
+            const SizedBox(height: 7),
+            Row(
+              children: [
+                Pill(
+                    label: _definition!.kind.label,
+                    icon: Icons.category_rounded),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _definition!.equipment,
+                    style: TextStyle(
+                      color: spec.textSecondary,
+                      fontSize: 10.5,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _pickExercise,
+                  icon: const Icon(Icons.search_rounded, size: 15),
+                  label: const Text('动作库'),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 30),
+                    textStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           Wrap(
             spacing: 7,
@@ -2218,38 +2729,74 @@ class _ProjectCardState extends State<_ProjectCard> {
             ],
           ),
           const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _numberField(
-                  spec,
-                  widget.weightController,
-                  '重量',
-                  '0',
-                  suffix: 'kg',
+          if (_isTimeBased)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _numberField(
+                    spec,
+                    widget.durationController,
+                    '时长',
+                    '0',
+                    suffix: '分钟',
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _numberField(
-                  spec,
-                  widget.setsController,
-                  '组数',
-                  '0',
+                const SizedBox(width: 8),
+                if (_isCardio)
+                  Expanded(
+                    child: _numberField(
+                      spec,
+                      widget.distanceController,
+                      '距离',
+                      '0',
+                      suffix: 'km',
+                    ),
+                  ),
+                if (_category == '柔韧')
+                  Expanded(
+                    child: _numberField(
+                      spec,
+                      widget.repsController,
+                      '呼吸次数',
+                      '0',
+                    ),
+                  ),
+              ],
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _numberField(
+                    spec,
+                    widget.weightController,
+                    '重量',
+                    '0',
+                    suffix: 'kg',
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _numberField(
-                  spec,
-                  widget.repsController,
-                  '每组次数',
-                  '0',
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _numberField(
+                    spec,
+                    widget.setsController,
+                    '组数',
+                    '0',
+                  ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _numberField(
+                    spec,
+                    widget.repsController,
+                    '每组次数',
+                    '0',
+                  ),
+                ),
+              ],
+            ),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2282,10 +2829,16 @@ class _ProjectCardState extends State<_ProjectCard> {
             ),
             child: Row(
               children: [
-                Icon(Icons.bolt_rounded, size: 16, color: spec.primary),
+                Icon(
+                  _isTimeBased
+                      ? Icons.local_fire_department_rounded
+                      : Icons.bolt_rounded,
+                  size: 16,
+                  color: spec.primary,
+                ),
                 const SizedBox(width: 5),
                 Text(
-                  '预计做功',
+                  _isTimeBased ? '估算消耗' : '预计做功',
                   style: TextStyle(
                     color: spec.textSecondary,
                     fontSize: 11.5,
@@ -2294,7 +2847,9 @@ class _ProjectCardState extends State<_ProjectCard> {
                 ),
                 const Spacer(),
                 Text(
-                  '${formatCompact(work)} J',
+                  _isTimeBased
+                      ? '${kcal.toStringAsFixed(0)} kcal'
+                      : '${formatCompact(work)} J',
                   style: TextStyle(
                     color: spec.primary,
                     fontSize: 13,

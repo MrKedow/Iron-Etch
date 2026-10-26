@@ -4,12 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../data/exercise_library.dart';
 import '../main.dart';
 import '../providers/app_providers.dart';
 import '../services/ai_coach_service.dart';
 import '../services/coach_insights.dart';
+import '../services/knowledge_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ai_message_text.dart';
 import '../widgets/app_ui.dart';
+import 'insight_detail_pages.dart';
+import 'knowledge_page.dart';
 
 class CoachAnalysisPage extends StatefulWidget {
   const CoachAnalysisPage({super.key});
@@ -23,12 +28,16 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
   late final AnimationController _orbController;
   CoachKnowledge _knowledge = CoachKnowledge.empty();
   bool _knowledgeLoading = true;
+  List<KnowledgeArticle> _liveArticles = const [];
+  bool _liveLoading = true;
+  String? _liveError;
 
   final List<_ChatTurn> _chat = [];
   bool _aiLoading = false;
   final TextEditingController _questionController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _aiKey = GlobalKey();
+  final GlobalKey _lastTurnKey = GlobalKey();
   final Random _random = Random();
 
   @override
@@ -39,6 +48,7 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
       duration: const Duration(seconds: 5),
     )..repeat();
     _loadKnowledge();
+    _loadLiveKnowledge();
   }
 
   Future<void> _loadKnowledge() async {
@@ -47,6 +57,17 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
     setState(() {
       _knowledge = knowledge;
       _knowledgeLoading = false;
+    });
+  }
+
+  Future<void> _loadLiveKnowledge() async {
+    setState(() => _liveLoading = true);
+    final bundle = await KnowledgeService.fetchAll(limitPerTopic: 2);
+    if (!mounted) return;
+    setState(() {
+      _liveArticles = bundle.articles.take(4).toList();
+      _liveError = bundle.failures.isEmpty ? null : bundle.failures.first;
+      _liveLoading = false;
     });
   }
 
@@ -61,15 +82,20 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
   CoachInsights get _insights =>
       CoachInsights(context.read<WorkoutProvider>().records);
 
-  void _scrollToAi() {
-    final target = _aiKey.currentContext;
-    if (target == null) return;
-    Scrollable.ensureVisible(
-      target,
-      duration: const Duration(milliseconds: 650),
-      curve: Curves.easeOutCubic,
-      alignment: .06,
-    );
+  void _scrollToAi({bool latestTurn = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final target = latestTurn && _lastTurnKey.currentContext != null
+          ? _lastTurnKey.currentContext
+          : _aiKey.currentContext;
+      if (target == null) return;
+      Scrollable.ensureVisible(
+        target,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeOutCubic,
+        alignment: latestTurn ? .12 : .04,
+      );
+    });
   }
 
   Future<void> _askAi({String? presetQuestion}) async {
@@ -102,15 +128,22 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
       ));
       _questionController.clear();
     });
-    _scrollToAi();
-    _scrollToBottomSoon();
+    _scrollToAi(latestTurn: true);
 
     final systemPrompt = '''
-你是「铁镌」App 的 AI 力量教练，由 OpenCode Zen 驱动。
+你是「铁镌」App 的 AI 力量教练，由免费 AI 多通道驱动。
 你的风格：专业、直接、有温度，像一位懂训练数据的老教练。不要空泛鼓励，必须引用用户真实数据。
-请用中文回答，结构清晰，可以使用短标题和项目符号。控制在 450 字以内。
 训练建议必须遵循科学证据；不确定时说明不确定性；不要提供医疗诊断，若涉及伤痛请建议就医。
-请重点分析：最近一次训练质量、容量与频率、肌群均衡、渐进超负荷、恢复与下周安排。
+重点分析：最近一次训练质量、容量与频率、肌群均衡、渐进超负荷、恢复与下周安排。
+
+输出格式（严格遵守）：
+1. 只输出最终中文回答，不要输出思考过程、英文草稿或自我说明。
+2. 禁止使用 Markdown 符号（#、*、`、>、|）、表格、制表符和连续空行。
+3. 第一行用一句不超过 20 字的结论概括状态。
+4. 接下来写 2-3 个小标题段落，每个小标题以“结论：”“问题：”“安排：”这类短词开头，各配 1-2 句话。
+5. 最后单独一行以“今天先做：”开头，给一个今天就能执行的具体动作。
+6. 全文控制在 450 字以内，语气自然，像教练当面说话。
+
 以下是用户真实训练数据：
 ${insights.buildAiContext(settings)}
 ''';
@@ -151,7 +184,7 @@ ${insights.buildAiContext(settings)}
         ));
       }
     });
-    _scrollToBottomSoon();
+    _scrollToAi(latestTurn: true);
   }
 
   String _fallbackAdvice(String error, CoachInsights insights) {
@@ -178,17 +211,6 @@ ${insights.buildAiContext(settings)}
     }
     buffer.writeln('• 下一次训练优先保持动作质量，再尝试在主要动作上增加 1-2.5kg 或 1-2 次。');
     return buffer.toString();
-  }
-
-  void _scrollToBottomSoon() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeOutCubic,
-      );
-    });
   }
 
   void _showSnack(String message) {
@@ -224,127 +246,182 @@ ${insights.buildAiContext(settings)}
           ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(18, 4, 18, 40),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                FadeSlideIn(
-                  child: _HeroPanel(
-                    insights: insights,
-                    settings: settings,
-                    orb: _orbController,
-                    onAskAi: () {
-                      _scrollToAi();
-                      if (_chat.isEmpty) _askAi();
-                    },
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FadeSlideIn(
+                    child: _HeroPanel(
+                      insights: insights,
+                      settings: settings,
+                      orb: _orbController,
+                      onAskAi: () {
+                        if (_chat.isEmpty) {
+                          _askAi();
+                        } else {
+                          _scrollToAi(latestTurn: true);
+                        }
+                      },
+                    ),
                   ),
-                ),
-                const SectionHeader(
-                  title: '训练概览',
-                  subtitle: '来自你真实训练记录的关键数据',
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: StatTile(
-                        label: '累计训练',
-                        value: '${insights.totalSessions}',
-                        unit: '次',
-                        icon: Icons.fitness_center_rounded,
+                  const SectionHeader(
+                    title: '训练概览',
+                    subtitle: '来自你真实训练记录的关键数据',
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: StatTile(
+                          label: '累计训练',
+                          value: '${insights.totalSessions}',
+                          unit: '次',
+                          icon: Icons.fitness_center_rounded,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: StatTile(
-                        label: '本周训练',
-                        value: '${insights.thisWeekSessions}',
-                        unit: '/${settings.weeklyGoal}',
-                        icon: Icons.calendar_month_rounded,
-                        accent: spec.secondary,
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: StatTile(
+                          label: '本周训练',
+                          value: '${insights.thisWeekSessions}',
+                          unit: '/${settings.weeklyGoal}',
+                          icon: Icons.calendar_month_rounded,
+                          accent: spec.secondary,
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: StatTile(
+                          label: '总训练容量',
+                          value: (insights.totalWork / 1000).toStringAsFixed(1),
+                          unit: '千焦',
+                          icon: Icons.bolt_rounded,
+                          accent: const Color(0xFFFFA24C),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: StatTile(
+                          label: '累计组数',
+                          value: '${insights.totalSets}',
+                          unit: '组',
+                          icon: Icons.stacked_bar_chart_rounded,
+                          accent: const Color(0xFF4FD1C5),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SectionHeader(
+                    title: '最近训练分析',
+                    subtitle: '逐项拆解最近一次训练',
+                  ),
+                  FadeSlideIn(
+                    index: 1,
+                    child: _RecentAnalysisCard(
+                      insights: insights,
+                      records: recent,
                     ),
+                  ),
+                  const SectionHeader(
+                    title: '训练洞察',
+                    subtitle: '频率、容量、均衡与个人纪录',
+                  ),
+                  _InsightGrid(insights: insights, settings: settings),
+                  const SectionHeader(
+                    title: 'AI 教练建议',
+                    subtitle: '真实大模型 · 基于你的训练数据生成',
+                  ),
+                  Container(
+                    key: _aiKey,
+                    child: _AiCoachCard(
+                      spec: spec,
+                      settings: settings,
+                      chat: _chat,
+                      loading: _aiLoading,
+                      controller: _questionController,
+                      lastTurnKey: _lastTurnKey,
+                      onSend: () => _askAi(),
+                      onPreset: (question) => _askAi(presetQuestion: question),
+                      onOpenSettings: () {
+                        _showAiConfig(context, settings);
+                      },
+                    ),
+                  ),
+                  SectionHeader(
+                    title: '知识补给',
+                    subtitle: '实时同步 PubMed 与 WHO，下拉查看全部',
+                    trailing: TextButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const KnowledgePage(),
+                          ),
+                        );
+                      },
+                      child: const Text('全部'),
+                    ),
+                  ),
+                  if (_liveLoading && _liveArticles.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 26),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 10),
+                            Text(
+                              '正在获取最新研究…',
+                              style: TextStyle(
+                                color: spec.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (_liveArticles.isNotEmpty)
+                    for (final article in _liveArticles)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: KnowledgeArticleCard(article: article),
+                      )
+                  else if (_knowledgeLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 30),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else ...[
+                    _KnowledgeGrid(
+                      knowledge: _knowledge,
+                      random: _random,
+                    ),
+                    if (_liveError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          '实时资讯暂不可用，已展示本地精选：$_liveError',
+                          style: TextStyle(
+                            color: spec.textSecondary,
+                            fontSize: 10.5,
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
                   ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: StatTile(
-                        label: '总训练容量',
-                        value: (insights.totalWork / 1000).toStringAsFixed(1),
-                        unit: '千焦',
-                        icon: Icons.bolt_rounded,
-                        accent: const Color(0xFFFFA24C),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: StatTile(
-                        label: '累计组数',
-                        value: '${insights.totalSets}',
-                        unit: '组',
-                        icon: Icons.stacked_bar_chart_rounded,
-                        accent: const Color(0xFF4FD1C5),
-                      ),
-                    ),
-                  ],
-                ),
-                const SectionHeader(
-                  title: '最近训练分析',
-                  subtitle: '逐项拆解最近一次训练',
-                ),
-                FadeSlideIn(
-                  index: 1,
-                  child: _RecentAnalysisCard(
-                    insights: insights,
-                    records: recent,
+                  const SectionHeader(
+                    title: '健身以来',
+                    subtitle: '每一次训练都在塑造更好的你',
                   ),
-                ),
-                const SectionHeader(
-                  title: '训练洞察',
-                  subtitle: '频率、容量、均衡与个人纪录',
-                ),
-                _InsightGrid(insights: insights, settings: settings),
-                const SectionHeader(
-                  title: 'AI 教练建议',
-                  subtitle: '真实大模型 · 基于你的训练数据生成',
-                ),
-                Container(
-                  key: _aiKey,
-                  child: _AiCoachCard(
-                    spec: spec,
-                    settings: settings,
-                    chat: _chat,
-                    loading: _aiLoading,
-                    controller: _questionController,
-                    onSend: () => _askAi(),
-                    onPreset: (question) => _askAi(presetQuestion: question),
-                    onOpenSettings: () {
-                      _showAiConfig(context, settings);
-                    },
+                  FadeSlideIn(
+                    index: 2,
+                    child: _OverallCard(insights: insights),
                   ),
-                ),
-                const SectionHeader(
-                  title: '知识补给',
-                  subtitle: '科学事实、研究、训练方案与迷思澄清',
-                ),
-                if (_knowledgeLoading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 30),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else
-                  _KnowledgeGrid(
-                    knowledge: _knowledge,
-                    random: _random,
-                  ),
-                const SectionHeader(
-                  title: '健身以来',
-                  subtitle: '每一次训练都在塑造更好的你',
-                ),
-                FadeSlideIn(
-                  index: 2,
-                  child: _OverallCard(insights: insights),
-                ),
-              ]),
+                ],
+              ),
             ),
           ),
         ],
@@ -363,14 +440,15 @@ ${insights.buildAiContext(settings)}
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text('OpenCode AI 设置'),
+            title: const Text('AI 通道设置'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '默认接入 OpenCode Zen 的 OpenAI 兼容接口。免费模型可直接尝试；如遇限流，填入控制台 API Key 即可。',
+                    '默认使用 BlockRun 免费通道，失败时自动回退到 Pollinations '
+                    '与 OpenCode Zen。也可以填入任意 OpenAI 兼容服务的 Key。',
                     style: TextStyle(fontSize: 12, height: 1.5),
                   ),
                   const SizedBox(height: 14),
@@ -378,8 +456,8 @@ ${insights.buildAiContext(settings)}
                     controller: apiKeyController,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: 'OpenCode API Key',
-                      hintText: 'sk-...（可留空试用免费模型）',
+                      labelText: 'API Key（可选）',
+                      hintText: 'sk-...（留空使用免费通道）',
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -545,10 +623,10 @@ class _HeroPanel extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 9, vertical: 5),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .14),
+                        color: spec.onHero.withValues(alpha: .1),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: Colors.white.withValues(alpha: .18),
+                          color: spec.onHero.withValues(alpha: .18),
                         ),
                       ),
                       child: Row(
@@ -564,11 +642,9 @@ class _HeroPanel extends StatelessWidget {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            settings.hasAiKey
-                                ? 'OPENCODE · API KEY'
-                                : 'OPENCODE · ZEN',
-                            style: const TextStyle(
-                              color: Colors.white,
+                            _aiChannelLabel(settings),
+                            style: TextStyle(
+                              color: spec.onHero,
                               fontSize: 9.5,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1,
@@ -579,14 +655,14 @@ class _HeroPanel extends StatelessWidget {
                     ),
                     const Spacer(),
                     Icon(Icons.auto_awesome,
-                        color: Colors.white.withValues(alpha: .6), size: 18),
+                        color: spec.onHero.withValues(alpha: .6), size: 18),
                   ],
                 ),
                 const SizedBox(height: 18),
                 Text(
                   '${dayGreeting()}，${settings.nickname}',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: spec.onHero,
                     fontSize: 23,
                     fontWeight: FontWeight.w900,
                     letterSpacing: .2,
@@ -598,7 +674,7 @@ class _HeroPanel extends StatelessWidget {
                       ? '记录第一次训练，让 AI 教练认识你。'
                       : '最近一次训练 · ${DateFormat('M月d日').format(insights.lastRecord!.date)} · ${insights.lastRecord!.projects.length} 个项目',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: .72),
+                    color: spec.onHeroMuted,
                     fontSize: 12.5,
                     height: 1.5,
                   ),
@@ -608,6 +684,7 @@ class _HeroPanel extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _heroMetric(
+                        spec,
                         '${insights.thisWeekSessions}',
                         '本周次数',
                         '目标 ${settings.weeklyGoal}',
@@ -616,10 +693,11 @@ class _HeroPanel extends StatelessWidget {
                     Container(
                       width: 1,
                       height: 38,
-                      color: Colors.white.withValues(alpha: .16),
+                      color: spec.onHero.withValues(alpha: .16),
                     ),
                     Expanded(
                       child: _heroMetric(
+                        spec,
                         (insights.totalWork / 1000).toStringAsFixed(1),
                         '总容量',
                         '千焦',
@@ -628,10 +706,11 @@ class _HeroPanel extends StatelessWidget {
                     Container(
                       width: 1,
                       height: 38,
-                      color: Colors.white.withValues(alpha: .16),
+                      color: spec.onHero.withValues(alpha: .16),
                     ),
                     Expanded(
                       child: _heroMetric(
+                        spec,
                         '${insights.trainingDays}',
                         '训练天数',
                         '天',
@@ -646,7 +725,8 @@ class _HeroPanel extends StatelessWidget {
                     onPressed: onAskAi,
                     style: FilledButton.styleFrom(
                       backgroundColor: Colors.white,
-                      foregroundColor: spec.background,
+                      foregroundColor:
+                          spec.isDark ? spec.background : spec.textPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     icon: const Icon(Icons.bolt_rounded, size: 20),
@@ -661,14 +741,15 @@ class _HeroPanel extends StatelessWidget {
     );
   }
 
-  Widget _heroMetric(String value, String label, String sub) {
+  Widget _heroMetric(
+      AppThemeSpec spec, String value, String label, String sub) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: spec.onHero,
             fontSize: 24,
             fontWeight: FontWeight.w900,
             height: 1,
@@ -678,7 +759,7 @@ class _HeroPanel extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: .7),
+            color: spec.onHeroMuted,
             fontSize: 10.5,
             fontWeight: FontWeight.w600,
           ),
@@ -686,7 +767,7 @@ class _HeroPanel extends StatelessWidget {
         Text(
           sub,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: .45),
+            color: spec.onHero.withValues(alpha: .55),
             fontSize: 9,
           ),
         ),
@@ -802,25 +883,12 @@ class _RecentAnalysisCard extends StatelessWidget {
                 ),
                 _miniDivider(spec),
                 _miniMetric(
-                  '${insights.lastParts.length}/5',
+                  '${insights.lastParts.length}/${ExerciseLibrary.trainingParts.length}',
                   '部位覆盖',
                   spec,
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: last.projects
-                .where((p) => p.name.trim().isNotEmpty)
-                .map((p) => Pill(
-                      label: '${p.name} · ${p.weight}kg',
-                      icon: Icons.fitness_center_rounded,
-                      color: p.part == '腿' ? const Color(0xFFFF9500) : null,
-                    ))
-                .toList(),
           ),
           if (progressList.isNotEmpty) ...[
             const SizedBox(height: 18),
@@ -834,6 +902,20 @@ class _RecentAnalysisCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             ...progressList.map((progress) {
+              final detail = progress.isTimeBased
+                  ? '${progress.durationMinutes.toStringAsFixed(0)} 分钟'
+                      '${progress.distanceKm > 0 ? ' · ${progress.distanceKm.toStringAsFixed(1)} km' : ''}'
+                  : '${progress.sets}×${progress.reps} @ ${progress.currentWeight}kg';
+              final change = progress.isTimeBased
+                  ? progress.category
+                  : (progress.isFirst
+                      ? '首次'
+                      : '${progress.diff! >= 0 ? '+' : ''}${progress.diff!.toStringAsFixed(1)}kg');
+              final tone = progress.isTimeBased || progress.isFirst
+                  ? spec.textSecondary
+                  : (progress.diff! >= 0
+                      ? const Color(0xFF34C759)
+                      : const Color(0xFFFF9500));
               return Padding(
                 padding: const EdgeInsets.only(bottom: 9),
                 child: Row(
@@ -842,11 +924,7 @@ class _RecentAnalysisCard extends StatelessWidget {
                       width: 7,
                       height: 7,
                       decoration: BoxDecoration(
-                        color: progress.isFirst
-                            ? spec.textSecondary
-                            : (progress.diff! >= 0
-                                ? const Color(0xFF34C759)
-                                : const Color(0xFFFF9500)),
+                        color: tone,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -863,7 +941,7 @@ class _RecentAnalysisCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${progress.sets}×${progress.reps} @ ${progress.currentWeight}kg',
+                      detail,
                       style: TextStyle(
                         color: spec.textSecondary,
                         fontSize: 10.5,
@@ -873,16 +951,10 @@ class _RecentAnalysisCard extends StatelessWidget {
                     SizedBox(
                       width: 62,
                       child: Text(
-                        progress.isFirst
-                            ? '首次'
-                            : '${progress.diff! >= 0 ? '+' : ''}${progress.diff!.toStringAsFixed(1)}kg',
+                        change,
                         textAlign: TextAlign.right,
                         style: TextStyle(
-                          color: progress.isFirst
-                              ? spec.textSecondary
-                              : (progress.diff! >= 0
-                                  ? const Color(0xFF34C759)
-                                  : const Color(0xFFFF9500)),
+                          color: tone,
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
                         ),
@@ -985,255 +1057,271 @@ class _InsightGrid extends StatelessWidget {
 
     return Column(
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: FadeSlideIn(
-                index: 1,
-                child: GlassPanel(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _cardHeader(Icons.flag_rounded, '本周目标', spec),
-                      const SizedBox(height: 14),
-                      RichText(
-                        text: TextSpan(
-                          children: [
-                            TextSpan(
-                              text: '${insights.thisWeekSessions}',
-                              style: TextStyle(
-                                color: spec.textPrimary,
-                                fontSize: 28,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            TextSpan(
-                              text: ' / ${settings.weeklyGoal} 次',
-                              style: TextStyle(
-                                color: spec.textSecondary,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(5),
-                        child: LinearProgressIndicator(
-                          value: goalProgress,
-                          minHeight: 7,
-                          backgroundColor:
-                              spec.textPrimary.withValues(alpha: .07),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        insights.thisWeekSessions >= settings.weeklyGoal
-                            ? '本周目标已完成，保持恢复。'
-                            : '还差 ${settings.weeklyGoal - insights.thisWeekSessions} 次达成目标。',
-                        style: TextStyle(
-                          color: spec.textSecondary,
-                          fontSize: 10.5,
-                          height: 1.45,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FadeSlideIn(
-                index: 2,
-                child: GlassPanel(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _cardHeader(Icons.balance_rounded, '部位均衡', spec),
-                      const SizedBox(height: 12),
-                      ...partStats.take(4).map((stat) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 7),
-                          child: Row(
+        SizedBox(
+          height: 184,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: FadeSlideIn(
+                  index: 1,
+                  child: GlassPanel(
+                    padding: const EdgeInsets.all(16),
+                    onTap: () => _open(context, const WeeklyTrainingDaysPage()),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _cardHeader(Icons.flag_rounded, '本周目标', spec),
+                        const SizedBox(height: 14),
+                        RichText(
+                          text: TextSpan(
                             children: [
-                              SizedBox(
-                                width: 18,
-                                child: Text(
-                                  stat.part,
-                                  style: TextStyle(
-                                    color: spec.textSecondary,
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                              TextSpan(
+                                text: '${insights.thisWeekSessions}',
+                                style: TextStyle(
+                                  color: spec.textPrimary,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w900,
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: LinearProgressIndicator(
-                                    value:
-                                        (stat.work / maxWork).clamp(0.0, 1.0),
-                                    minHeight: 5,
-                                    backgroundColor:
-                                        spec.textPrimary.withValues(alpha: .06),
-                                    color: stat.part == '腿'
-                                        ? const Color(0xFFFF9500)
-                                        : spec.primary,
-                                  ),
+                              TextSpan(
+                                text: ' / ${settings.weeklyGoal} 次',
+                                style: TextStyle(
+                                  color: spec.textSecondary,
+                                  fontSize: 12,
                                 ),
                               ),
                             ],
                           ),
-                        );
-                      }),
-                      if (partStats.isEmpty)
+                        ),
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(5),
+                          child: LinearProgressIndicator(
+                            value: goalProgress,
+                            minHeight: 7,
+                            backgroundColor:
+                                spec.textPrimary.withValues(alpha: .07),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
                         Text(
-                          '暂无数据',
+                          insights.thisWeekSessions >= settings.weeklyGoal
+                              ? '本周目标已完成，保持恢复。'
+                              : '还差 ${settings.weeklyGoal - insights.thisWeekSessions} 次达成目标。',
                           style: TextStyle(
                             color: spec.textSecondary,
                             fontSize: 10.5,
+                            height: 1.45,
                           ),
                         ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: FadeSlideIn(
-                index: 3,
-                child: GlassPanel(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _cardHeader(Icons.show_chart_rounded, '容量趋势', spec),
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        height: 66,
-                        child: trend.isEmpty
-                            ? Center(
-                                child: Text(
-                                  '暂无容量数据',
-                                  style: TextStyle(
-                                    color: spec.textSecondary,
-                                    fontSize: 10.5,
-                                  ),
-                                ),
-                              )
-                            : Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: trend.map((point) {
-                                  final ratio =
-                                      (point.work / maxTrend).clamp(.12, 1.0);
-                                  return Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 2),
-                                      child: Container(
-                                        height: 66 * ratio,
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              spec.primary,
-                                              spec.primary
-                                                  .withValues(alpha: .28),
-                                            ],
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                          ),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                      ),
-                      const SizedBox(height: 9),
-                      Text(
-                        trend.length < 2
-                            ? '再记录几次即可看到趋势'
-                            : '最近 ${trend.length} 次训练容量',
-                        style: TextStyle(
-                          color: spec.textSecondary,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FadeSlideIn(
-                index: 4,
-                child: GlassPanel(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _cardHeader(Icons.emoji_events_rounded, '个人纪录', spec),
-                      const SizedBox(height: 13),
-                      if (bests.isEmpty)
-                        Text(
-                          '暂无重量记录',
-                          style: TextStyle(
-                            color: spec.textSecondary,
-                            fontSize: 10.5,
-                          ),
-                        )
-                      else
-                        ...bests.take(3).map((entry) {
+              const SizedBox(width: 10),
+              Expanded(
+                child: FadeSlideIn(
+                  index: 2,
+                  child: GlassPanel(
+                    padding: const EdgeInsets.all(16),
+                    onTap: () => _open(context, const PartBalanceDetailPage()),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _cardHeader(Icons.balance_rounded, '部位均衡', spec),
+                        const SizedBox(height: 12),
+                        ...partStats.take(4).map((stat) {
                           return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.only(bottom: 7),
                             child: Row(
                               children: [
-                                Expanded(
+                                SizedBox(
+                                  width: 18,
                                   child: Text(
-                                    entry.key,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                    stat.part,
                                     style: TextStyle(
-                                      color: spec.textPrimary,
+                                      color: spec.textSecondary,
                                       fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),
-                                Text(
-                                  '${entry.value.toStringAsFixed(entry.value % 1 == 0 ? 0 : 1)}kg',
-                                  style: TextStyle(
-                                    color: spec.primary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value:
+                                          (stat.work / maxWork).clamp(0.0, 1.0),
+                                      minHeight: 5,
+                                      backgroundColor: spec.textPrimary
+                                          .withValues(alpha: .06),
+                                      color: stat.part == '腿'
+                                          ? const Color(0xFFFF9500)
+                                          : spec.primary,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           );
                         }),
-                    ],
+                        if (partStats.isEmpty)
+                          Text(
+                            '暂无数据',
+                            style: TextStyle(
+                              color: spec.textSecondary,
+                              fontSize: 10.5,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 184,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: FadeSlideIn(
+                  index: 3,
+                  child: GlassPanel(
+                    padding: const EdgeInsets.all(16),
+                    onTap: () => _open(context, const VolumeTrendPage()),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _cardHeader(Icons.show_chart_rounded, '容量趋势', spec),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          height: 66,
+                          child: trend.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    '暂无容量数据',
+                                    style: TextStyle(
+                                      color: spec.textSecondary,
+                                      fontSize: 10.5,
+                                    ),
+                                  ),
+                                )
+                              : Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: trend.map((point) {
+                                    final ratio =
+                                        (point.work / maxTrend).clamp(.12, 1.0);
+                                    return Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 2),
+                                        child: Container(
+                                          height: 66 * ratio,
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                spec.primary,
+                                                spec.primary
+                                                    .withValues(alpha: .28),
+                                              ],
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                        ),
+                        const SizedBox(height: 9),
+                        Text(
+                          trend.length < 2
+                              ? '再记录几次即可看到趋势'
+                              : '最近 ${trend.length} 次训练容量',
+                          style: TextStyle(
+                            color: spec.textSecondary,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FadeSlideIn(
+                  index: 4,
+                  child: GlassPanel(
+                    padding: const EdgeInsets.all(16),
+                    onTap: () => _open(context, const PersonalRecordsPage()),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _cardHeader(Icons.emoji_events_rounded, '个人记录', spec),
+                        const SizedBox(height: 13),
+                        if (bests.isEmpty)
+                          Text(
+                            '暂无重量记录',
+                            style: TextStyle(
+                              color: spec.textSecondary,
+                              fontSize: 10.5,
+                            ),
+                          )
+                        else
+                          ...bests.take(3).map((entry) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      entry.key,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: spec.textPrimary,
+                                        fontSize: 10.5,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    '${entry.value.toStringAsFixed(entry.value % 1 == 0 ? 0 : 1)}kg',
+                                    style: TextStyle(
+                                      color: spec.primary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
+    );
+  }
+
+  void _open(BuildContext context, Widget page) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => page),
     );
   }
 
@@ -1250,6 +1338,12 @@ class _InsightGrid extends StatelessWidget {
             fontWeight: FontWeight.w800,
           ),
         ),
+        const Spacer(),
+        Icon(
+          Icons.chevron_right_rounded,
+          size: 16,
+          color: spec.textSecondary.withValues(alpha: .7),
+        ),
       ],
     );
   }
@@ -1261,6 +1355,7 @@ class _AiCoachCard extends StatelessWidget {
   final List<_ChatTurn> chat;
   final bool loading;
   final TextEditingController controller;
+  final GlobalKey lastTurnKey;
   final VoidCallback onSend;
   final void Function(String) onPreset;
   final VoidCallback onOpenSettings;
@@ -1271,6 +1366,7 @@ class _AiCoachCard extends StatelessWidget {
     required this.chat,
     required this.loading,
     required this.controller,
+    required this.lastTurnKey,
     required this.onSend,
     required this.onPreset,
     required this.onOpenSettings,
@@ -1325,7 +1421,7 @@ class _AiCoachCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'OpenCode Zen · ${settings.aiModel}',
+                      '${_aiChannelLabel(settings)} · ${settings.aiModel}',
                       style: TextStyle(
                         color: spec.textSecondary,
                         fontSize: 10,
@@ -1379,7 +1475,13 @@ class _AiCoachCard extends StatelessWidget {
               ),
             )
           else
-            ...chat.map((turn) => _ChatBubble(turn: turn, spec: spec)),
+            for (var i = 0; i < chat.length; i++)
+              i == chat.length - 1
+                  ? KeyedSubtree(
+                      key: lastTurnKey,
+                      child: _ChatBubble(turn: chat[i], spec: spec),
+                    )
+                  : _ChatBubble(turn: chat[i], spec: spec),
           if (loading)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1517,19 +1619,27 @@ class _ChatBubble extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
-            Text(
-              turn.content,
-              style: TextStyle(
-                color: spec.textPrimary,
-                fontSize: 12.5,
-                height: 1.65,
-              ),
+            AiMessageText(
+              text: turn.content,
+              spec: spec,
             ),
           ],
         ),
       ),
     );
   }
+}
+
+String _aiChannelLabel(SettingsProvider settings) {
+  final endpoint = settings.aiEndpoint.toLowerCase();
+  final base = endpoint.contains('blockrun')
+      ? 'BLOCKRUN · FREE'
+      : endpoint.contains('pollinations')
+          ? 'POLLINATIONS · FREE'
+          : endpoint.contains('opencode')
+              ? 'OPENCODE · ZEN'
+              : 'CUSTOM · AI';
+  return settings.hasAiKey ? '$base · KEY' : base;
 }
 
 class _KnowledgeGrid extends StatelessWidget {
