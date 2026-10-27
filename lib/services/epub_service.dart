@@ -170,6 +170,9 @@ class EpubLibraryService extends ChangeNotifier {
       'flutter_assets/assets/books/iron_book.epub';
   static const String defaultDownloadUrl =
       'https://github.com/MrKedow/Iron-Etch/releases/latest/download/iron_book.epub';
+  static const String jianguoyunDownloadUrl =
+      'https://www.jianguoyun.com/p/DQaP5GgQ2omXCRj5468GIAA';
+  static const String _downloadFileName = 'iron_book.epub';
   static const MethodChannel _channel = MethodChannel('com.MrKedow.FT/epub');
 
   Directory? _baseDir;
@@ -265,6 +268,15 @@ class EpubLibraryService extends ChangeNotifier {
     return File('${_baseDir!.path}/$defaultId.epub').existsSync();
   }
 
+  /// 后台下载（Android DownloadManager）完成但尚未导入时，复制到内部缓存。
+  Future<void> adoptPendingDownload() async {
+    if (!Platform.isAndroid) return;
+    await load();
+    final epubFile = File('${_baseDir!.path}/$defaultId.epub');
+    if (await epubFile.exists()) return;
+    await _adoptExternal(epubFile);
+  }
+
   Future<void> downloadDefaultBook({
     void Function(double progress)? onProgress,
   }) async {
@@ -274,37 +286,7 @@ class EpubLibraryService extends ChangeNotifier {
     if (isExtracted(entry)) return;
     final epubFile = File('${_baseDir!.path}/$defaultId.epub');
     if (!await epubFile.exists()) {
-      final partFile = File('${epubFile.path}.part');
-      final client = http.Client();
-      try {
-        final request = http.Request('GET', Uri.parse(defaultDownloadUrl));
-        final response = await client.send(request);
-        if (response.statusCode != 200) {
-          throw EpubException('下载失败：HTTP ${response.statusCode}');
-        }
-        final total = response.contentLength ?? 0;
-        var received = 0;
-        final sink = partFile.openWrite();
-        try {
-          await for (final chunk in response.stream) {
-            sink.add(chunk);
-            received += chunk.length;
-            if (total > 0) onProgress?.call((received / total).clamp(0.0, 1.0));
-          }
-        } finally {
-          await sink.close();
-        }
-        await partFile.rename(epubFile.path);
-      } catch (_) {
-        if (await partFile.exists()) {
-          try {
-            await partFile.delete();
-          } catch (_) {}
-        }
-        rethrow;
-      } finally {
-        client.close();
-      }
+      await _retrieveEpub(epubFile, onProgress);
     }
     await (_defaultExtraction ??= _extractFile(epubFile.path, entry.rootPath)
         .whenComplete(() => _defaultExtraction = null));
@@ -318,6 +300,160 @@ class EpubLibraryService extends ChangeNotifier {
     }
     await _saveLibrary();
     notifyListeners();
+  }
+
+  Future<void> _retrieveEpub(
+    File epubFile,
+    void Function(double)? onProgress,
+  ) async {
+    if (await _adoptExternal(epubFile)) return;
+    final url =
+        await _pickFastestUrl([defaultDownloadUrl, jianguoyunDownloadUrl]);
+    if (Platform.isAndroid &&
+        await _nativeDownload(url, epubFile, onProgress)) {
+      return;
+    }
+    await _dartDownload(url, epubFile, onProgress);
+  }
+
+  Future<bool> _adoptExternal(File epubFile) async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final path = await _channel.invokeMethod<String>(
+        'externalDownloadPath',
+        {'fileName': _downloadFileName},
+      );
+      if (path == null) return false;
+      final file = File(path);
+      if (await file.exists() && await file.length() > 1024 * 1024) {
+        await file.copy(epubFile.path);
+        try {
+          await file.delete();
+        } catch (_) {}
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<String> _pickFastestUrl(List<String> urls) async {
+    String? best;
+    var bestMs = 1 << 30;
+    for (final url in urls) {
+      http.Client? client;
+      try {
+        client = http.Client();
+        final sw = Stopwatch()..start();
+        final request = http.Request('GET', Uri.parse(url));
+        request.headers['Range'] = 'bytes=0-131071';
+        final response =
+            await client.send(request).timeout(const Duration(seconds: 12));
+        final bytes = <int>[];
+        await for (final chunk
+            in response.stream.timeout(const Duration(seconds: 12))) {
+          bytes.addAll(chunk);
+          if (bytes.length >= 1024) break;
+        }
+        final ms = sw.elapsedMilliseconds;
+        final head =
+            String.fromCharCodes(bytes.take(1024)).trimLeft().toLowerCase();
+        final isHtml = head.startsWith('<!doctype') || head.startsWith('<html');
+        final ok = (response.statusCode == 200 || response.statusCode == 206) &&
+            !isHtml;
+        if (ok && ms < bestMs) {
+          bestMs = ms;
+          best = url;
+        }
+      } catch (_) {
+      } finally {
+        client?.close();
+      }
+    }
+    return best ?? urls.first;
+  }
+
+  Future<bool> _nativeDownload(
+    String url,
+    File epubFile,
+    void Function(double)? onProgress,
+  ) async {
+    try {
+      final start = await _channel.invokeMapMethod<String, dynamic>(
+        'enqueueDownload',
+        {'url': url, 'fileName': _downloadFileName},
+      );
+      if (start == null) return false;
+      final id = (start['id'] as num).toInt();
+      final path = start['path'] as String;
+      while (true) {
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+        final status = await _channel.invokeMapMethod<String, dynamic>(
+          'downloadStatus',
+          {'downloadId': id},
+        );
+        if (status == null) return false;
+        final code = (status['status'] as num).toInt();
+        final downloaded = (status['downloaded'] as num).toInt();
+        final total = (status['total'] as num).toInt();
+        if (total > 0) {
+          onProgress?.call((downloaded / total).clamp(0.0, 1.0));
+        }
+        if (code == 8) {
+          final file = File(path);
+          if (await file.exists() && await file.length() > 1024 * 1024) {
+            await file.copy(epubFile.path);
+            try {
+              await file.delete();
+            } catch (_) {}
+            return true;
+          }
+          return false;
+        }
+        if (code == 16 || code == -1) return false;
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _dartDownload(
+    String url,
+    File epubFile,
+    void Function(double)? onProgress,
+  ) async {
+    final partFile = File('${epubFile.path}.part');
+    final client = http.Client();
+    try {
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await client.send(request);
+      if (response.statusCode != 200) {
+        throw EpubException('下载失败：HTTP ${response.statusCode}');
+      }
+      final total = response.contentLength ?? 0;
+      var received = 0;
+      final sink = partFile.openWrite();
+      try {
+        await for (final chunk in response.stream) {
+          sink.add(chunk);
+          received += chunk.length;
+          if (total > 0) {
+            onProgress?.call((received / total).clamp(0.0, 1.0));
+          }
+        }
+      } finally {
+        await sink.close();
+      }
+      await partFile.rename(epubFile.path);
+    } catch (_) {
+      if (await partFile.exists()) {
+        try {
+          await partFile.delete();
+        } catch (_) {}
+      }
+      rethrow;
+    } finally {
+      client.close();
+    }
   }
 
   Future<EpubBook> ensureDefaultReady() async {

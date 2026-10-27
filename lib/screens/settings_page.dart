@@ -515,6 +515,65 @@ class _SettingsPageState extends State<SettingsPage> {
     keyController.dispose();
   }
 
+  Future<void> _editAiPrompt(SettingsProvider settings) async {
+    final controller = TextEditingController(text: settings.aiPrompt);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final spec = dialogContext.watch<ThemeProvider>().currentSpec;
+        return AlertDialog(
+          title: const Text('AI 提示词'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '设置后会作为系统提示词应用到「让 AI 教练分析我的训练」。留空则使用内置默认提示词。',
+                  style: TextStyle(
+                    color: spec.textSecondary,
+                    fontSize: 11.5,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  minLines: 4,
+                  maxLines: 10,
+                  decoration: const InputDecoration(
+                    hintText: '例如：你是一位严谨的力量举教练，只输出中文结论，不要输出思考过程…',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                controller.text = '';
+              },
+              child: const Text('清空'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+    if (saved == true && mounted) {
+      await context.read<SettingsProvider>().setAiPrompt(controller.text);
+    }
+    controller.dispose();
+  }
+
   Future<void> _testAi(SettingsProvider settings) async {
     if (!settings.aiEnabled) {
       _showSnack('AI 建议当前已关闭，请先开启。');
@@ -1330,6 +1389,14 @@ class _SettingsPageState extends State<SettingsPage> {
                           : Icon(Icons.chevron_right_rounded,
                               color: spec.textSecondary),
                       onTap: _testingAi ? null : () => _testAi(settings),
+                    ),
+                    _SettingsTile(
+                      icon: Icons.edit_note_rounded,
+                      title: 'AI 提示词',
+                      subtitle: settings.aiPrompt.trim().isEmpty
+                          ? '使用内置默认提示词 · 点击自定义'
+                          : settings.aiPrompt,
+                      onTap: () => _editAiPrompt(settings),
                     ),
                   ],
                 ),

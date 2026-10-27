@@ -283,6 +283,14 @@ class AiCoachService {
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
         .replaceAll('\t', '  ');
+    text = text.replaceAll(
+      RegExp(r'```(?:think|thinking)[\s\S]*?```', caseSensitive: false),
+      '',
+    );
+    text = text.replaceAll(
+      RegExp(r'<think(?:ing)?[\s\S]*?</think(?:ing)?>', caseSensitive: false),
+      '',
+    );
     text = text.replaceAll(RegExp(r'<\|[^>]*\|>'), '');
     text = text.replaceAll(RegExp(r'\n{3,}'), '\n\n');
     return text.trim();

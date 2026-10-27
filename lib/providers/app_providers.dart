@@ -4,6 +4,48 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/work_energy.dart';
 import '../theme/app_theme.dart';
 
+/// 内置 AI 模型预设：选择后自动填入接口地址与模型 ID。
+class AiModelPreset {
+  final String label;
+  final String endpoint;
+  final String model;
+
+  const AiModelPreset(this.label, this.endpoint, this.model);
+}
+
+const List<AiModelPreset> builtInAiModels = [
+  AiModelPreset(
+    '铁镌推荐 · GPT-OSS 20B',
+    'https://blockrun.ai/api/v1/chat/completions',
+    'nvidia/gpt-oss-20b',
+  ),
+  AiModelPreset(
+    'GPT-OSS 120B（更强推理）',
+    'https://blockrun.ai/api/v1/chat/completions',
+    'nvidia/gpt-oss-120b',
+  ),
+  AiModelPreset(
+    'Pollinations · GPT-OSS 20B',
+    'https://text.pollinations.ai/openai',
+    'gpt-oss-20b',
+  ),
+  AiModelPreset(
+    'Pollinations · GPT-OSS 20B（v1）',
+    'https://text.pollinations.ai/openai/v1/chat/completions',
+    'gpt-oss-20b',
+  ),
+  AiModelPreset(
+    'OpenCode Zen · Big Pickle',
+    'https://opencode.ai/inference/openai/v1/chat/completions',
+    'big-pickle',
+  ),
+  AiModelPreset(
+    '自定义（手动填写上方字段）',
+    '',
+    '',
+  ),
+];
+
 class ThemeProvider extends ChangeNotifier {
   ThemeProvider(String initialThemeId)
       : _themeId = AppThemes.byId(initialThemeId).id {
@@ -150,6 +192,7 @@ class SettingsProvider extends ChangeNotifier {
   String _aiEndpoint = defaultAiEndpoint;
   String _aiModel = defaultAiModel;
   String _aiApiKey = '';
+  String _aiPrompt = '';
 
   String _statusEmoji = '🔥';
   String _statusText = '今天的铁，也要镌刻进身体里';
@@ -182,6 +225,7 @@ class SettingsProvider extends ChangeNotifier {
   String get aiEndpoint => _aiEndpoint;
   String get aiModel => _aiModel;
   String get aiApiKey => _aiApiKey;
+  String get aiPrompt => _aiPrompt;
   bool get hasAiKey => _aiApiKey.trim().isNotEmpty;
 
   String get statusEmoji => _statusEmoji;
@@ -250,6 +294,7 @@ class SettingsProvider extends ChangeNotifier {
     _aiEndpoint = savedEndpoint ?? defaultAiEndpoint;
     _aiModel = savedModel ?? defaultAiModel;
     _aiApiKey = prefs.getString('ai_api_key') ?? '';
+    _aiPrompt = prefs.getString('ai_prompt') ?? '';
 
     _statusEmoji = prefs.getString('status_emoji') ?? '🔥';
     _statusText = prefs.getString('status_text') ?? '今天的铁，也要镌刻进身体里';
@@ -434,6 +479,12 @@ class SettingsProvider extends ChangeNotifier {
       _aiApiKey = apiKey.trim();
       await _persist('ai_api_key', _aiApiKey);
     }
+    notifyListeners();
+  }
+
+  Future<void> setAiPrompt(String value) async {
+    _aiPrompt = value.trim();
+    await _persist('ai_prompt', _aiPrompt);
     notifyListeners();
   }
 

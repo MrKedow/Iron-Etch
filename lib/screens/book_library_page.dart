@@ -157,6 +157,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
   Future<void> _prepareLibrary() async {
     try {
       await _library.load();
+      await _library.adoptPendingDownload();
       final defaultBook = _library.defaultBook;
       if (defaultBook != null &&
           !defaultBook.deleted &&
@@ -191,7 +192,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
         if (!mounted) return;
         setState(() {
           _downloadProgress = progress;
-          _busyMessage = '下载中 ${(progress * 100).toStringAsFixed(0)}%';
+          _busyMessage = '下载中 ${(progress * 100).toStringAsFixed(0)}%（可切到后台继续）';
         });
       });
       if (!mounted) return;

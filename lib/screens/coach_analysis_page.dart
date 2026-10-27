@@ -130,7 +130,13 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
     });
     _scrollToAi(latestTurn: true);
 
-    final systemPrompt = '''
+    final customPrompt = settings.aiPrompt.trim();
+    final systemPrompt = customPrompt.isNotEmpty
+        ? '$customPrompt\n\n'
+            '只输出最终中文回答，不要输出思考过程、英文草稿或自我说明。\n\n'
+            '以下是用户真实训练数据：\n'
+            '${insights.buildAiContext(settings)}'
+        : '''
 你是「铁镌」App 的 AI 力量教练，由免费 AI 多通道驱动。
 你的风格：专业、直接、有温度，像一位懂训练数据的老教练。不要空泛鼓励，必须引用用户真实数据。
 训练建议必须遵循科学证据；不确定时说明不确定性；不要提供医疗诊断，若涉及伤痛请建议就医。
@@ -435,6 +441,12 @@ ${insights.buildAiContext(settings)}
     final endpointController = TextEditingController(text: settings.aiEndpoint);
     var testing = false;
     String? result;
+    String? selectedPreset;
+    final smallLabelStyle = TextStyle(
+      fontSize: 11.5,
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .62),
+      fontWeight: FontWeight.w600,
+    );
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -452,6 +464,8 @@ ${insights.buildAiContext(settings)}
                     style: TextStyle(fontSize: 12, height: 1.5),
                   ),
                   const SizedBox(height: 14),
+                  Text('填写你的AI模型：', style: smallLabelStyle),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: apiKeyController,
                     obscureText: true,
@@ -474,6 +488,41 @@ ${insights.buildAiContext(settings)}
                     decoration: const InputDecoration(
                       labelText: '接口地址',
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('或直接选择内置模型：', style: smallLabelStyle),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedPreset,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: '内置模型',
+                    ),
+                    hint: const Text('选择一个可直接使用的模型'),
+                    items: builtInAiModels
+                        .map(
+                          (preset) => DropdownMenuItem<String>(
+                            value: preset.label,
+                            child: Text(
+                              preset.label,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (label) {
+                      if (label == null) return;
+                      final preset = builtInAiModels.firstWhere(
+                        (item) => item.label == label,
+                      );
+                      setDialogState(() {
+                        selectedPreset = label;
+                        if (preset.endpoint.isNotEmpty) {
+                          endpointController.text = preset.endpoint;
+                          modelController.text = preset.model;
+                        }
+                      });
+                    },
                   ),
                   if (result != null) ...[
                     const SizedBox(height: 12),
