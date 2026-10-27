@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/exercise_library.dart';
+import '../data/exercise_illustrations.dart';
 import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
@@ -157,7 +158,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                 ),
                 const SizedBox(height: 18),
                 Container(
-                  height: 168,
+                  height: 210,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
@@ -176,12 +177,8 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                     children: [
                       Positioned.fill(
                         child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: ExerciseIllustration(
-                            pattern: exercise.pattern,
-                            equipment: exercise.equipment,
-                            color: spec.primary,
-                          ),
+                          padding: const EdgeInsets.fromLTRB(14, 14, 14, 34),
+                          child: _exerciseIllustration(exercise, spec),
                         ),
                       ),
                       Positioned(
@@ -248,6 +245,56 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
         Navigator.pop(context, value);
       }
     });
+  }
+
+  Widget _exerciseIllustration(ExerciseDefinition exercise, AppThemeSpec spec) {
+    final slug = exerciseImageSlugs[exercise.name];
+    if (slug == null) {
+      return ExerciseIllustration(
+        pattern: exercise.pattern,
+        equipment: exercise.equipment,
+        color: spec.primary,
+      );
+    }
+    Widget frame(int index, String label) {
+      return Expanded(
+        child: Column(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'assets/exercises/${slug}_$index.jpg',
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => ExerciseIllustration(
+                    pattern: exercise.pattern,
+                    equipment: exercise.equipment,
+                    color: spec.primary,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: spec.textSecondary,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        frame(0, '起始'),
+        const SizedBox(width: 10),
+        frame(1, '结束'),
+      ],
+    );
   }
 
   Widget _detailSection(

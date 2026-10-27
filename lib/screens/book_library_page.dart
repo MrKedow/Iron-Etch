@@ -71,7 +71,6 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
   }
 
   Future<void> _pickMaterial() async {
-    final prefs = await SharedPreferences.getInstance();
     final selected = await showModalBottomSheet<int>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -151,6 +150,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
     );
     if (selected == null) return;
     setState(() => _shelfMaterial = selected);
+    final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('library_shelf_material', selected);
   }
 
@@ -813,7 +813,7 @@ class _BookCard extends StatelessWidget {
                     alignment: Alignment.bottomCenter,
                     transform: Matrix4.identity()
                       ..setEntry(3, 2, 0.0016)
-                      ..rotateX(0.42),
+                      ..rotateX(-0.42),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
