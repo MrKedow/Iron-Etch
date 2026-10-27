@@ -681,10 +681,10 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 14),
             InkWell(
               onTap: () => launchUrl(
-                Uri.parse('https://github.com/MrKedow/Fitness-Tracker'),
+                Uri.parse('https://github.com/MrKedow/Iron-Etch'),
               ),
               child: const Text(
-                'GitHub · MrKedow/Fitness-Tracker',
+                'GitHub · MrKedow/Iron-Etch',
                 style: TextStyle(color: Colors.blue, fontSize: 12.5),
               ),
             ),
@@ -707,6 +707,81 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showAcknowledgments() {
+    final spec = context.watch<ThemeProvider>().currentSpec;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('鸣谢'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ackItem(
+              spec,
+              'free-exercise-db',
+              '动作教学示意图（约 876 个动作的开源动作库）',
+              'https://github.com/yuhonas/free-exercise-db',
+            ),
+            const SizedBox(height: 12),
+            _ackItem(
+              spec,
+              'ExRx.net',
+              '动作分类与肌群命名参考',
+              'https://exrx.net',
+            ),
+            const SizedBox(height: 12),
+            _ackItem(
+              spec,
+              'ACE / NASM / ACSM',
+              '动作库、矫正训练体系与运动测试处方参考',
+              'https://www.acefitness.org',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ackItem(
+    AppThemeSpec spec,
+    String name,
+    String description,
+    String url,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => launchUrl(Uri.parse(url)),
+          child: Text(
+            name,
+            style: TextStyle(
+              color: spec.primary,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          description,
+          style: TextStyle(
+            color: spec.textSecondary,
+            fontSize: 12,
+            height: 1.5,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1361,12 +1436,18 @@ class _SettingsPageState extends State<SettingsPage> {
                     _SettingsTile(
                       icon: Icons.code_rounded,
                       title: '开源地址',
-                      subtitle: 'github.com/MrKedow/Fitness-Tracker',
+                      subtitle: 'github.com/MrKedow/Iron-Etch',
                       onTap: () => launchUrl(
                         Uri.parse(
-                          'https://github.com/MrKedow/Fitness-Tracker',
+                          'https://github.com/MrKedow/Iron-Etch',
                         ),
                       ),
+                    ),
+                    _SettingsTile(
+                      icon: Icons.volunteer_activism_rounded,
+                      title: '鸣谢',
+                      subtitle: '动作示意图与动作分类参考来源',
+                      onTap: _showAcknowledgments,
                     ),
                   ],
                 ),
