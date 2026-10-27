@@ -30,10 +30,19 @@ class AppBackdrop extends StatelessWidget {
           ),
         ),
         if (customImage != null && File(customImage).existsSync())
-          Image.file(
-            File(customImage),
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          Builder(
+            builder: (context) {
+              final size = MediaQuery.sizeOf(context);
+              final dpr = MediaQuery.devicePixelRatioOf(context);
+              return Image.file(
+                File(customImage),
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                cacheWidth: (size.width * dpr).round(),
+                cacheHeight: (size.height * dpr).round(),
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              );
+            },
           ),
         if (customImage != null)
           DecoratedBox(
@@ -125,8 +134,7 @@ class GlassPanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         border: border ??
             Border.all(
-              color: spec.textPrimary
-                  .withValues(alpha: isDark ? .075 : .11),
+              color: spec.textPrimary.withValues(alpha: isDark ? .075 : .11),
             ),
         boxShadow: shadows ??
             [

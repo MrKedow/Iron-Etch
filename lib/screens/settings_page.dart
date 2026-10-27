@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart';
@@ -13,6 +15,7 @@ import '../services/ai_coach_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
 import '../widgets/status_banner.dart';
+import 'iron_card_page.dart';
 import 'theme_gallery_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -663,7 +666,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 4),
             Text(
-              '版本 1.2.0（Android）',
+              '版本 3.0.0（Android）',
               style: TextStyle(color: spec.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 14),
@@ -777,11 +780,231 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Future<void> _showCloudSync(NutstoreService nutstore) async {
+    if (!nutstore.isConnected) {
+      await _showCloudLogin(nutstore);
+      return;
+    }
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final spec = sheetContext.watch<ThemeProvider>().currentSpec;
+        return SafeArea(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+            decoration: BoxDecoration(
+              color: spec.background,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(26)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: spec.textSecondary.withValues(alpha: .3),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  '坚果云同步',
+                  style: TextStyle(
+                    color: spec.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '已连接：${nutstore.username}',
+                  style: TextStyle(
+                    color: spec.textSecondary,
+                    fontSize: 11.5,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ListTile(
+                  leading: Icon(Icons.upload_rounded, color: spec.primary),
+                  title: const Text('同步配置到云端'),
+                  onTap: () => Navigator.pop(sheetContext, 'upload'),
+                ),
+                ListTile(
+                  leading: Icon(Icons.download_rounded, color: spec.secondary),
+                  title: const Text('从云端恢复配置'),
+                  onTap: () => Navigator.pop(sheetContext, 'download'),
+                ),
+                ListTile(
+                  leading: Icon(Icons.link_off_rounded,
+                      color: const Color(0xFFF97316)),
+                  title: const Text('断开连接'),
+                  onTap: () => Navigator.pop(sheetContext, 'disconnect'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted) return;
+    if (action == 'upload') {
+      await _uploadConfig(nutstore);
+    } else if (action == 'download') {
+      await _downloadConfig(nutstore);
+    } else if (action == 'disconnect') {
+      await nutstore.clearCredentials();
+      _snack('已断开坚果云连接');
+    }
+  }
+
+  Future<void> _showCloudLogin(NutstoreService nutstore) async {
+    final usernameController = TextEditingController();
+    final passwordController = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('连接坚果云'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '在坚果云网页端「安全选项」生成应用密码后填写。',
+                style: TextStyle(fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: usernameController,
+                decoration: const InputDecoration(
+                  labelText: '坚果云账号',
+                  hintText: '邮箱地址',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '应用密码',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final ok = await nutstore.connect(
+                username: usernameController.text.trim(),
+                password: passwordController.text.trim(),
+              );
+              if (dialogContext.mounted) Navigator.pop(dialogContext, ok);
+            },
+            child: const Text('连接'),
+          ),
+        ],
+      ),
+    );
+    usernameController.dispose();
+    passwordController.dispose();
+    if (!mounted) return;
+    _snack(result == true ? '坚果云连接成功' : '坚果云连接失败');
+  }
+
+  Future<Map<String, dynamic>> _dumpPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final map = <String, dynamic>{};
+    for (final key in prefs.getKeys()) {
+      final value = prefs.get(key);
+      if (value == null) continue;
+      if (value is List<String>) {
+        map[key] = {'t': 'list', 'v': value};
+      } else if (value is bool) {
+        map[key] = {'t': 'bool', 'v': value};
+      } else if (value is int) {
+        map[key] = {'t': 'int', 'v': value};
+      } else if (value is double) {
+        map[key] = {'t': 'double', 'v': value};
+      } else {
+        map[key] = {'t': 'string', 'v': value.toString()};
+      }
+    }
+    return map;
+  }
+
+  Future<void> _applyPrefs(Map<String, dynamic> map) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final entry in map.entries) {
+      final value = entry.value;
+      if (value is! Map) continue;
+      final type = value['t']?.toString();
+      final v = value['v'];
+      switch (type) {
+        case 'list':
+          if (v is List) {
+            await prefs.setStringList(
+                entry.key, v.map((e) => e.toString()).toList());
+          }
+        case 'bool':
+          if (v is bool) await prefs.setBool(entry.key, v);
+        case 'int':
+          if (v is int) await prefs.setInt(entry.key, v);
+        case 'double':
+          if (v is num) await prefs.setDouble(entry.key, v.toDouble());
+        case 'string':
+          await prefs.setString(entry.key, v?.toString() ?? '');
+      }
+    }
+  }
+
+  Future<void> _uploadConfig(NutstoreService nutstore) async {
+    final map = await _dumpPrefs();
+    final ok = await nutstore.uploadConfig(jsonEncode(map));
+    _snack(ok ? '配置已同步到云端' : '上传失败，请检查网络');
+  }
+
+  Future<void> _downloadConfig(NutstoreService nutstore) async {
+    final raw = await nutstore.downloadConfig();
+    if (raw == null) {
+      _snack('云端暂无配置或下载失败');
+      return;
+    }
+    try {
+      final data = jsonDecode(raw);
+      if (data is Map<String, dynamic>) {
+        await _applyPrefs(data);
+        _snack('配置已恢复，重启应用后生效');
+      } else {
+        _snack('配置格式错误');
+      }
+    } catch (_) {
+      _snack('配置解析失败');
+    }
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
     final spec = context.watch<ThemeProvider>().currentSpec;
     final themeProvider = context.watch<ThemeProvider>();
+    final nutstore = context.watch<NutstoreService>();
 
     return Scaffold(
       body: CustomScrollView(
@@ -898,6 +1121,21 @@ class _SettingsPageState extends State<SettingsPage> {
                       title: '体重',
                       subtitle: '${settings.bodyWeight.toStringAsFixed(1)} kg',
                       onTap: () => _editBodyWeight(settings),
+                    ),
+                    _SettingsTile(
+                      icon: Icons.badge_outlined,
+                      title: '铁卡',
+                      subtitle: settings.heightCm == null
+                          ? '可选填写身高、年龄、体脂与静息心率'
+                          : '完整度 ${(settings.ironProfile.completeness * 100).round()}% · 点击完善',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const IronCardPage(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -1095,13 +1333,29 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ],
                 ),
+                const SectionHeader(
+                  title: '云同步',
+                  subtitle: '配置与训练数据同步到坚果云',
+                ),
+                _SettingsGroup(
+                  children: [
+                    _SettingsTile(
+                      icon: Icons.cloud_sync_rounded,
+                      title: '坚果云同步',
+                      subtitle: nutstore.isConnected
+                          ? '已连接 · ${nutstore.username}'
+                          : '未配置 · 点击配置',
+                      onTap: () => _showCloudSync(nutstore),
+                    ),
+                  ],
+                ),
                 const SectionHeader(title: '关于'),
                 _SettingsGroup(
                   children: [
                     _SettingsTile(
                       icon: Icons.fitness_center_rounded,
                       title: '铁镌',
-                      subtitle: '版本 1.2.0 · 镌刻每一次撸铁',
+                      subtitle: '版本 3.0.0 · 镌刻每一次撸铁',
                       onTap: _showAbout,
                     ),
                     _SettingsTile(

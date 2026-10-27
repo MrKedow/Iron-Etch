@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/work_energy.dart';
 import '../theme/app_theme.dart';
 
 class ThemeProvider extends ChangeNotifier {
@@ -89,12 +90,55 @@ class SettingsProvider extends ChangeNotifier {
     '🧊',
     '🚀',
     '🎯',
+    '🏃',
+    '🧗',
+    '🚴',
+    '🏊',
+    '🥊',
+    '⛹️',
+    '🎾',
+    '⚽',
+    '🏀',
+    '🥩',
+    '🥦',
+    '🍗',
+    '💤',
+    '⏰',
+    '📈',
+    '🧠',
+    '❤️',
+    '🐺',
+    '🦁',
+    '🐯',
+    '🦅',
+    '⚔️',
+    '🛡️',
+    '👑',
+    '💎',
+    '🌊',
+    '🗻',
+    '🎸',
+    '🎮',
+    '📚',
+    '🎓',
+    '🧭',
+    '🔨',
+    '🪓',
+    '⚙️',
+    '🧲',
   ];
 
   String _nickname = '铁友';
   String _trainingGoal = '增肌';
   String _experience = '进阶';
   double _bodyWeight = 70;
+  double? _heightCm;
+  int? _age;
+  String _sex = '未填写';
+  double? _bodyFatPercent;
+  int? _restingHeartRate;
+  double? _trainingYears;
+  DateTime _streakStart = DateTime(2025, 6, 9, 18, 29);
   int _weeklyGoal = 4;
   String _weightUnit = 'kg';
   int _restSeconds = 90;
@@ -118,6 +162,15 @@ class SettingsProvider extends ChangeNotifier {
   String get trainingGoal => _trainingGoal;
   String get experience => _experience;
   double get bodyWeight => _bodyWeight;
+  double? get heightCm => _heightCm;
+  int? get age => _age;
+  String get sex => _sex;
+  double? get bodyFatPercent => _bodyFatPercent;
+  int? get restingHeartRate => _restingHeartRate;
+  double? get trainingYears => _trainingYears;
+  DateTime get streakStart => _streakStart;
+  bool get hasStreakStart => _streakStart.isAfter(DateTime(2020, 1, 1));
+  IronProfile get ironProfile => IronProfile.instance;
   int get weeklyGoal => _weeklyGoal;
   String get weightUnit => _weightUnit;
   int get restSeconds => _restSeconds;
@@ -155,6 +208,16 @@ class SettingsProvider extends ChangeNotifier {
     _trainingGoal = prefs.getString('profile_goal') ?? '增肌';
     _experience = prefs.getString('profile_experience') ?? '进阶';
     _bodyWeight = prefs.getDouble('profile_body_weight') ?? 70;
+    _heightCm = prefs.getDouble('profile_height_cm');
+    _age = prefs.getInt('profile_age');
+    _sex = prefs.getString('profile_sex') ?? '未填写';
+    _bodyFatPercent = prefs.getDouble('profile_body_fat');
+    _restingHeartRate = prefs.getInt('profile_resting_hr');
+    _trainingYears = prefs.getDouble('profile_training_years');
+    final savedStreakStart = prefs.getString('first_workout_date');
+    if (savedStreakStart != null) {
+      _streakStart = DateTime.tryParse(savedStreakStart) ?? _streakStart;
+    }
     _weeklyGoal = prefs.getInt('training_weekly_goal') ?? 4;
     _weightUnit = prefs.getString('training_weight_unit') ?? 'kg';
     _restSeconds = prefs.getInt('training_rest_seconds') ?? 90;
@@ -194,7 +257,31 @@ class SettingsProvider extends ChangeNotifier {
     _statusTone = prefs.getInt('status_tone') ?? 0;
     _statusMotion = prefs.getInt('status_motion') ?? 0;
     _avatarPath = prefs.getString('profile_avatar_path');
+    _syncIronProfile();
     notifyListeners();
+  }
+
+  void _syncIronProfile() {
+    IronProfile.instance.update(
+      bodyWeightKg: _bodyWeight,
+      heightCm: _heightCm,
+      age: _age,
+      sex: switch (_sex) {
+        '男' => IronSex.male,
+        '女' => IronSex.female,
+        _ => IronSex.unspecified,
+      },
+      bodyFatPercent: _bodyFatPercent,
+      restingHeartRate: _restingHeartRate,
+      trainingYears: _trainingYears,
+      experience: _experience,
+      goal: _trainingGoal,
+      clearHeight: _heightCm == null,
+      clearAge: _age == null,
+      clearBodyFat: _bodyFatPercent == null,
+      clearRestingHeartRate: _restingHeartRate == null,
+      clearTrainingYears: _trainingYears == null,
+    );
   }
 
   Future<void> _persist(String key, Object? value) async {
@@ -221,18 +308,69 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> setTrainingGoal(String value) async {
     _trainingGoal = value;
     await _persist('profile_goal', value);
+    _syncIronProfile();
     notifyListeners();
   }
 
   Future<void> setExperience(String value) async {
     _experience = value;
     await _persist('profile_experience', value);
+    _syncIronProfile();
     notifyListeners();
   }
 
   Future<void> setBodyWeight(double value) async {
     _bodyWeight = value.clamp(20, 350);
     await _persist('profile_body_weight', _bodyWeight);
+    _syncIronProfile();
+    notifyListeners();
+  }
+
+  Future<void> setHeightCm(double? value) async {
+    _heightCm = value?.clamp(100, 250);
+    await _persist('profile_height_cm', _heightCm);
+    _syncIronProfile();
+    notifyListeners();
+  }
+
+  Future<void> setAge(int? value) async {
+    _age = value?.clamp(10, 100);
+    await _persist('profile_age', _age);
+    _syncIronProfile();
+    notifyListeners();
+  }
+
+  Future<void> setSex(String value) async {
+    _sex = ['男', '女'].contains(value) ? value : '未填写';
+    await _persist('profile_sex', _sex);
+    _syncIronProfile();
+    notifyListeners();
+  }
+
+  Future<void> setBodyFatPercent(double? value) async {
+    _bodyFatPercent = value?.clamp(3, 60);
+    await _persist('profile_body_fat', _bodyFatPercent);
+    _syncIronProfile();
+    notifyListeners();
+  }
+
+  Future<void> setRestingHeartRate(int? value) async {
+    _restingHeartRate = value?.clamp(30, 120);
+    await _persist('profile_resting_hr', _restingHeartRate);
+    _syncIronProfile();
+    notifyListeners();
+  }
+
+  Future<void> setTrainingYears(double? value) async {
+    _trainingYears = value?.clamp(0, 60);
+    await _persist('profile_training_years', _trainingYears);
+    _syncIronProfile();
+    notifyListeners();
+  }
+
+  Future<void> setStreakStart(DateTime value) async {
+    _streakStart = value;
+    await _persist('first_workout_date', value.toIso8601String());
     notifyListeners();
   }
 

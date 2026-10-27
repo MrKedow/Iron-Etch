@@ -1,0 +1,2 @@
+# 大文件走 Git LFS，避免仓库体积膨胀
+*.epub filter=lfs diff=lfs merge=lfs -text

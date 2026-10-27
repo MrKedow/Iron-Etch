@@ -5,6 +5,7 @@ import '../data/exercise_library.dart';
 import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
+import '../widgets/exercise_illustration.dart';
 
 class ExerciseLibraryPage extends StatefulWidget {
   final ExerciseKind? initialKind;
@@ -83,7 +84,8 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
           child: Container(
             decoration: BoxDecoration(
               color: spec.background,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
               border: Border.all(
                 color: spec.textPrimary.withValues(alpha: .08),
               ),
@@ -154,6 +156,46 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                   ],
                 ),
                 const SizedBox(height: 18),
+                Container(
+                  height: 168,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        spec.primary.withValues(alpha: .12),
+                        spec.secondary.withValues(alpha: .05),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: spec.primary.withValues(alpha: .14),
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: ExerciseIllustration(
+                            pattern: exercise.pattern,
+                            equipment: exercise.equipment,
+                            color: spec.primary,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 12,
+                        bottom: 10,
+                        child: Pill(
+                          label: exercise.pattern,
+                          icon: Icons.sync_alt_rounded,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
                 _detailSection(
                   spec,
                   '动作要领',
@@ -558,16 +600,19 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 46,
+            height: 46,
             decoration: BoxDecoration(
               color: spec.primary.withValues(alpha: .11),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(13),
             ),
-            child: Icon(
-              _kindIcon(exercise.kind),
-              size: 19,
-              color: spec.primary,
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: ExerciseIllustration(
+                pattern: exercise.pattern,
+                equipment: exercise.equipment,
+                color: spec.primary,
+              ),
             ),
           ),
           const SizedBox(width: 11),
@@ -609,7 +654,9 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
           ),
           const SizedBox(width: 6),
           Icon(
-            widget.selectMode ? Icons.add_circle_outline_rounded : Icons.chevron_right_rounded,
+            widget.selectMode
+                ? Icons.add_circle_outline_rounded
+                : Icons.chevron_right_rounded,
             size: 20,
             color: widget.selectMode ? spec.primary : spec.textSecondary,
           ),

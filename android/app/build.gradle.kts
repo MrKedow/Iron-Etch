@@ -24,8 +24,8 @@ android {
         applicationId = "com.MrKedow.FT"
         minSdk = flutter.minSdkVersion
         targetSdk = 34
-        versionCode = 3
-        versionName = "Android_v1.2.0"
+        versionCode = 4
+        versionName = "Android_v3.0.0"
     }
 
     signingConfigs {

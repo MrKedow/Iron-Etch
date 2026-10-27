@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -6,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
-import '../main.dart';
 import '../providers/app_providers.dart';
 import 'app_ui.dart';
 
@@ -22,16 +22,9 @@ const List<List<Color>> statusTones = [
 const List<String> statusMotionNames = ['极光流动', '微光扫过', '星尘漂浮'];
 
 class StatusBanner extends StatefulWidget {
-  final int streakDays;
-  final int streakHours;
-  final int streakMinutes;
+  final DateTime startedAt;
 
-  const StatusBanner({
-    super.key,
-    required this.streakDays,
-    required this.streakHours,
-    required this.streakMinutes,
-  });
+  const StatusBanner({super.key, required this.startedAt});
 
   @override
   State<StatusBanner> createState() => _StatusBannerState();
@@ -40,6 +33,7 @@ class StatusBanner extends StatefulWidget {
 class _StatusBannerState extends State<StatusBanner>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  Timer? _ticker;
 
   @override
   void initState() {
@@ -48,10 +42,14 @@ class _StatusBannerState extends State<StatusBanner>
       vsync: this,
       duration: const Duration(seconds: 7),
     )..repeat();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _ticker?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -59,22 +57,19 @@ class _StatusBannerState extends State<StatusBanner>
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
-    final workout = context.watch<WorkoutProvider>();
     final spec = context.watch<ThemeProvider>().currentSpec;
     final tone = statusTones[settings.statusTone % statusTones.length];
     final hasImage = settings.statusImagePath != null &&
         File(settings.statusImagePath!).existsSync();
 
     final now = DateTime.now();
-    final weekSessions = workout.records.where((r) {
-      final diff = now.difference(r.date).inDays;
-      return diff >= 0 && diff < 7;
-    }).length;
+    final elapsed = now.difference(widget.startedAt);
+    final duration = elapsed.isNegative ? Duration.zero : elapsed;
 
     return GestureDetector(
       onTap: () => showStatusEditor(context),
       child: Container(
-        height: 206,
+        height: 214,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
           gradient: hasImage
@@ -217,10 +212,12 @@ class _StatusBannerState extends State<StatusBanner>
                             ),
                           ],
                         ),
-                        child: Text(
-                          settings.statusEmoji,
-                          style: const TextStyle(fontSize: 20),
-                        ),
+                        child: settings.statusEmoji.isEmpty
+                            ? _statusAvatar(settings)
+                            : Text(
+                                settings.statusEmoji,
+                                style: const TextStyle(fontSize: 20),
+                              ),
                       ),
                       const SizedBox(width: 11),
                       Expanded(
@@ -258,7 +255,7 @@ class _StatusBannerState extends State<StatusBanner>
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '今日状态 · ${_timeAgo(now)}',
+                              '今日状态',
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: .62),
                                 fontSize: 10.5,
@@ -309,7 +306,7 @@ class _StatusBannerState extends State<StatusBanner>
                   const SizedBox(height: 14),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 11),
+                        horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: .22),
                       borderRadius: BorderRadius.circular(18),
@@ -317,29 +314,68 @@ class _StatusBannerState extends State<StatusBanner>
                         color: Colors.white.withValues(alpha: .1),
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        _miniStat(
-                          '${widget.streakDays}',
-                          '天坚持',
-                        ),
-                        _divider(),
-                        _miniStat(
-                          '$weekSessions/${settings.weeklyGoal}',
-                          '本周训练',
-                        ),
-                        _divider(),
-                        _miniStat(
-                          '${workout.totalSessions}',
-                          '累计次数',
-                        ),
-                        const Spacer(),
-                        const Icon(
-                          Icons.auto_awesome,
-                          color: Colors.white54,
-                          size: 16,
-                        ),
-                      ],
+                    child: AnimatedBuilder(
+                      animation: _controller,
+                      builder: (context, child) {
+                        final wave =
+                            .5 + .5 * math.sin(_controller.value * math.pi * 2);
+                        final glow = [
+                          Shadow(
+                            color:
+                                tone.first.withValues(alpha: .16 + .3 * wave),
+                            blurRadius: 5 + 8 * wave,
+                          ),
+                          Shadow(
+                            color: Colors.white
+                                .withValues(alpha: .08 + .16 * wave),
+                            blurRadius: 3 + 5 * wave,
+                          ),
+                        ];
+                        return Row(
+                          children: [
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '已坚持',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: .8,
+                                    shadows: glow,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 10),
+                            _timeUnit(
+                              duration.inDays.toString(),
+                              '天',
+                              glow,
+                            ),
+                            _timeDivider(),
+                            _timeUnit(
+                              (duration.inHours % 24).toString(),
+                              '时',
+                              glow,
+                            ),
+                            _timeDivider(),
+                            _timeUnit(
+                              (duration.inMinutes % 60).toString(),
+                              '分',
+                              glow,
+                            ),
+                            _timeDivider(),
+                            _timeUnit(
+                              (duration.inSeconds % 60).toString(),
+                              '秒',
+                              glow,
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -348,6 +384,30 @@ class _StatusBannerState extends State<StatusBanner>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _statusAvatar(SettingsProvider settings) {
+    final path = settings.avatarPath;
+    if (path != null && File(path).existsSync()) {
+      return ClipOval(
+        child: Image.file(
+          File(path),
+          width: 42,
+          height: 42,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const Icon(
+            Icons.person_rounded,
+            color: Colors.white,
+            size: 24,
+          ),
+        ),
+      );
+    }
+    return const Icon(
+      Icons.person_rounded,
+      color: Colors.white,
+      size: 24,
     );
   }
 
@@ -364,50 +424,234 @@ class _StatusBannerState extends State<StatusBanner>
     );
   }
 
-  Widget _miniStat(String value, String label) {
+  Widget _timeUnit(
+    String value,
+    String label,
+    List<Shadow> glow,
+  ) {
     return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              height: 1,
+      child: SizedBox(
+        height: 34,
+        child: Stack(
+          children: [
+            Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                    shadows: glow,
+                  ),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: .56),
-              fontSize: 9.5,
-              letterSpacing: .3,
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .68),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: .4,
+                  shadows: glow,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _divider() {
+  Widget _timeDivider() {
     return Container(
       width: 1,
-      height: 24,
-      margin: const EdgeInsets.symmetric(horizontal: 12),
+      height: 29,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
       color: Colors.white.withValues(alpha: .12),
     );
   }
+}
 
-  String _timeAgo(DateTime now) {
-    final h = now.hour;
-    if (h < 6) return '凌晨';
-    if (h < 11) return '早晨';
-    if (h < 14) return '中午';
-    if (h < 18) return '下午';
-    return '夜晚';
+String _formatPrecise(DateTime value) {
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${value.year}-${two(value.month)}-${two(value.day)} '
+      '${two(value.hour)}:${two(value.minute)}:${two(value.second)}';
+}
+
+class _StreakStartDialog extends StatefulWidget {
+  final DateTime initial;
+
+  const _StreakStartDialog({required this.initial});
+
+  @override
+  State<_StreakStartDialog> createState() => _StreakStartDialogState();
+}
+
+class _StreakStartDialogState extends State<_StreakStartDialog> {
+  late DateTime _value;
+
+  @override
+  void initState() {
+    super.initState();
+    _value = widget.initial;
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _value,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: '选择坚持起点日期',
+      cancelText: '取消',
+      confirmText: '确定',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _value = DateTime(
+        picked.year,
+        picked.month,
+        picked.day,
+        _value.hour,
+        _value.minute,
+        _value.second,
+      );
+    });
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_value),
+      helpText: '选择坚持起点时间',
+      cancelText: '取消',
+      confirmText: '确定',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _value = DateTime(
+        _value.year,
+        _value.month,
+        _value.day,
+        picked.hour,
+        picked.minute,
+        _value.second,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = context.watch<ThemeProvider>().currentSpec;
+    return AlertDialog(
+      title: const Text('坚持起点'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _formatPrecise(_value),
+              style: TextStyle(
+                color: spec.primary,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '计时会精确到秒，并从这里持续累加。',
+              style: TextStyle(color: spec.textSecondary, fontSize: 11.5),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickDate,
+                    icon: const Icon(Icons.calendar_month_rounded, size: 17),
+                    label: Text(
+                      '${_value.year}-${_value.month.toString().padLeft(2, '0')}-${_value.day.toString().padLeft(2, '0')}',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickTime,
+                    icon: const Icon(Icons.schedule_rounded, size: 17),
+                    label: Text(
+                      '${_value.hour.toString().padLeft(2, '0')}:${_value.minute.toString().padLeft(2, '0')}',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Text(
+                  '秒',
+                  style: TextStyle(
+                    color: spec.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _value.second,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    items: List.generate(
+                      60,
+                      (index) => DropdownMenuItem(
+                        value: index,
+                        child: Text(index.toString().padLeft(2, '0')),
+                      ),
+                    ),
+                    onChanged: (second) {
+                      if (second == null) return;
+                      setState(() {
+                        _value = DateTime(
+                          _value.year,
+                          _value.month,
+                          _value.day,
+                          _value.hour,
+                          _value.minute,
+                          second,
+                        );
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, _value),
+          child: const Text('保存起点'),
+        ),
+      ],
+    );
   }
 }
 
@@ -444,6 +688,7 @@ Future<void> showStatusEditor(BuildContext context) async {
   var emoji = settings.statusEmoji;
   var tone = settings.statusTone;
   var motion = settings.statusMotion;
+  var streakStart = settings.streakStart;
   String? imagePath = settings.statusImagePath;
 
   await showModalBottomSheet(
@@ -467,6 +712,16 @@ Future<void> showStatusEditor(BuildContext context) async {
                 '${dir.path}/status_${DateTime.now().millisecondsSinceEpoch}.jpg';
             await File(picked.path).copy(target);
             setSheetState(() => imagePath = target);
+          }
+
+          Future<void> pickStreakStart() async {
+            final picked = await showDialog<DateTime>(
+              context: context,
+              builder: (_) => _StreakStartDialog(initial: streakStart),
+            );
+            if (picked != null) {
+              setSheetState(() => streakStart = picked);
+            }
           }
 
           return Container(
@@ -573,32 +828,62 @@ Future<void> showStatusEditor(BuildContext context) async {
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: SettingsProvider.statusEmojis.map((item) {
-                        final selected = item == emoji;
-                        return GestureDetector(
-                          onTap: () => setSheetState(() => emoji = item),
+                      children: [
+                        GestureDetector(
+                          onTap: () => setSheetState(() => emoji = ''),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
                             width: 42,
                             height: 42,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: selected
+                              color: emoji.isEmpty
                                   ? palette.first.withValues(alpha: .2)
                                   : spec.textPrimary.withValues(alpha: .05),
                               borderRadius: BorderRadius.circular(13),
                               border: Border.all(
-                                color: selected
+                                color: emoji.isEmpty
                                     ? palette.first
                                     : Colors.transparent,
                                 width: 1.4,
                               ),
                             ),
-                            child: Text(item,
-                                style: const TextStyle(fontSize: 20)),
+                            child: Icon(
+                              Icons.account_circle_rounded,
+                              size: 22,
+                              color: emoji.isEmpty
+                                  ? palette.first
+                                  : spec.textSecondary,
+                            ),
                           ),
-                        );
-                      }).toList(),
+                        ),
+                        ...SettingsProvider.statusEmojis.map((item) {
+                          final selected = item == emoji;
+                          return GestureDetector(
+                            onTap: () => setSheetState(() => emoji = item),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              width: 42,
+                              height: 42,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? palette.first.withValues(alpha: .2)
+                                    : spec.textPrimary.withValues(alpha: .05),
+                                borderRadius: BorderRadius.circular(13),
+                                border: Border.all(
+                                  color: selected
+                                      ? palette.first
+                                      : Colors.transparent,
+                                  width: 1.4,
+                                ),
+                              ),
+                              child: Text(item,
+                                  style: const TextStyle(fontSize: 20)),
+                            ),
+                          );
+                        }),
+                      ],
                     ),
                     const SizedBox(height: 18),
                     Text(
@@ -678,6 +963,69 @@ Future<void> showStatusEditor(BuildContext context) async {
                     ),
                     const SizedBox(height: 18),
                     Text(
+                      '坚持起点',
+                      style: TextStyle(
+                        color: spec.textPrimary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: pickStreakStart,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 13, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: palette.first.withValues(alpha: .08),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: palette.first.withValues(alpha: .22),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.timer_outlined,
+                              color: palette.first,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 9),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _formatPrecise(streakStart),
+                                    style: TextStyle(
+                                      color: spec.textPrimary,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '精确到秒 · 点击修改起点时间',
+                                    style: TextStyle(
+                                      color: spec.textSecondary,
+                                      fontSize: 10.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.edit_calendar_rounded,
+                              color: palette.first,
+                              size: 18,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
                       '背景图片',
                       style: TextStyle(
                         color: spec.textPrimary,
@@ -712,6 +1060,7 @@ Future<void> showStatusEditor(BuildContext context) async {
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () async {
+                          await settings.setStreakStart(streakStart);
                           await settings.setStatus(
                             emoji: emoji,
                             text: textController.text,

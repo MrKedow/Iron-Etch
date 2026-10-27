@@ -1,7 +1,7 @@
 name: fitness_tracker
 description: 铁镌 - 镌刻每一次撸铁的现代化个人健身数据管理系统。
 publish_to: "none"
-version: 1.2.0+3
+version: 3.0.0+4
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -22,11 +22,13 @@ dependencies:
   fluttertoast: ^9.0.0
   url_launcher: ^6.2.5
   webview_flutter: ^4.4.0   # 替换 webview_windows
+  webview_flutter_android: ^4.11.0
   excel: ^4.0.0
   process_run: ^1.1.0
   html: ^0.15.4   # 用于解析 HTML
   xml: ^6.3.0    # 用于解析 XML
   share_plus: ^10.0.0
+  file_picker: ^11.0.3
 
 dev_dependencies:
   flutter_test:
@@ -50,3 +52,4 @@ flutter:
     - assets/一起跳舞.gif
     - assets/coach_rules.json
     - assets/images/
+    - assets/books/iron_book.epub

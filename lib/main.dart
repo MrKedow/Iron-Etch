@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:excel/excel.dart' hide Border;
 import 'package:fitness_tracker/data/exercise_library.dart';
+import 'package:fitness_tracker/screens/book_library_page.dart';
 import 'package:fitness_tracker/screens/settings_page.dart';
 import 'package:fitness_tracker/screens/coach_analysis_page.dart';
 import 'package:fitness_tracker/screens/exercise_library_page.dart';
@@ -17,6 +18,7 @@ import 'package:fitness_tracker/screens/history_page.dart';
 import 'package:fitness_tracker/screens/splash_screen.dart';
 import 'package:fitness_tracker/screens/theme_gallery_page.dart';
 import 'package:fitness_tracker/providers/app_providers.dart';
+import 'package:fitness_tracker/services/work_energy.dart';
 import 'package:fitness_tracker/theme/app_theme.dart';
 import 'package:fitness_tracker/widgets/app_ui.dart';
 import 'package:fitness_tracker/widgets/status_banner.dart';
@@ -193,33 +195,35 @@ class WorkoutProject {
     if (category == '有氧' || category == '柔韧' || category == '专项') {
       return 0;
     }
-    const travelDistances = {
-      '肩': 0.6,
-      '背': 0.6,
-      '腿': 0.7,
-      '胸': 0.6,
-      '核心': 0.3,
-      '手臂': 0.55,
-      '前臂': 0.4,
-      '臀': 0.7,
-      '小腿': 0.45,
-      '全身': 0.6,
-    };
-
-    if (part == '核心' || part == '腹') {
-      return (sets * repsPerSet * 65 * 9.8 * 0.3).toDouble();
-    }
-    final distance = travelDistances[part] ?? 0.6;
-    return weight * 9.8 * distance * sets * repsPerSet;
+    return IronProfile.instance.estimateMechanicalWork(
+      part: part,
+      weight: weight,
+      sets: sets,
+      reps: repsPerSet,
+    );
   }
 
   double estimatedCalories({double bodyWeight = 70}) {
+    final profile = IronProfile.instance;
     if ((isCardio || category == '柔韧' || category == '功能') &&
         durationMinutes > 0) {
       final intensity = met > 0 ? met : (category == '柔韧' ? 2.5 : 6.5);
-      return intensity * 3.5 * bodyWeight / 200 * durationMinutes;
+      return profile.estimateCardioCalories(
+        met: intensity,
+        minutes: durationMinutes,
+        bodyWeightOverride: bodyWeight == 70 ? null : bodyWeight,
+      );
     }
-    return calculateWork() / 4184;
+    if (category == '力量' || category == '功能') {
+      return profile.estimateStrengthCalories(
+        part: part,
+        weight: weight,
+        sets: sets,
+        reps: repsPerSet,
+        durationMinutes: durationMinutes,
+      );
+    }
+    return 0;
   }
 
   String get inputSummary {
@@ -719,6 +723,7 @@ class NutstoreService extends ChangeNotifier {
   static const String _baseUrl = 'https://dav.jianguoyun.com/dav/';
   static const String _cloudFolder = '健身数据管理系统';
   static const String _defaultFilename = 'workout_data.json'; // 改为 JSON
+  static const String _configFilename = 'app_config.json';
 
   String? _username;
   String? _password;
@@ -906,6 +911,49 @@ class NutstoreService extends ChangeNotifier {
     }
   }
 
+  Future<bool> uploadConfig(String json) async {
+    try {
+      final remotePath =
+          '$_baseUrl${Uri.encodeComponent(_cloudFolder)}/$_configFilename';
+      final url = Uri.parse(remotePath);
+      final client = http.Client();
+      final response = await client.put(
+        url,
+        headers: {
+          'Authorization': _getAuthHeader(),
+          'Content-Type': 'application/json',
+        },
+        body: utf8.encode(json),
+      );
+      client.close();
+      return response.statusCode == 201 || response.statusCode == 204;
+    } catch (e) {
+      debugPrint('上传配置失败: $e');
+      return false;
+    }
+  }
+
+  Future<String?> downloadConfig() async {
+    try {
+      final remotePath =
+          '$_baseUrl${Uri.encodeComponent(_cloudFolder)}/$_configFilename';
+      final url = Uri.parse(remotePath);
+      final client = http.Client();
+      final response = await client.get(
+        url,
+        headers: {'Authorization': _getAuthHeader()},
+      );
+      client.close();
+      if (response.statusCode == 200) {
+        return utf8.decode(response.bodyBytes);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('下载配置失败: $e');
+      return null;
+    }
+  }
+
   Future<bool> checkConnection() async {
     try {
       final client = http.Client();
@@ -1003,7 +1051,6 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   DateTime selectedDate = DateTime.now();
   final List<WorkoutProject> projects = [WorkoutProject.empty()];
-  DateTime firstWorkoutDate = DateTime(2025, 6, 9, 18, 29);
 
   final TextEditingController dateController = TextEditingController();
   final List<TextEditingController> nameControllers = [];
@@ -1025,7 +1072,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     dateController.text = DateFormat('yyyy-MM-dd').format(selectedDate);
     _initializeControllers();
     _loadData();
-    _loadFirstWorkoutDate();
   }
 
   void _loadData() async {
@@ -1041,17 +1087,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final provider = context.read<WorkoutProvider>();
     await provider.loadSavedRecords();
     if (mounted) setState(() {});
-  }
-
-  Future<void> _loadFirstWorkoutDate() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedDate = prefs.getString('first_workout_date');
-    if (!mounted) return;
-    setState(() {
-      firstWorkoutDate = savedDate == null
-          ? DateTime(2025, 6, 9, 18, 29)
-          : DateTime.parse(savedDate);
-    });
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
@@ -1895,8 +1930,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final duration = DateTime.now().difference(firstWorkoutDate);
     final spec = context.watch<ThemeProvider>().currentSpec;
+    final settings = context.watch<SettingsProvider>();
     final provider = context.watch<WorkoutProvider>();
     final now = DateTime.now();
     final weekSessions = provider.records.where((r) {
@@ -1969,6 +2004,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             icon: const Icon(Icons.auto_awesome_rounded),
           ),
           IconButton(
+            tooltip: '阅读器',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const BookLibraryPage()),
+              );
+            },
+            icon: const Icon(Icons.menu_book_rounded),
+          ),
+          IconButton(
             tooltip: '训练历史',
             onPressed: () => _showHistory(context),
             icon: const Icon(Icons.history_rounded),
@@ -2003,12 +2048,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 34 + MediaQuery.paddingOf(context).bottom,
               ),
               children: [
-                StatusBanner(
-                  streakDays: duration.inDays,
-                  streakHours: duration.inHours % 24,
-                  streakMinutes: duration.inMinutes % 60,
-                ),
-                const SizedBox(height: 14),
+                StatusBanner(startedAt: settings.streakStart),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
@@ -2044,7 +2085,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 ),
                 SectionHeader(
                   title: '记录今天的铁',
-                  subtitle: '训练次数已按日期自动编号，不再需要手动填写',
+                  subtitle: '',
                   trailing: Pill(
                     label: '${projects.length} 个动作',
                     icon: Icons.list_alt_rounded,
@@ -2399,23 +2440,12 @@ class _ProjectCardState extends State<_ProjectCard> {
     final weight = double.tryParse(widget.weightController.text) ?? 0;
     final sets = int.tryParse(widget.setsController.text) ?? 0;
     final reps = int.tryParse(widget.repsController.text) ?? 0;
-    const travelDistances = {
-      '肩': 0.6,
-      '背': 0.6,
-      '腿': 0.7,
-      '胸': 0.6,
-      '核心': 0.3,
-      '手臂': 0.55,
-      '前臂': 0.4,
-      '臀': 0.7,
-      '小腿': 0.45,
-      '全身': 0.6,
-    };
-    if (_part == '核心' || _part == '腹') {
-      return (sets * reps * 65 * 9.8 * 0.3).toDouble();
-    }
-    final distance = travelDistances[_part] ?? 0.6;
-    return weight * 9.8 * distance * sets * reps;
+    return IronProfile.instance.estimateMechanicalWork(
+      part: _part,
+      weight: weight,
+      sets: sets,
+      reps: reps,
+    );
   }
 
   Future<void> _pickExercise() async {
@@ -2591,8 +2621,10 @@ class _ProjectCardState extends State<_ProjectCard> {
     final work = _calculateWork();
     final duration = double.tryParse(widget.durationController.text) ?? 0;
     final met = _definition?.met ?? 0;
-    final kcal =
-        duration <= 0 ? 0 : (met > 0 ? met : 6.5) * 3.5 * 70 / 200 * duration;
+    final kcal = IronProfile.instance.estimateCardioCalories(
+      met: met > 0 ? met : 6.5,
+      minutes: duration,
+    );
     return GlassPanel(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
