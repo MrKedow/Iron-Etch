@@ -274,6 +274,7 @@ class EpubLibraryService extends ChangeNotifier {
     if (isExtracted(entry)) return;
     final epubFile = File('${_baseDir!.path}/$defaultId.epub');
     if (!await epubFile.exists()) {
+      final partFile = File('${epubFile.path}.part');
       final client = http.Client();
       try {
         final request = http.Request('GET', Uri.parse(defaultDownloadUrl));
@@ -283,7 +284,7 @@ class EpubLibraryService extends ChangeNotifier {
         }
         final total = response.contentLength ?? 0;
         var received = 0;
-        final sink = epubFile.openWrite();
+        final sink = partFile.openWrite();
         try {
           await for (final chunk in response.stream) {
             sink.add(chunk);
@@ -293,6 +294,14 @@ class EpubLibraryService extends ChangeNotifier {
         } finally {
           await sink.close();
         }
+        await partFile.rename(epubFile.path);
+      } catch (_) {
+        if (await partFile.exists()) {
+          try {
+            await partFile.delete();
+          } catch (_) {}
+        }
+        rethrow;
       } finally {
         client.close();
       }
