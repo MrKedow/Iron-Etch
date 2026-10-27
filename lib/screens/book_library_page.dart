@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +28,8 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
   bool _gridView = true;
   int _shelfMaterial = 1;
   bool _introVisible = true;
+  bool _downloading = false;
+  double _downloadProgress = 0;
 
   static const List<String> _shelfMaterials = [
     '玻璃',
@@ -157,10 +160,11 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
       final defaultBook = _library.defaultBook;
       if (defaultBook != null &&
           !defaultBook.deleted &&
-          !_library.isExtracted(defaultBook)) {
+          !_library.isExtracted(defaultBook) &&
+          _library.isDefaultDownloaded) {
         if (mounted) {
           setState(() {
-            _busyMessage = '首次打开需要解压内置 EPUB，约 259 MB，请稍候…';
+            _busyMessage = '正在解压内置书，请稍候…';
           });
         }
         final book = await _library.ensureDefaultReady();
@@ -175,9 +179,58 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
     }
   }
 
+  Future<void> _downloadDefault() async {
+    setState(() {
+      _downloading = true;
+      _downloadProgress = 0;
+      _busy = true;
+      _busyMessage = '正在下载内置书…';
+    });
+    try {
+      await _library.downloadDefaultBook(onProgress: (progress) {
+        if (!mounted) return;
+        setState(() {
+          _downloadProgress = progress;
+          _busyMessage = '下载中 ${(progress * 100).toStringAsFixed(0)}%';
+        });
+      });
+      if (!mounted) return;
+      setState(() {
+        _downloading = false;
+        _busy = false;
+      });
+      final book = await _library.ensureDefaultReady();
+      final prefs = await SharedPreferences.getInstance();
+      final saved =
+          prefs.getInt('epub_progress_${EpubLibraryService.defaultId}');
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EpubReaderPage(
+            book: book,
+            initialChapter: saved,
+          ),
+        ),
+      );
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _downloading = false;
+        _busy = false;
+      });
+      _showMessage('下载失败：$error');
+    }
+  }
+
   Future<void> _openBook(EpubBookEntry entry) async {
     if (entry.deleted) {
       await _restoreBook(entry);
+      return;
+    }
+    if (entry.builtIn && !_library.isDefaultDownloaded) {
+      await _downloadDefault();
       return;
     }
     setState(() {
@@ -210,6 +263,10 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
   }
 
   Future<void> _restoreBook(EpubBookEntry entry) async {
+    if (!_library.isDefaultDownloaded) {
+      await _downloadDefault();
+      return;
+    }
     setState(() {
       _busy = true;
       _busyMessage = '正在恢复《${entry.title}》…';
@@ -485,6 +542,8 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                         return _BookCard(
                           entry: entry,
                           material: _shelfMaterial,
+                          needsDownload:
+                              entry.builtIn && !_library.isDefaultDownloaded,
                           onTap: _busy ? null : () => _openBook(entry),
                           onDelete: _busy ? null : () => _deleteBook(entry),
                         );
@@ -498,6 +557,8 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                             index++)
                           _BookListTile(
                             entry: _library.books[index],
+                            needsDownload: _library.books[index].builtIn &&
+                                !_library.isDefaultDownloaded,
                             onTap: _busy
                                 ? null
                                 : () => _openBook(_library.books[index]),
@@ -547,15 +608,31 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 3.2,
-                          color: spec.primary,
+                      if (_downloading) ...[
+                        SizedBox(
+                          width: 180,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: _downloadProgress,
+                              minHeight: 6,
+                              backgroundColor:
+                                  spec.textPrimary.withValues(alpha: .08),
+                              color: spec.primary,
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 12),
+                      ] else
+                        SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3.2,
+                            color: spec.primary,
+                          ),
+                        ),
+                      if (!_downloading) const SizedBox(height: 16),
                       Text(
                         _busyMessage,
                         textAlign: TextAlign.center,
@@ -580,12 +657,14 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
 class _BookCard extends StatelessWidget {
   final EpubBookEntry entry;
   final int material;
+  final bool needsDownload;
   final VoidCallback? onTap;
   final VoidCallback? onDelete;
 
   const _BookCard({
     required this.entry,
     required this.material,
+    required this.needsDownload,
     required this.onTap,
     required this.onDelete,
   });
@@ -681,10 +760,14 @@ class _BookCard extends StatelessWidget {
     );
 
     if (hasCover) {
-      cover = Image.file(
-        coverFile,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => cover,
+      final fallback = cover;
+      cover = Container(
+        color: Colors.black.withValues(alpha: .16),
+        child: Image.file(
+          coverFile,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => fallback,
+        ),
       );
     }
     if (entry.deleted) {
@@ -729,8 +812,8 @@ class _BookCard extends StatelessWidget {
                   child: Transform(
                     alignment: Alignment.bottomCenter,
                     transform: Matrix4.identity()
-                      ..setEntry(3, 2, 0.0012)
-                      ..rotateX(0.28),
+                      ..setEntry(3, 2, 0.0016)
+                      ..rotateX(0.42),
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -776,6 +859,49 @@ class _BookCard extends StatelessWidget {
                                       SizedBox(width: 5),
                                       Text(
                                         '点击恢复',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (needsDownload)
+                          Positioned.fill(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                color: Colors.black.withValues(alpha: .28),
+                                alignment: Alignment.center,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: .48),
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color:
+                                          Colors.white.withValues(alpha: .28),
+                                    ),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.download_rounded,
+                                        color: Colors.white,
+                                        size: 15,
+                                      ),
+                                      SizedBox(width: 5),
+                                      Text(
+                                        '点击下载',
                                         style: TextStyle(
                                           color: Colors.white,
                                           fontSize: 10.5,
@@ -843,7 +969,7 @@ class _BookCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             entry.title,
-            maxLines: 2,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: spec.textPrimary,
@@ -871,26 +997,29 @@ class _BookCard extends StatelessWidget {
   }
 }
 
+enum _ShelfMaterial { glass, wood, steel, porcelain, lattice, rattan }
+
 class _ShelfSpec {
+  final _ShelfMaterial type;
   final List<Color> gradient;
   final Color board;
   final Color boardEdge;
-  const _ShelfSpec(this.gradient, this.board, this.boardEdge);
+  const _ShelfSpec(this.type, this.gradient, this.board, this.boardEdge);
 }
 
 const List<_ShelfSpec> _shelfSpecs = [
-  _ShelfSpec([Color(0xFF2A3B4C), Color(0xFF18242F)], Color(0xFF335066),
-      Color(0xFF22394D)),
-  _ShelfSpec([Color(0xFF7A4E28), Color(0xFF4A2C14)], Color(0xFF8A5A30),
-      Color(0xFF5E3B1C)),
-  _ShelfSpec([Color(0xFF3C424B), Color(0xFF23272E)], Color(0xFF4A515C),
-      Color(0xFF31363F)),
-  _ShelfSpec([Color(0xFFEAE2D4), Color(0xFFCFC4B0)], Color(0xFFF4EEE2),
-      Color(0xFFC3B7A0)),
-  _ShelfSpec([Color(0xFF22262C), Color(0xFF101318)], Color(0xFF2C3138),
-      Color(0xFF1A1E23)),
-  _ShelfSpec([Color(0xFFB98E4F), Color(0xFF86642F)], Color(0xFFC89A58),
-      Color(0xFF8F6C35)),
+  _ShelfSpec(_ShelfMaterial.glass, [Color(0xFF33556A), Color(0xFF1B2C38)],
+      Color(0xFF5B7D92), Color(0xFF33556A)),
+  _ShelfSpec(_ShelfMaterial.wood, [Color(0xFF8A5A2B), Color(0xFF4E2E12)],
+      Color(0xFF9A6A38), Color(0xFF5C3A1A)),
+  _ShelfSpec(_ShelfMaterial.steel, [Color(0xFF4A515C), Color(0xFF22262C)],
+      Color(0xFF6A737F), Color(0xFF3A4048)),
+  _ShelfSpec(_ShelfMaterial.porcelain, [Color(0xFFF2ECE2), Color(0xFFD8CEBC)],
+      Color(0xFFFBF6EC), Color(0xFFC9BEA9)),
+  _ShelfSpec(_ShelfMaterial.lattice, [Color(0xFF23272E), Color(0xFF12151A)],
+      Color(0xFF3A3230), Color(0xFF221D1B)),
+  _ShelfSpec(_ShelfMaterial.rattan, [Color(0xFF4E6B3A), Color(0xFF2C3E1F)],
+      Color(0xFF6B8A52), Color(0xFF39502A)),
 ];
 
 class _ShelfBackground extends StatelessWidget {
@@ -921,18 +1050,162 @@ class _ShelfPainter extends CustomPainter {
       ).createShader(rect);
     canvas.drawRect(rect, bg);
 
-    final plank = Paint()
-      ..color = Colors.black.withValues(alpha: .06)
-      ..strokeWidth = 1;
-    for (double x = 0; x < size.width; x += 64) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), plank);
+    switch (spec.type) {
+      case _ShelfMaterial.wood:
+        _paintWood(canvas, size);
+      case _ShelfMaterial.steel:
+        _paintSteel(canvas, size);
+      case _ShelfMaterial.glass:
+        _paintGlass(canvas, size);
+      case _ShelfMaterial.porcelain:
+        _paintPorcelain(canvas, size);
+      case _ShelfMaterial.lattice:
+        _paintLattice(canvas, size);
+      case _ShelfMaterial.rattan:
+        _paintRattan(canvas, size);
     }
 
-    final shelf = Paint()
-      ..color = Colors.black.withValues(alpha: .14)
+    _paintBoards(canvas, size);
+  }
+
+  void _paintBoards(Canvas canvas, Size size) {
+    final shadow = Paint()
+      ..color = Colors.black.withValues(alpha: .18)
+      ..strokeWidth = 3;
+    final light = Paint()
+      ..color = Colors.white.withValues(alpha: .10)
+      ..strokeWidth = 1.5;
+    for (double y = 0; y < size.height; y += 240) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), shadow);
+      canvas.drawLine(Offset(0, y + 3), Offset(size.width, y + 3), light);
+    }
+  }
+
+  void _paintWood(Canvas canvas, Size size) {
+    final rnd = math.Random(7);
+    final grain = Paint()..strokeWidth = 1;
+    for (double y = 6; y < size.height; y += 5 + rnd.nextDouble() * 6) {
+      grain.color =
+          Colors.black.withValues(alpha: .05 + rnd.nextDouble() * .07);
+      final path = Path()..moveTo(0, y);
+      for (double x = 0; x <= size.width; x += 48) {
+        path.lineTo(x, y + math.sin(x * .018 + y) * 2.6);
+      }
+      canvas.drawPath(path, grain);
+    }
+    final knot = Paint()
+      ..color = Colors.black.withValues(alpha: .12)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    for (var i = 0; i < 4; i++) {
+      final cx = rnd.nextDouble() * size.width;
+      final cy = rnd.nextDouble() * size.height;
+      for (var r = 3.0; r <= 12; r += 3) {
+        canvas.drawOval(
+          Rect.fromCenter(center: Offset(cx, cy), width: r * 2, height: r),
+          knot,
+        );
+      }
+    }
+  }
+
+  void _paintSteel(Canvas canvas, Size size) {
+    final brush = Paint()
+      ..color = Colors.white.withValues(alpha: .05)
+      ..strokeWidth = 1;
+    for (double y = 0; y < size.height; y += 3) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), brush);
+    }
+    final band = Paint();
+    for (double y = 0; y < size.height; y += 48) {
+      band.color =
+          Colors.white.withValues(alpha: ((y ~/ 48) % 2 == 0) ? .04 : 0);
+      canvas.drawRect(Rect.fromLTWH(0, y, size.width, 24), band);
+    }
+    final highlight = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Colors.white.withValues(alpha: .14),
+          Colors.transparent,
+          Colors.white.withValues(alpha: .05),
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, highlight);
+  }
+
+  void _paintGlass(Canvas canvas, Size size) {
+    final tint = Paint()
+      ..color = const Color(0xFF9CC6E0).withValues(alpha: .08);
+    canvas.drawRect(Offset.zero & size, tint);
+    final streak = Paint()
+      ..color = Colors.white.withValues(alpha: .10)
+      ..strokeWidth = 9
+      ..strokeCap = StrokeCap.round;
+    for (double x = -size.height; x < size.width; x += size.width / 4) {
+      canvas.drawLine(
+          Offset(x, 0), Offset(x + size.height, size.height), streak);
+    }
+    final edge = Paint()
+      ..color = Colors.white.withValues(alpha: .16)
+      ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
-    for (double y = 0; y < size.height; y += 220) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), shelf);
+    canvas.drawRect(Offset.zero & size, edge);
+  }
+
+  void _paintPorcelain(Canvas canvas, Size size) {
+    final highlight = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-.4, -.6),
+        radius: 1.3,
+        colors: [
+          Colors.white.withValues(alpha: .55),
+          Colors.transparent,
+        ],
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, highlight);
+  }
+
+  void _paintLattice(Canvas canvas, Size size) {
+    final carve = Paint()
+      ..color = const Color(0xFF5C4638).withValues(alpha: .55)
+      ..strokeWidth = 2;
+    const step = 30.0;
+    for (double y = -size.height; y < size.height * 2; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y + size.width), carve);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y - size.width), carve);
+    }
+    final hole = Paint()
+      ..color = Colors.black.withValues(alpha: .18)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    for (double y = step / 2; y < size.height; y += step) {
+      for (double x = step / 2; x < size.width; x += step) {
+        canvas.drawCircle(Offset(x, y), 4, hole);
+      }
+    }
+  }
+
+  void _paintRattan(Canvas canvas, Size size) {
+    const step = 22.0;
+    final h = Paint()
+      ..color = const Color(0xFF4E6B3A)
+      ..strokeWidth = 3;
+    final v = Paint()
+      ..color = const Color(0xFF2C3E1F)
+      ..strokeWidth = 3;
+    for (double y = step / 2; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), h);
+    }
+    for (double x = step / 2; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), v);
+    }
+    final hl = Paint()
+      ..color = const Color(0xFF7FA060).withValues(alpha: .45)
+      ..strokeWidth = 1.5;
+    for (double y = step / 2; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), hl);
     }
   }
 
@@ -943,11 +1216,13 @@ class _ShelfPainter extends CustomPainter {
 
 class _BookListTile extends StatelessWidget {
   final EpubBookEntry entry;
+  final bool needsDownload;
   final VoidCallback? onTap;
   final VoidCallback? onDelete;
 
   const _BookListTile({
     required this.entry,
+    required this.needsDownload,
     required this.onTap,
     required this.onDelete,
   });
@@ -1050,11 +1325,13 @@ class _BookListTile extends StatelessWidget {
                   Text(
                     entry.deleted
                         ? '已删除 · 可恢复'
-                        : (entry.author.isEmpty ? 'EPUB' : entry.author),
+                        : needsDownload
+                            ? '未下载 · 点击下载'
+                            : (entry.author.isEmpty ? 'EPUB' : entry.author),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: entry.deleted
+                      color: entry.deleted || needsDownload
                           ? const Color(0xFFF97316)
                           : spec.textSecondary,
                       fontSize: 11,

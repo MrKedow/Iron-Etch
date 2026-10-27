@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:html/parser.dart' as html_parser;
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:xml/xml.dart';
 
@@ -167,6 +168,8 @@ class EpubLibraryService extends ChangeNotifier {
   static const String defaultId = 'north_science_fitness';
   static const String defaultAssetPath =
       'flutter_assets/assets/books/iron_book.epub';
+  static const String defaultDownloadUrl =
+      'https://github.com/MrKedow/Iron-Etch/releases/latest/download/iron_book.epub';
   static const MethodChannel _channel = MethodChannel('com.MrKedow.FT/epub');
 
   Directory? _baseDir;
@@ -255,22 +258,80 @@ class EpubLibraryService extends ChangeNotifier {
         File('${entry.rootPath}/META-INF/container.xml').existsSync();
   }
 
+  bool get isDefaultDownloaded {
+    final entry = defaultBook;
+    if (entry == null) return false;
+    if (isExtracted(entry)) return true;
+    return File('${_baseDir!.path}/$defaultId.epub').existsSync();
+  }
+
+  Future<void> downloadDefaultBook({
+    void Function(double progress)? onProgress,
+  }) async {
+    await load();
+    final entry = defaultBook;
+    if (entry == null) throw const EpubException('默认书不存在');
+    if (isExtracted(entry)) return;
+    final epubFile = File('${_baseDir!.path}/$defaultId.epub');
+    if (!await epubFile.exists()) {
+      final client = http.Client();
+      try {
+        final request = http.Request('GET', Uri.parse(defaultDownloadUrl));
+        final response = await client.send(request);
+        if (response.statusCode != 200) {
+          throw EpubException('下载失败：HTTP ${response.statusCode}');
+        }
+        final total = response.contentLength ?? 0;
+        var received = 0;
+        final sink = epubFile.openWrite();
+        try {
+          await for (final chunk in response.stream) {
+            sink.add(chunk);
+            received += chunk.length;
+            if (total > 0) onProgress?.call((received / total).clamp(0.0, 1.0));
+          }
+        } finally {
+          await sink.close();
+        }
+      } finally {
+        client.close();
+      }
+    }
+    await (_defaultExtraction ??= _extractFile(epubFile.path, entry.rootPath)
+        .whenComplete(() => _defaultExtraction = null));
+    try {
+      final book = await parseEntry(entry);
+      _applyMetadata(entry, book);
+    } catch (_) {
+      await _extractFile(epubFile.path, entry.rootPath);
+      final book = await parseEntry(entry);
+      _applyMetadata(entry, book);
+    }
+    await _saveLibrary();
+    notifyListeners();
+  }
+
   Future<EpubBook> ensureDefaultReady() async {
     await load();
     final entry = defaultBook;
     if (entry == null) throw const EpubException('默认书不存在');
     if (entry.deleted) throw const EpubException('默认书已被删除，请重新下载');
     if (!isExtracted(entry)) {
-      await (_defaultExtraction ??= _extractAsset(
-        defaultAssetPath,
-        entry.rootPath,
-      ).whenComplete(() => _defaultExtraction = null));
+      final epubFile = File('${_baseDir!.path}/$defaultId.epub');
+      if (!await epubFile.exists()) {
+        throw const EpubException('内置书尚未下载，请先下载');
+      }
+      await (_defaultExtraction ??= _extractFile(epubFile.path, entry.rootPath)
+          .whenComplete(() => _defaultExtraction = null));
     }
     EpubBook book;
     try {
       book = await parseEntry(entry);
     } catch (_) {
-      await _extractAsset(defaultAssetPath, entry.rootPath);
+      await _extractFile(
+        File('${_baseDir!.path}/$defaultId.epub').path,
+        entry.rootPath,
+      );
       book = await parseEntry(entry);
     }
     _applyMetadata(entry, book);
@@ -545,16 +606,6 @@ class EpubLibraryService extends ChangeNotifier {
       html = '$themeStyles$html';
     }
     return html;
-  }
-
-  Future<void> _extractAsset(String assetPath, String target) async {
-    if (!Platform.isAndroid) {
-      throw const EpubException('默认书解压目前仅支持 Android');
-    }
-    await _channel.invokeMethod<bool>('extractAsset', {
-      'assetPath': assetPath,
-      'target': target,
-    });
   }
 
   Future<void> _extractFile(String sourcePath, String target) async {

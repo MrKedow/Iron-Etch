@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -26,24 +27,33 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 3400),
     )..forward();
     _navigationTimer = Timer(const Duration(milliseconds: 3550), _enterApp);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _precacheAssets());
+  }
+
+  void _precacheAssets() {
+    final themeProvider = context.read<ThemeProvider>();
+    final path = themeProvider.customBackgroundPath;
+    if (path == null || !File(path).existsSync()) return;
+    final size = MediaQuery.sizeOf(context);
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    precacheImage(
+      ResizeImage(
+        FileImage(File(path)),
+        width: (size.width * dpr).round(),
+        height: (size.height * dpr).round(),
+      ),
+      context,
+    );
   }
 
   void _enterApp() {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 700),
+        transitionDuration: const Duration(milliseconds: 380),
         pageBuilder: (_, animation, __) => const MainScreen(),
         transitionsBuilder: (_, animation, __, child) {
-          final curved =
-              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-          return FadeTransition(
-            opacity: curved,
-            child: ScaleTransition(
-              scale: Tween(begin: 1.04, end: 1.0).animate(curved),
-              child: child,
-            ),
-          );
+          return FadeTransition(opacity: animation, child: child);
         },
       ),
     );
