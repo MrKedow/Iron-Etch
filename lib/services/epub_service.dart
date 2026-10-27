@@ -169,9 +169,33 @@ class EpubLibraryService extends ChangeNotifier {
   static const String defaultAssetPath =
       'flutter_assets/assets/books/iron_book.epub';
   static const String defaultDownloadUrl =
-      'https://github.com/MrKedow/Iron-Etch/releases/latest/download/iron_book.epub';
+      'https://github.com/MrKedow/Iron-Etch/releases/download/v3.0.0/iron_book.epub';
   static const String jianguoyunDownloadUrl =
-      'https://www.jianguoyun.com/p/DQaP5GgQ2omXCRj5468GIAA';
+      'https://www.jianguoyun.com/c/dl-pubfile/%E5%8C%97%E7%A7%91%C2%B7%E5%81%A5%E8%BA%AB%E5%85%A8%E4%B9%A6%E3%80%90%E5%85%A89%E5%86%8C%E3%80%91.epub?td=tnknl8&xy=RXRob2Nhc0BvdXRsb29rLmNvbQ&ip=112.0.130.19&w=FmJ7oI3u0RVubNAJzpmWR9lLRmkxNXcIQ_KtfYNnaow&ha=DQaP5GgQ2omXCRj5468GIAA&cid=x7pEuJsSsfAM279rYpeQrQ';
+
+  /// GitHub 加速代理前缀（已按真实测速排序：前 4 个实测可返回真实 EPUB）。
+  static const List<String> githubProxyPrefixes = [
+    'https://gh.monlor.com/',
+    'https://gh.acmsz.top/',
+    'https://gh-proxy.org/',
+    'https://gh-proxy.com/',
+    'https://ghproxy.imciel.com/',
+    'https://ghproxy.net/',
+    'https://ghfast.top/',
+    'https://gh.llkk.cc/',
+    'https://mirror.ghproxy.com/',
+    'https://ghmirror.com/',
+    'https://ghproxy.link/',
+    'https://ghproxy.cn/',
+    'https://hub.gitmirror.com/',
+    'https://gh.ddlc.top/',
+    'https://gh-proxy.net/',
+    'https://gh.6yit.com/',
+    'https://gh.xxooo.cf/',
+    'https://ghproxy.cfd/',
+    'https://gh.api.99988866.xyz/',
+    'https://gh-proxy.ygxz.in/',
+  ];
   static const String _downloadFileName = 'iron_book.epub';
   static const MethodChannel _channel = MethodChannel('com.MrKedow.FT/epub');
 
@@ -307,13 +331,31 @@ class EpubLibraryService extends ChangeNotifier {
     void Function(double)? onProgress,
   ) async {
     if (await _adoptExternal(epubFile)) return;
-    final url =
-        await _pickFastestUrl([defaultDownloadUrl, jianguoyunDownloadUrl]);
-    if (Platform.isAndroid &&
-        await _nativeDownload(url, epubFile, onProgress)) {
-      return;
+    final candidates = <String>[
+      defaultDownloadUrl,
+      for (final prefix in githubProxyPrefixes) '$prefix$defaultDownloadUrl',
+      jianguoyunDownloadUrl,
+    ];
+    final ranked = await _rankedUrls(candidates);
+    final ordered = ranked.isEmpty ? <String>[defaultDownloadUrl] : ranked;
+    Object? lastError;
+    for (final url in ordered) {
+      try {
+        if (Platform.isAndroid &&
+            await _nativeDownload(url, epubFile, onProgress)) {
+          return;
+        }
+        await _dartDownload(url, epubFile, onProgress);
+        return;
+      } catch (error) {
+        lastError = error;
+        try {
+          final part = File('${epubFile.path}.part');
+          if (await part.exists()) await part.delete();
+        } catch (_) {}
+      }
     }
-    await _dartDownload(url, epubFile, onProgress);
+    throw EpubException('下载失败：${lastError ?? '所有下载源均不可用'}');
   }
 
   Future<bool> _adoptExternal(File epubFile) async {
@@ -336,40 +378,45 @@ class EpubLibraryService extends ChangeNotifier {
     return false;
   }
 
-  Future<String> _pickFastestUrl(List<String> urls) async {
-    String? best;
-    var bestMs = 1 << 30;
-    for (final url in urls) {
-      http.Client? client;
-      try {
-        client = http.Client();
-        final sw = Stopwatch()..start();
-        final request = http.Request('GET', Uri.parse(url));
-        request.headers['Range'] = 'bytes=0-131071';
-        final response =
-            await client.send(request).timeout(const Duration(seconds: 12));
-        final bytes = <int>[];
-        await for (final chunk
-            in response.stream.timeout(const Duration(seconds: 12))) {
-          bytes.addAll(chunk);
-          if (bytes.length >= 1024) break;
-        }
-        final ms = sw.elapsedMilliseconds;
-        final head =
-            String.fromCharCodes(bytes.take(1024)).trimLeft().toLowerCase();
-        final isHtml = head.startsWith('<!doctype') || head.startsWith('<html');
-        final ok = (response.statusCode == 200 || response.statusCode == 206) &&
-            !isHtml;
-        if (ok && ms < bestMs) {
-          bestMs = ms;
-          best = url;
-        }
-      } catch (_) {
-      } finally {
-        client?.close();
-      }
+  /// 并行探测所有候选源，返回按实测速度从快到慢排序的可用链接。
+  Future<List<String>> _rankedUrls(List<String> urls) async {
+    final results = await Future.wait(urls.map(_probeUrl));
+    final ranked = <MapEntry<String, int>>[];
+    for (var i = 0; i < urls.length; i++) {
+      final ms = results[i];
+      if (ms != null) ranked.add(MapEntry(urls[i], ms));
     }
-    return best ?? urls.first;
+    ranked.sort((a, b) => a.value.compareTo(b.value));
+    return ranked.map((entry) => entry.key).toList();
+  }
+
+  /// 返回响应耗时（毫秒）；失败、超时或内容不是 EPUB 时返回 null。
+  Future<int?> _probeUrl(String url) async {
+    http.Client? client;
+    try {
+      client = http.Client();
+      final sw = Stopwatch()..start();
+      final request = http.Request('GET', Uri.parse(url));
+      request.headers['Range'] = 'bytes=0-4095';
+      final response =
+          await client.send(request).timeout(const Duration(seconds: 5));
+      if (response.statusCode != 200 && response.statusCode != 206) return null;
+      final bytes = <int>[];
+      await for (final chunk
+          in response.stream.timeout(const Duration(seconds: 5))) {
+        bytes.addAll(chunk);
+        if (bytes.length >= 512) break;
+      }
+      if (bytes.length < 4) return null;
+      // EPUB 是 ZIP 容器，文件头必须是 "PK" (0x50 0x4B)。
+      final isZip = bytes[0] == 0x50 && bytes[1] == 0x4B;
+      if (!isZip) return null;
+      return sw.elapsedMilliseconds;
+    } catch (_) {
+      return null;
+    } finally {
+      client?.close();
+    }
   }
 
   Future<bool> _nativeDownload(
@@ -425,7 +472,8 @@ class EpubLibraryService extends ChangeNotifier {
     final client = http.Client();
     try {
       final request = http.Request('GET', Uri.parse(url));
-      final response = await client.send(request);
+      final response =
+          await client.send(request).timeout(const Duration(seconds: 30));
       if (response.statusCode != 200) {
         throw EpubException('下载失败：HTTP ${response.statusCode}');
       }
@@ -433,7 +481,8 @@ class EpubLibraryService extends ChangeNotifier {
       var received = 0;
       final sink = partFile.openWrite();
       try {
-        await for (final chunk in response.stream) {
+        await for (final chunk
+            in response.stream.timeout(const Duration(seconds: 40))) {
           sink.add(chunk);
           received += chunk.length;
           if (total > 0) {
