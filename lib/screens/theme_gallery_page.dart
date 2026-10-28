@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -28,9 +29,10 @@ class ThemeGalleryPage extends StatelessWidget {
             onPressed: () async {
               await themeProvider.clearCustomBackground();
               await themeProvider.setTheme(AppThemes.ironForge.id);
+              await themeProvider.setMode(AppThemeMode.light);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('已恢复铁铸黑金主题')),
+                  const SnackBar(content: Text('已恢复黑金主题与昼间模式')),
                 );
               }
             },
@@ -67,6 +69,8 @@ class ThemeGalleryPage extends StatelessWidget {
                             const SizedBox(height: 2),
                             Text(
                               spec.subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: spec.onHeroMuted,
                                 fontSize: 12,
@@ -75,10 +79,13 @@ class ThemeGalleryPage extends StatelessWidget {
                           ],
                         ),
                       ),
-                      Pill(
-                        label: spec.isDark ? '深色' : '浅色',
-                        color: spec.onHero,
-                        icon: Icons.contrast_rounded,
+                      const SizedBox(width: 8),
+                      _ThemeModeSwitch(
+                        mode: themeProvider.mode,
+                        spec: spec,
+                        onChanged: (mode) {
+                          themeProvider.setMode(mode);
+                        },
                       ),
                     ],
                   ),
@@ -123,7 +130,7 @@ class ThemeGalleryPage extends StatelessWidget {
               return FadeSlideIn(
                 index: index,
                 child: _ThemeCard(
-                  spec: theme,
+                  spec: themeProvider.specFor(theme.id),
                   selected: selected,
                   onTap: () => themeProvider.setTheme(theme.id),
                 ),
@@ -260,6 +267,264 @@ class ThemeGalleryPage extends StatelessWidget {
   }
 }
 
+class _ThemeModeSwitch extends StatefulWidget {
+  final AppThemeMode mode;
+  final AppThemeSpec spec;
+  final ValueChanged<AppThemeMode> onChanged;
+
+  const _ThemeModeSwitch({
+    required this.mode,
+    required this.spec,
+    required this.onChanged,
+  });
+
+  @override
+  State<_ThemeModeSwitch> createState() => _ThemeModeSwitchState();
+}
+
+class _ThemeModeSwitchState extends State<_ThemeModeSwitch>
+    with SingleTickerProviderStateMixin {
+  static const double _width = 104;
+  static const double _height = 34;
+  static const double _thumbSize = 28;
+  static const double _padding = 3;
+  static const double _travel = _width - _padding * 2 - _thumbSize;
+
+  late final AnimationController _spin;
+  double? _dragFraction;
+
+  @override
+  void initState() {
+    super.initState();
+    _spin = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _spin.dispose();
+    super.dispose();
+  }
+
+  double get _selectedFraction => widget.mode.index / 2;
+  double get _fraction => _dragFraction ?? _selectedFraction;
+
+  int get _displayIndex {
+    final index = (_fraction * 2).round();
+    return index < 0 ? 0 : (index > 2 ? 2 : index);
+  }
+
+  void _selectFromDx(double dx) {
+    final fraction = (dx / _width).clamp(0.0, 1.0);
+    _commit((fraction * 2).round());
+  }
+
+  void _commit(int index) {
+    setState(() => _dragFraction = null);
+    final safeIndex = index < 0 ? 0 : (index > 2 ? 2 : index);
+    final mode = AppThemeMode.values[safeIndex];
+    if (mode != widget.mode) widget.onChanged(mode);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final trackColor = widget.spec.onHero.withValues(
+      alpha: widget.spec.isDark ? .18 : .09,
+    );
+    final borderColor = widget.spec.onHero.withValues(
+      alpha: widget.spec.isDark ? .20 : .14,
+    );
+    final markerColor = widget.spec.onHero.withValues(alpha: .48);
+    final thumbColor =
+        widget.spec.isDark ? Colors.white : widget.spec.textPrimary;
+    final thumbForeground =
+        widget.spec.isDark ? const Color(0xFF101216) : Colors.white;
+
+    return Semantics(
+      button: true,
+      label: '主题明暗模式',
+      value: switch (widget.mode) {
+        AppThemeMode.light => '昼',
+        AppThemeMode.system => '跟随系统',
+        AppThemeMode.dark => '夜',
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: (details) => _selectFromDx(details.localPosition.dx),
+        onHorizontalDragStart: (_) {
+          setState(() => _dragFraction = _selectedFraction);
+        },
+        onHorizontalDragUpdate: (details) {
+          setState(() {
+            _dragFraction = (details.localPosition.dx / _width).clamp(0.0, 1.0);
+          });
+        },
+        onHorizontalDragEnd: (_) {
+          _commit((_fraction * 2).round());
+        },
+        child: SizedBox(
+          width: _width,
+          height: _height,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: trackColor,
+                    borderRadius: BorderRadius.circular(_height / 2),
+                    border: Border.all(color: borderColor),
+                  ),
+                ),
+              ),
+              for (var i = 0; i < 3; i++) _slotMarker(i, markerColor),
+              AnimatedPositioned(
+                duration: _dragFraction == null
+                    ? const Duration(milliseconds: 220)
+                    : Duration.zero,
+                curve: Curves.easeOutCubic,
+                left: _padding + _fraction * _travel,
+                top: _padding,
+                child: Container(
+                  width: _thumbSize,
+                  height: _thumbSize,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: thumbColor,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: .18),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: _displayIndex == 1
+                      ? RotationTransition(
+                          turns: _spin,
+                          child: const SizedBox.square(
+                            dimension: 17,
+                            child: CustomPaint(
+                              painter: _TaijiPainter(),
+                            ),
+                          ),
+                        )
+                      : Text(
+                          _displayIndex == 0 ? '昼' : '夜',
+                          style: TextStyle(
+                            color: thumbForeground,
+                            fontSize: 12,
+                            height: 1,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _slotMarker(int index, Color color) {
+    final center = _padding + _travel * (index / 2) + _thumbSize / 2;
+    return Positioned(
+      left: center - 5,
+      top: 0,
+      bottom: 0,
+      width: 10,
+      child: Center(
+        child: Opacity(
+          opacity: .34,
+          child: index == 1
+              ? const SizedBox.square(
+                  dimension: 10,
+                  child: CustomPaint(
+                    painter: _TaijiPainter(
+                      inkColor: Colors.black87,
+                      paperColor: Colors.white,
+                    ),
+                  ),
+                )
+              : Text(
+                  index == 0 ? '昼' : '夜',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 9,
+                    height: 1,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TaijiPainter extends CustomPainter {
+  final Color inkColor;
+  final Color paperColor;
+
+  const _TaijiPainter({
+    this.inkColor = const Color(0xFF111111),
+    this.paperColor = Colors.white,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final radius = size.shortestSide / 2;
+    final center = Offset(size.width / 2, size.height / 2);
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    final paper = Paint()..color = paperColor;
+    final ink = Paint()..color = inkColor;
+
+    canvas.drawCircle(center, radius, paper);
+
+    final rightHalf = Path()
+      ..moveTo(center.dx, center.dy - radius)
+      ..arcTo(rect, -math.pi / 2, math.pi, false)
+      ..close();
+    canvas.drawPath(rightHalf, ink);
+    canvas.drawCircle(
+      Offset(center.dx, center.dy - radius / 2),
+      radius / 2,
+      ink,
+    );
+    canvas.drawCircle(
+      Offset(center.dx, center.dy + radius / 2),
+      radius / 2,
+      paper,
+    );
+    canvas.drawCircle(
+      Offset(center.dx, center.dy + radius / 2),
+      radius / 6,
+      ink,
+    );
+    canvas.drawCircle(
+      Offset(center.dx, center.dy - radius / 2),
+      radius / 6,
+      paper,
+    );
+
+    canvas.drawCircle(
+      center,
+      radius - .5,
+      Paint()
+        ..color = inkColor.withValues(alpha: .65)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TaijiPainter oldDelegate) =>
+      oldDelegate.inkColor != inkColor || oldDelegate.paperColor != paperColor;
+}
+
 class _ThemeCard extends StatelessWidget {
   final AppThemeSpec spec;
   final bool selected;
@@ -286,8 +551,7 @@ class _ThemeCard extends StatelessWidget {
             end: Alignment.bottomRight,
           ),
           border: Border.all(
-            color:
-                selected ? spec.primary : Colors.white.withValues(alpha: .08),
+            color: selected ? spec.primary : spec.onHero.withValues(alpha: .10),
             width: selected ? 2.2 : 1,
           ),
           boxShadow: selected

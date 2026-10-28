@@ -250,30 +250,67 @@ class _HistoryPageState extends State<HistoryPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            '第 ${record.sessionNumber ?? '-'} 次训练',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: spec.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final maxParts = constraints.maxWidth < 230 ? 2 : 3;
+                        return Row(
+                          children: [
+                            Flexible(
+                              flex: 3,
+                              child: Text(
+                                '第 ${record.sessionNumber ?? '-'} 次训练',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: spec.textPrimary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        for (final part in parts.take(3))
-                          Padding(
-                            padding: const EdgeInsets.only(right: 4),
-                            child: Pill(
-                              label: part,
-                              color: spec.secondary,
+                            const SizedBox(width: 5),
+                            Flexible(
+                              flex: 2,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    for (final part in parts.take(maxParts))
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 4),
+                                        child: Pill(
+                                          label: part,
+                                          color: spec.secondary,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                      ],
+                            const SizedBox(width: 5),
+                            Flexible(
+                              flex: 2,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: StatusBattery(
+                                  level: record.statusBattery,
+                                  width: 58,
+                                  height: 13,
+                                  outlineColor: spec.isDark
+                                      ? null
+                                      : spec.textPrimary.withValues(alpha: .42),
+                                  textColor:
+                                      spec.isDark ? null : spec.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -367,7 +404,11 @@ class _HistoryPageState extends State<HistoryPage> {
                   Divider(color: spec.textPrimary.withValues(alpha: .07)),
                   const SizedBox(height: 4),
                   for (final project in recordProjects)
-                    _ProjectDetail(project: project, spec: spec),
+                    _ProjectDetail(
+                      project: project,
+                      spec: spec,
+                      battery: record.statusBattery,
+                    ),
                   const SizedBox(height: 2),
                   Row(
                     children: [
@@ -616,8 +657,13 @@ class _HistoryPageState extends State<HistoryPage> {
 class _ProjectDetail extends StatelessWidget {
   final WorkoutProject project;
   final AppThemeSpec spec;
+  final int battery;
 
-  const _ProjectDetail({required this.project, required this.spec});
+  const _ProjectDetail({
+    required this.project,
+    required this.spec,
+    required this.battery,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -654,6 +700,17 @@ class _ProjectDetail extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              StatusBattery(
+                level: battery,
+                width: 64,
+                height: 13,
+                outlineColor: spec.isDark
+                    ? null
+                    : spec.textPrimary.withValues(alpha: .42),
+                textColor: spec.isDark ? null : spec.textPrimary,
+              ),
+              const SizedBox(width: 8),
               Pill(label: project.part, color: spec.secondary),
             ],
           ),

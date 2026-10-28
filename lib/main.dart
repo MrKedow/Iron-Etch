@@ -30,6 +30,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final savedThemeId = prefs.getString('selected_theme_id');
+  final savedThemeMode = prefs.getString('theme_mode');
+  final initialThemeMode = AppThemeMode.values.firstWhere(
+    (mode) => mode.name == savedThemeMode,
+    orElse: () => AppThemeMode.light,
+  );
   final legacyThemeIndex = prefs.getInt('selected_theme') ?? 0;
   final initialThemeId = savedThemeId ??
       (legacyThemeIndex >= 0 && legacyThemeIndex < AppThemes.all.length
@@ -48,7 +53,12 @@ void main() async {
           ),
         ),
         // 3. 其他提供者
-        ChangeNotifierProvider(create: (_) => ThemeProvider(initialThemeId)),
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider(
+            initialThemeId,
+            initialMode: initialThemeMode,
+          ),
+        ),
         ChangeNotifierProvider(create: (_) => NutstoreService()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ChangeNotifierProvider(create: (_) => EpubLibraryService.instance),
@@ -64,6 +74,7 @@ class WorkoutRecord {
   DateTime date;
   int? sessionNumber;
   List<WorkoutProject> projects;
+  int statusBattery;
   final DateTime timestamp;
 
   WorkoutRecord({
@@ -71,6 +82,7 @@ class WorkoutRecord {
     required this.date,
     required this.sessionNumber,
     required this.projects,
+    this.statusBattery = 80,
     required this.timestamp,
   });
 
@@ -302,6 +314,7 @@ List<WorkoutRecord> normalizeWorkoutRecords(Iterable<WorkoutRecord> records) {
       date: record.date,
       sessionNumber: record.sessionNumber,
       projects: projects,
+      statusBattery: record.statusBattery,
       timestamp: record.timestamp,
     ));
   }
@@ -358,11 +371,13 @@ class JsonStorageService {
       'date': r.date.toIso8601String(),
       'sessionNumber': r.sessionNumber,
       'projects': r.projects.map((p) => p.toJson()).toList(),
+      'statusBattery': r.statusBattery,
       'timestamp': r.timestamp.toIso8601String(),
     };
   }
 
   WorkoutRecord _recordFromJson(Map<String, dynamic> json) {
+    final battery = (json['statusBattery'] as num?)?.toInt() ?? 80;
     return WorkoutRecord(
       id: json['id'],
       date: DateTime.parse(json['date']),
@@ -372,6 +387,7 @@ class JsonStorageService {
                 Map<String, dynamic>.from(p as Map),
               ))
           .toList(),
+      statusBattery: battery.clamp(0, 100).toInt(),
       timestamp: DateTime.parse(json['timestamp']),
     );
   }
@@ -420,6 +436,7 @@ class WorkoutProvider extends ChangeNotifier {
         date: existing.date,
         sessionNumber: existing.sessionNumber,
         projects: mergedProjects,
+        statusBattery: newRecord.statusBattery,
         timestamp: DateTime.now(),
       );
       _records[existingIndex] = updatedRecord;
@@ -429,6 +446,7 @@ class WorkoutProvider extends ChangeNotifier {
         date: newRecord.date,
         sessionNumber: newRecord.sessionNumber,
         projects: dedupeWorkoutProjects(newRecord.projects),
+        statusBattery: newRecord.statusBattery,
         timestamp: newRecord.timestamp,
       ));
     }
@@ -443,6 +461,7 @@ class WorkoutProvider extends ChangeNotifier {
         date: updatedRecord.date,
         sessionNumber: updatedRecord.sessionNumber,
         projects: dedupeWorkoutProjects(updatedRecord.projects),
+        statusBattery: updatedRecord.statusBattery,
         timestamp: updatedRecord.timestamp,
       );
       recalculateSessionNumbers();
@@ -519,12 +538,16 @@ class WorkoutProvider extends ChangeNotifier {
                 record.sessionNumber! > existing.sessionNumber!)) {
           existing.sessionNumber = record.sessionNumber;
         }
+        if (record.timestamp.isAfter(existing.timestamp)) {
+          existing.statusBattery = record.statusBattery;
+        }
       } else {
         merged[key] = WorkoutRecord(
           id: record.id,
           date: record.date,
           sessionNumber: record.sessionNumber,
           projects: List.from(record.projects),
+          statusBattery: record.statusBattery,
           timestamp: record.timestamp,
         );
       }
@@ -560,6 +583,7 @@ class WorkoutProvider extends ChangeNotifier {
                 'id': record.id,
                 'date': record.date.toIso8601String(),
                 'sessionNumber': record.sessionNumber,
+                'statusBattery': record.statusBattery,
                 'projects': record.projects
                     .map((project) => {
                           'name': project.name,
@@ -593,6 +617,7 @@ class WorkoutProvider extends ChangeNotifier {
         try {
           final List<dynamic> data = json.decode(recordsJson);
           _records = data.map((item) {
+            final battery = (item['statusBattery'] as num?)?.toInt() ?? 80;
             return WorkoutRecord(
               id: item['id'],
               date: DateTime.parse(item['date']),
@@ -602,6 +627,7 @@ class WorkoutProvider extends ChangeNotifier {
                         Map<String, dynamic>.from(project as Map),
                       ))
                   .toList(),
+              statusBattery: battery.clamp(0, 100).toInt(),
               timestamp: DateTime.parse(item['timestamp']),
             );
           }).toList();
@@ -1159,11 +1185,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
 
     final provider = context.read<WorkoutProvider>();
+    final settings = context.read<SettingsProvider>();
     final record = WorkoutRecord(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       date: selectedDate,
       sessionNumber: provider.sessionNumberForDate(selectedDate),
       projects: validProjects,
+      statusBattery: settings.statusBattery,
       timestamp: DateTime.now(),
     );
     provider.addRecord(record);
@@ -1294,14 +1322,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               (r) => DateFormat('yyyy-MM-dd').format(r.date) == key,
             );
             if (index != -1) {
+              final existing = merged[index];
+              final useIncoming = record.timestamp.isAfter(existing.timestamp);
               merged[index] = WorkoutRecord(
-                id: merged[index].id,
-                date: merged[index].date,
-                sessionNumber: merged[index].sessionNumber,
+                id: existing.id,
+                date: existing.date,
+                sessionNumber: existing.sessionNumber,
                 projects: dedupeWorkoutProjects([
-                  ...merged[index].projects,
+                  ...existing.projects,
                   ...record.projects,
                 ]),
+                statusBattery:
+                    useIncoming ? record.statusBattery : existing.statusBattery,
                 timestamp: DateTime.now(),
               );
             }

@@ -268,7 +268,7 @@ class _StatusBannerState extends State<StatusBanner>
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: _StatusBattery(
+                                  child: StatusBattery(
                                     level: settings.statusBattery,
                                   ),
                                 ),
@@ -277,16 +277,19 @@ class _StatusBannerState extends State<StatusBanner>
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .12),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.edit_outlined,
-                          color: Colors.white70,
-                          size: 16,
+                      Transform.translate(
+                        offset: const Offset(4, -4),
+                        child: Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: .12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.edit_outlined,
+                            color: Colors.white70,
+                            size: 16,
+                          ),
                         ),
                       ),
                     ],
@@ -489,114 +492,6 @@ class _StatusBannerState extends State<StatusBanner>
       color: Colors.white.withValues(alpha: .12),
     );
   }
-}
-
-class _StatusBattery extends StatelessWidget {
-  final int level;
-  final double height;
-
-  const _StatusBattery({
-    required this.level,
-    this.height = 12.5,
-  });
-
-  static Color fillColorFor(int value) {
-    if (value > 80) return const Color(0xFF00FF00);
-    if (value >= 60) return const Color(0xFF9ACD32);
-    if (value >= 30) return const Color(0xFF98FB98);
-    return const Color(0xFFBCE672);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final clamped = level.clamp(0, 100);
-    final textColor =
-        clamped >= 50 ? const Color(0xFF0B1622) : Colors.white;
-    return SizedBox(
-      height: height,
-      child: CustomPaint(
-        painter: _BatteryPainter(
-          progress: clamped / 100,
-          fillColor: fillColorFor(clamped),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.only(right: 3),
-            child: Text(
-              '$clamped%',
-              style: TextStyle(
-                color: textColor,
-                fontSize: (height * .68).clamp(7.5, 12.0),
-                fontWeight: FontWeight.w900,
-                height: 1,
-                letterSpacing: .1,
-                shadows: const [
-                  Shadow(color: Colors.black26, blurRadius: 2),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BatteryPainter extends CustomPainter {
-  final double progress;
-  final Color fillColor;
-
-  _BatteryPainter({required this.progress, required this.fillColor});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final bodyWidth = size.width - 3.4;
-    if (bodyWidth <= 0) return;
-    final outline = Paint()
-      ..color = Colors.white.withValues(alpha: .62)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    final fill = Paint()
-      ..color = fillColor
-      ..style = PaintingStyle.fill;
-    final cap = Paint()
-      ..color = Colors.white.withValues(alpha: .62)
-      ..style = PaintingStyle.fill;
-
-    final bodyRect = Rect.fromLTWH(0.5, 0.5, bodyWidth - 1, size.height - 1);
-    final body = RRect.fromRectAndRadius(
-      bodyRect,
-      const Radius.circular(3),
-    );
-    final capRect = Rect.fromLTWH(
-      bodyWidth + 0.6,
-      size.height * .28,
-      2.4,
-      size.height * .44,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(capRect, const Radius.circular(1)),
-      cap,
-    );
-
-    if (progress > 0) {
-      canvas.save();
-      canvas.clipRRect(
-        RRect.fromRectAndRadius(bodyRect.deflate(1.4), const Radius.circular(2)),
-      );
-      final innerWidth = (bodyWidth - 2.8) * progress;
-      canvas.drawRect(
-        Rect.fromLTWH(1.4, 1.4, innerWidth, size.height - 2.8),
-        fill,
-      );
-      canvas.restore();
-    }
-    canvas.drawRRect(body, outline);
-  }
-
-  @override
-  bool shouldRepaint(covariant _BatteryPainter oldDelegate) =>
-      oldDelegate.progress != progress || oldDelegate.fillColor != fillColor;
 }
 
 String _formatPrecise(DateTime value) {
@@ -1085,7 +980,7 @@ Future<void> showStatusEditor(BuildContext context) async {
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      '电量',
+                      '今日状态',
                       style: TextStyle(
                         color: spec.textPrimary,
                         fontWeight: FontWeight.w800,
@@ -1108,9 +1003,13 @@ Future<void> showStatusEditor(BuildContext context) async {
                         children: [
                           SizedBox(
                             width: double.infinity,
-                            child: _StatusBattery(
+                            child: StatusBattery(
                               level: battery,
                               height: 20,
+                              outlineColor: spec.isDark
+                                  ? null
+                                  : spec.textPrimary.withValues(alpha: .42),
+                              textColor: spec.isDark ? null : spec.textPrimary,
                             ),
                           ),
                           Slider(
@@ -1333,7 +1232,7 @@ class _StatusPreview extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: _StatusBattery(
+                  child: StatusBattery(
                     level: battery,
                     height: 11,
                   ),

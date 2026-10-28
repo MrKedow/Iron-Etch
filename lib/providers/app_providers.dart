@@ -46,17 +46,30 @@ const List<AiModelPreset> builtInAiModels = [
   ),
 ];
 
-class ThemeProvider extends ChangeNotifier {
-  ThemeProvider(String initialThemeId)
-      : _themeId = AppThemes.byId(initialThemeId).id {
+class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
+  ThemeProvider(
+    String initialThemeId, {
+    AppThemeMode initialMode = AppThemeMode.light,
+  })  : _themeId = AppThemes.byId(initialThemeId).id,
+        _mode = initialMode,
+        _platformBrightness =
+            WidgetsBinding.instance.platformDispatcher.platformBrightness {
+    WidgetsBinding.instance.addObserver(this);
     _loadCustomBackground();
   }
 
   String _themeId;
+  AppThemeMode _mode;
+  Brightness _platformBrightness;
   String? _customBackgroundPath;
 
   String get themeId => _themeId;
-  AppThemeSpec get currentSpec => AppThemes.byId(_themeId);
+  AppThemeMode get mode => _mode;
+  AppThemeSpec get currentSpec => specFor(_themeId);
+  AppThemeSpec specFor(String id) => AppThemes.byId(id).specFor(
+        mode: _mode,
+        platformBrightness: _platformBrightness,
+      );
   String? get customBackgroundPath => _customBackgroundPath;
   bool get hasCustomBackground =>
       _customBackgroundPath != null && _customBackgroundPath!.trim().isNotEmpty;
@@ -71,6 +84,22 @@ class ThemeProvider extends ChangeNotifier {
     await prefs.setString('selected_theme_id', _themeId);
     await prefs.remove('selected_theme');
     notifyListeners();
+  }
+
+  Future<void> setMode(AppThemeMode mode) async {
+    if (_mode == mode) return;
+    _mode = mode;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme_mode', mode.name);
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    final next = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    if (next == _platformBrightness) return;
+    _platformBrightness = next;
+    if (_mode == AppThemeMode.system) notifyListeners();
   }
 
   Future<void> _loadCustomBackground() async {
@@ -91,6 +120,12 @@ class ThemeProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('theme_custom_background');
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 }
 

@@ -536,6 +536,131 @@ class FadeSlideIn extends StatelessWidget {
   }
 }
 
+class StatusBattery extends StatelessWidget {
+  final int level;
+  final double height;
+  final double? width;
+  final Color? outlineColor;
+  final Color? textColor;
+
+  const StatusBattery({
+    super.key,
+    required this.level,
+    this.height = 12.5,
+    this.width,
+    this.outlineColor,
+    this.textColor,
+  });
+
+  static Color fillColorFor(int value) {
+    if (value > 80) return const Color(0xFF00FF00);
+    if (value >= 60) return const Color(0xFF9ACD32);
+    if (value >= 30) return const Color(0xFF98FB98);
+    return const Color(0xFFBCE672);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = level.clamp(0, 100);
+    final resolvedTextColor =
+        textColor ?? (clamped >= 50 ? const Color(0xFF0B1622) : Colors.white);
+    return SizedBox(
+      width: width,
+      height: height,
+      child: CustomPaint(
+        painter: _BatteryPainter(
+          progress: clamped / 100,
+          fillColor: fillColorFor(clamped),
+          outlineColor: outlineColor ?? Colors.white.withValues(alpha: .62),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 3),
+            child: Text(
+              '$clamped%',
+              style: TextStyle(
+                color: resolvedTextColor,
+                fontSize: (height * .68).clamp(7.5, 12.0),
+                fontWeight: FontWeight.w900,
+                height: 1,
+                letterSpacing: .1,
+                shadows: const [
+                  Shadow(color: Colors.black26, blurRadius: 2),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BatteryPainter extends CustomPainter {
+  final double progress;
+  final Color fillColor;
+  final Color outlineColor;
+
+  _BatteryPainter({
+    required this.progress,
+    required this.fillColor,
+    required this.outlineColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bodyWidth = size.width - 3.4;
+    if (bodyWidth <= 0) return;
+    final outline = Paint()
+      ..color = outlineColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final fill = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.fill;
+    final cap = Paint()
+      ..color = outlineColor
+      ..style = PaintingStyle.fill;
+
+    final bodyRect = Rect.fromLTWH(0.5, 0.5, bodyWidth - 1, size.height - 1);
+    final body = RRect.fromRectAndRadius(
+      bodyRect,
+      const Radius.circular(3),
+    );
+    final capRect = Rect.fromLTWH(
+      bodyWidth + 0.6,
+      size.height * .28,
+      2.4,
+      size.height * .44,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(capRect, const Radius.circular(1)),
+      cap,
+    );
+
+    if (progress > 0) {
+      canvas.save();
+      canvas.clipRRect(
+        RRect.fromRectAndRadius(
+            bodyRect.deflate(1.4), const Radius.circular(2)),
+      );
+      final innerWidth = (bodyWidth - 2.8) * progress;
+      canvas.drawRect(
+        Rect.fromLTWH(1.4, 1.4, innerWidth, size.height - 2.8),
+        fill,
+      );
+      canvas.restore();
+    }
+    canvas.drawRRect(body, outline);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BatteryPainter oldDelegate) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.fillColor != fillColor ||
+      oldDelegate.outlineColor != outlineColor;
+}
+
 String formatCompact(num value) {
   if (value >= 1000000) {
     return '${(value / 1000000).toStringAsFixed(1)}M';
