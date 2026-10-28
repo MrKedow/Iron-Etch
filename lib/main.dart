@@ -1580,6 +1580,19 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(width: 8),
+                                  StatusBattery(
+                                    level: record.statusBattery,
+                                    width: 64,
+                                    height: 13,
+                                    outlineColor: spec.isDark
+                                        ? null
+                                        : spec.textPrimary
+                                            .withValues(alpha: .42),
+                                    textColor:
+                                        spec.isDark ? null : spec.textPrimary,
+                                  ),
+                                  const SizedBox(width: 8),
                                   Pill(
                                     label: project.part,
                                     color: spec.secondary,
@@ -2344,23 +2357,65 @@ class _RecentRecordCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      '第 ${record.sessionNumber ?? '-'} 次训练',
-                      style: TextStyle(
-                        color: spec.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    for (final part in parts.take(2))
-                      Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: Pill(label: part, color: spec.secondary),
-                      ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxParts = constraints.maxWidth < 200 ? 1 : 2;
+                    return Row(
+                      children: [
+                        Flexible(
+                          flex: 3,
+                          child: Text(
+                            '第 ${record.sessionNumber ?? '-'} 次训练',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: spec.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          flex: 2,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (final part in parts.take(maxParts))
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 4),
+                                    child: Pill(
+                                      label: part,
+                                      color: spec.secondary,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          flex: 2,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: StatusBattery(
+                              level: record.statusBattery,
+                              width: 52,
+                              height: 12,
+                              outlineColor: spec.isDark
+                                  ? null
+                                  : spec.textPrimary.withValues(alpha: .42),
+                              textColor: spec.isDark ? null : spec.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 3),
                 Text(

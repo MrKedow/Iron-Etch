@@ -290,24 +290,27 @@ class _HistoryPageState extends State<HistoryPage> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 5),
-                            Flexible(
-                              flex: 2,
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerRight,
-                                child: StatusBattery(
-                                  level: record.statusBattery,
-                                  width: 58,
-                                  height: 13,
-                                  outlineColor: spec.isDark
-                                      ? null
-                                      : spec.textPrimary.withValues(alpha: .42),
-                                  textColor:
-                                      spec.isDark ? null : spec.textPrimary,
+                            if (!expanded) ...[
+                              const SizedBox(width: 5),
+                              Flexible(
+                                flex: 2,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerRight,
+                                  child: StatusBattery(
+                                    level: record.statusBattery,
+                                    width: 58,
+                                    height: 13,
+                                    outlineColor: spec.isDark
+                                        ? null
+                                        : spec.textPrimary
+                                            .withValues(alpha: .42),
+                                    textColor:
+                                        spec.isDark ? null : spec.textPrimary,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ],
                           ],
                         );
                       },
