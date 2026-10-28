@@ -199,6 +199,7 @@ class SettingsProvider extends ChangeNotifier {
   String? _statusImagePath;
   int _statusTone = 0;
   int _statusMotion = 0;
+  int _statusBattery = 80;
   String? _avatarPath;
 
   String get nickname => _nickname;
@@ -233,6 +234,7 @@ class SettingsProvider extends ChangeNotifier {
   String? get statusImagePath => _statusImagePath;
   int get statusTone => _statusTone;
   int get statusMotion => _statusMotion;
+  int get statusBattery => _statusBattery;
   String? get avatarPath => _avatarPath;
   bool get hasAvatar => _avatarPath != null && _avatarPath!.trim().isNotEmpty;
 
@@ -301,6 +303,7 @@ class SettingsProvider extends ChangeNotifier {
     _statusImagePath = prefs.getString('status_image_path');
     _statusTone = prefs.getInt('status_tone') ?? 0;
     _statusMotion = prefs.getInt('status_motion') ?? 0;
+    _statusBattery = (prefs.getInt('status_battery') ?? 80).clamp(0, 100);
     _avatarPath = prefs.getString('profile_avatar_path');
     _syncIronProfile();
     notifyListeners();
@@ -495,6 +498,7 @@ class SettingsProvider extends ChangeNotifier {
     bool clearImage = false,
     int? tone,
     int? motion,
+    int? battery,
   }) async {
     if (emoji != null) {
       _statusEmoji = emoji;
@@ -519,6 +523,16 @@ class SettingsProvider extends ChangeNotifier {
       _statusMotion = motion;
       await _persist('status_motion', motion);
     }
+    if (battery != null) {
+      _statusBattery = battery.clamp(0, 100);
+      await _persist('status_battery', _statusBattery);
+    }
+    notifyListeners();
+  }
+
+  Future<void> setStatusBattery(int value) async {
+    _statusBattery = value.clamp(0, 100);
+    await _persist('status_battery', _statusBattery);
     notifyListeners();
   }
 

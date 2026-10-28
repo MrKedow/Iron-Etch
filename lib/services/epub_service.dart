@@ -160,6 +160,18 @@ class EpubSearchResult {
   });
 }
 
+class BookDownloadProgress {
+  final double progress;
+  final double speedBytesPerSecond;
+  final DateTime updatedAt;
+
+  const BookDownloadProgress({
+    required this.progress,
+    required this.speedBytesPerSecond,
+    required this.updatedAt,
+  });
+}
+
 class EpubLibraryService extends ChangeNotifier {
   EpubLibraryService._();
 
@@ -206,10 +218,21 @@ class EpubLibraryService extends ChangeNotifier {
   final Map<String, List<EpubHighlight>> _highlightCache = {};
   final Map<String, Map<int, String>> _searchIndexCache = {};
   Future<void>? _defaultExtraction;
+  Future<void>? _defaultDownloadFuture;
   bool _loaded = false;
+  bool _defaultDownloading = false;
+  double _defaultDownloadProgress = 0;
+  double _defaultDownloadSpeed = 0;
+  final Map<String, BookDownloadProgress> _downloadProgressMap = {};
+  final ValueNotifier<int> downloadCompleted = ValueNotifier<int>(0);
 
   List<EpubBookEntry> get books => List.unmodifiable(_books);
   bool get loaded => _loaded;
+  bool get isDefaultDownloading => _defaultDownloading;
+  double get defaultDownloadProgress => _defaultDownloadProgress;
+  double get defaultDownloadSpeed => _defaultDownloadSpeed;
+  BookDownloadProgress? downloadProgressFor(String bookId) =>
+      _downloadProgressMap[bookId];
 
   EpubBookEntry? get defaultBook {
     for (final book in _books) {
@@ -285,50 +308,187 @@ class EpubLibraryService extends ChangeNotifier {
         File('${entry.rootPath}/META-INF/container.xml').existsSync();
   }
 
+  File _defaultEpubFile() => File('${_baseDir!.path}/$defaultId.epub');
+
+  File _defaultDoneMarker() =>
+      File('${_baseDir!.path}/$defaultId.epub.done');
+
   bool get isDefaultDownloaded {
     final entry = defaultBook;
     if (entry == null) return false;
     if (isExtracted(entry)) return true;
-    return File('${_baseDir!.path}/$defaultId.epub').existsSync();
+    if (_defaultDownloading) return false;
+    final epub = _defaultEpubFile();
+    if (!epub.existsSync() || !_defaultDoneMarker().existsSync()) return false;
+    return _looksLikeCompleteZip(epub);
+  }
+
+  /// 检查文件是否为一个完整的 ZIP（EPUB）容器：
+  /// 头部为 PK\\x03\\x04，且尾部存在 ZIP 结束记录 PK\\x05\\x06。
+  bool _looksLikeCompleteZip(File file) {
+    try {
+      if (!file.existsSync() || file.lengthSync() < 64 * 1024) return false;
+      final raf = file.openSync();
+      try {
+        final head = raf.readSync(4);
+        if (head.length < 4 ||
+            head[0] != 0x50 ||
+            head[1] != 0x4B ||
+            head[2] != 0x03 ||
+            head[3] != 0x04) {
+          return false;
+        }
+        final length = raf.lengthSync();
+        final tailLength = length < 66560 ? length : 66560;
+        raf.setPositionSync(length - tailLength);
+        final tail = raf.readSync(tailLength);
+        for (var i = tail.length - 4; i >= 0; i--) {
+          if (tail[i] == 0x50 &&
+              tail[i + 1] == 0x4B &&
+              tail[i + 2] == 0x05 &&
+              tail[i + 3] == 0x06) {
+            return true;
+          }
+        }
+        return false;
+      } finally {
+        raf.closeSync();
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _markDefaultDownloaded() async {
+    try {
+      await _defaultDoneMarker().writeAsString('ok');
+    } catch (_) {}
   }
 
   /// 后台下载（Android DownloadManager）完成但尚未导入时，复制到内部缓存。
+  /// 只有确认外部文件是完整 EPUB 时才会采纳，避免把半截下载当成品。
   Future<void> adoptPendingDownload() async {
     if (!Platform.isAndroid) return;
     await load();
-    final epubFile = File('${_baseDir!.path}/$defaultId.epub');
+    if (_defaultDownloading || _defaultDownloadFuture != null) return;
+    final epubFile = _defaultEpubFile();
     if (await epubFile.exists()) return;
-    await _adoptExternal(epubFile);
+    if (await _adoptExternal(epubFile)) {
+      await _markDefaultDownloaded();
+    }
   }
 
   Future<void> downloadDefaultBook({
     void Function(double progress)? onProgress,
+    void Function(double progress, double speed)? onProgressWithSpeed,
+  }) {
+    final existing = _defaultDownloadFuture;
+    if (existing != null) return existing;
+    final future = _downloadDefaultBookInternal(
+      onProgress: onProgress,
+      onProgressWithSpeed: onProgressWithSpeed,
+    );
+    _defaultDownloadFuture = future;
+    return future.whenComplete(() => _defaultDownloadFuture = null);
+  }
+
+  Future<void> _downloadDefaultBookInternal({
+    void Function(double progress)? onProgress,
+    void Function(double progress, double speed)? onProgressWithSpeed,
   }) async {
     await load();
     final entry = defaultBook;
     if (entry == null) throw const EpubException('默认书不存在');
+    if (isExtracted(entry)) {
+      await _markDefaultDownloaded();
+      return;
+    }
+    _defaultDownloading = true;
+    _defaultDownloadProgress = 0;
+    _defaultDownloadSpeed = 0;
+    _downloadProgressMap[defaultId] = BookDownloadProgress(
+      progress: 0,
+      speedBytesPerSecond: 0,
+      updatedAt: DateTime.now(),
+    );
+    notifyListeners();
+    try {
+      final epubFile = _defaultEpubFile();
+      if (!await epubFile.exists() || !_looksLikeCompleteZip(epubFile)) {
+        if (await epubFile.exists()) {
+          try {
+            await epubFile.delete();
+          } catch (_) {}
+        }
+        await _retrieveEpub(epubFile, (progress) {
+          _defaultDownloadProgress = progress;
+          onProgress?.call(progress);
+          _downloadProgressMap[defaultId] = BookDownloadProgress(
+            progress: progress,
+            speedBytesPerSecond: _defaultDownloadSpeed,
+            updatedAt: DateTime.now(),
+          );
+          notifyListeners();
+        }, (speed) {
+          _defaultDownloadSpeed = speed;
+          onProgressWithSpeed?.call(_defaultDownloadProgress, speed);
+          _downloadProgressMap[defaultId] = BookDownloadProgress(
+            progress: _defaultDownloadProgress,
+            speedBytesPerSecond: speed,
+            updatedAt: DateTime.now(),
+          );
+          notifyListeners();
+        });
+      }
+      if (!_looksLikeCompleteZip(epubFile)) {
+        try {
+          await epubFile.delete();
+        } catch (_) {}
+        throw const EpubException('下载文件不完整，请重试');
+      }
+      await _markDefaultDownloaded();
+      await _ensureExtracted(entry);
+      EpubBook book;
+      try {
+        book = await _parseBook(entry);
+      } catch (_) {
+        await _extractFile(epubFile.path, entry.rootPath);
+        book = await _parseBook(entry);
+      }
+      _bookCache[entry.id] = book;
+      _applyMetadata(entry, book);
+      _downloadProgressMap[defaultId] = BookDownloadProgress(
+        progress: 1,
+        speedBytesPerSecond: 0,
+        updatedAt: DateTime.now(),
+      );
+      await _saveLibrary();
+      downloadCompleted.value++;
+    } finally {
+      _defaultDownloading = false;
+      _defaultDownloadProgress = 0;
+      _defaultDownloadSpeed = 0;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _ensureExtracted(EpubBookEntry entry) async {
     if (isExtracted(entry)) return;
-    final epubFile = File('${_baseDir!.path}/$defaultId.epub');
+    final epubFile = _defaultEpubFile();
     if (!await epubFile.exists()) {
-      await _retrieveEpub(epubFile, onProgress);
+      throw const EpubException('内置书尚未下载，请先下载');
     }
     await (_defaultExtraction ??= _extractFile(epubFile.path, entry.rootPath)
         .whenComplete(() => _defaultExtraction = null));
-    try {
-      final book = await parseEntry(entry);
-      _applyMetadata(entry, book);
-    } catch (_) {
-      await _extractFile(epubFile.path, entry.rootPath);
-      final book = await parseEntry(entry);
-      _applyMetadata(entry, book);
+    if (!isExtracted(entry)) {
+      throw const EpubException('书籍解压失败，请重新下载');
     }
-    await _saveLibrary();
-    notifyListeners();
   }
 
   Future<void> _retrieveEpub(
     File epubFile,
     void Function(double)? onProgress,
+    void Function(double speed)? onSpeed,
   ) async {
     if (await _adoptExternal(epubFile)) return;
     final candidates = <String>[
@@ -342,10 +502,10 @@ class EpubLibraryService extends ChangeNotifier {
     for (final url in ordered) {
       try {
         if (Platform.isAndroid &&
-            await _nativeDownload(url, epubFile, onProgress)) {
+            await _nativeDownload(url, epubFile, onProgress, onSpeed)) {
           return;
         }
-        await _dartDownload(url, epubFile, onProgress);
+        await _dartDownload(url, epubFile, onProgress, onSpeed);
         return;
       } catch (error) {
         lastError = error;
@@ -367,7 +527,7 @@ class EpubLibraryService extends ChangeNotifier {
       );
       if (path == null) return false;
       final file = File(path);
-      if (await file.exists() && await file.length() > 1024 * 1024) {
+      if (_looksLikeCompleteZip(file)) {
         await file.copy(epubFile.path);
         try {
           await file.delete();
@@ -423,6 +583,7 @@ class EpubLibraryService extends ChangeNotifier {
     String url,
     File epubFile,
     void Function(double)? onProgress,
+    void Function(double speed)? onSpeed,
   ) async {
     try {
       final start = await _channel.invokeMapMethod<String, dynamic>(
@@ -432,6 +593,8 @@ class EpubLibraryService extends ChangeNotifier {
       if (start == null) return false;
       final id = (start['id'] as num).toInt();
       final path = start['path'] as String;
+      var lastBytes = 0;
+      final speedWatch = Stopwatch()..start();
       while (true) {
         await Future<void>.delayed(const Duration(milliseconds: 700));
         final status = await _channel.invokeMapMethod<String, dynamic>(
@@ -442,18 +605,29 @@ class EpubLibraryService extends ChangeNotifier {
         final code = (status['status'] as num).toInt();
         final downloaded = (status['downloaded'] as num).toInt();
         final total = (status['total'] as num).toInt();
+        if (speedWatch.elapsedMilliseconds >= 500) {
+          final delta = downloaded - lastBytes;
+          if (delta > 0) {
+            onSpeed?.call(delta / speedWatch.elapsedMilliseconds * 1000.0);
+          }
+          lastBytes = downloaded;
+          speedWatch.reset();
+        }
         if (total > 0) {
           onProgress?.call((downloaded / total).clamp(0.0, 1.0));
         }
         if (code == 8) {
           final file = File(path);
-          if (await file.exists() && await file.length() > 1024 * 1024) {
+          if (_looksLikeCompleteZip(file)) {
             await file.copy(epubFile.path);
             try {
               await file.delete();
             } catch (_) {}
             return true;
           }
+          try {
+            await file.delete();
+          } catch (_) {}
           return false;
         }
         if (code == 16 || code == -1) return false;
@@ -467,6 +641,7 @@ class EpubLibraryService extends ChangeNotifier {
     String url,
     File epubFile,
     void Function(double)? onProgress,
+    void Function(double speed)? onSpeed,
   ) async {
     final partFile = File('${epubFile.path}.part');
     final client = http.Client();
@@ -480,17 +655,27 @@ class EpubLibraryService extends ChangeNotifier {
       final total = response.contentLength ?? 0;
       var received = 0;
       final sink = partFile.openWrite();
+      final sw = Stopwatch()..start();
       try {
         await for (final chunk
-            in response.stream.timeout(const Duration(seconds: 40))) {
+            in response.stream.timeout(const Duration(seconds: 60))) {
           sink.add(chunk);
           received += chunk.length;
+          if (sw.elapsedMilliseconds > 300) {
+            final speed = (received / sw.elapsedMilliseconds) * 1000.0;
+            onSpeed?.call(speed);
+          }
           if (total > 0) {
             onProgress?.call((received / total).clamp(0.0, 1.0));
+          } else if (sw.elapsedMilliseconds > 500) {
+            onProgress?.call((received / (1024 * 1024 * 50)).clamp(0.0, 0.99));
           }
         }
       } finally {
         await sink.close();
+      }
+      if (!_looksLikeCompleteZip(partFile)) {
+        throw const EpubException('下载文件不完整，请重试');
       }
       await partFile.rename(epubFile.path);
     } catch (_) {
@@ -510,24 +695,17 @@ class EpubLibraryService extends ChangeNotifier {
     final entry = defaultBook;
     if (entry == null) throw const EpubException('默认书不存在');
     if (entry.deleted) throw const EpubException('默认书已被删除，请重新下载');
-    if (!isExtracted(entry)) {
-      final epubFile = File('${_baseDir!.path}/$defaultId.epub');
-      if (!await epubFile.exists()) {
-        throw const EpubException('内置书尚未下载，请先下载');
-      }
-      await (_defaultExtraction ??= _extractFile(epubFile.path, entry.rootPath)
-          .whenComplete(() => _defaultExtraction = null));
-    }
+    final cached = _bookCache[entry.id];
+    if (cached != null && isExtracted(entry)) return cached;
+    await _ensureExtracted(entry);
     EpubBook book;
     try {
-      book = await parseEntry(entry);
+      book = await _parseBook(entry);
     } catch (_) {
-      await _extractFile(
-        File('${_baseDir!.path}/$defaultId.epub').path,
-        entry.rootPath,
-      );
-      book = await parseEntry(entry);
+      await _extractFile(_defaultEpubFile().path, entry.rootPath);
+      book = await _parseBook(entry);
     }
+    _bookCache[entry.id] = book;
     _applyMetadata(entry, book);
     await _saveLibrary();
     notifyListeners();
@@ -605,9 +783,19 @@ class EpubLibraryService extends ChangeNotifier {
 
   Future<EpubBook> parseEntry(EpubBookEntry entry) async {
     final cached = _bookCache[entry.id];
-    if (cached != null) return cached;
+    if (cached != null && isExtracted(entry)) return cached;
     if (!isExtracted(entry)) {
-      throw const EpubException('书籍文件尚未准备完成');
+      if (entry.builtIn) {
+        final epub = _defaultEpubFile();
+        if (await epub.exists() && _looksLikeCompleteZip(epub)) {
+          try {
+            await _ensureExtracted(entry);
+          } catch (_) {}
+        }
+      }
+      if (!isExtracted(entry)) {
+        throw const EpubException('书籍文件尚未准备完成');
+      }
     }
     final parsed = await _parseBook(entry);
     _bookCache[entry.id] = parsed;

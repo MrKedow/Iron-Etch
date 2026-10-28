@@ -18,9 +18,11 @@ import 'package:fitness_tracker/screens/history_page.dart';
 import 'package:fitness_tracker/screens/splash_screen.dart';
 import 'package:fitness_tracker/screens/theme_gallery_page.dart';
 import 'package:fitness_tracker/providers/app_providers.dart';
+import 'package:fitness_tracker/services/epub_service.dart';
 import 'package:fitness_tracker/services/work_energy.dart';
 import 'package:fitness_tracker/theme/app_theme.dart';
 import 'package:fitness_tracker/widgets/app_ui.dart';
+import 'package:fitness_tracker/widgets/book_download_toast.dart';
 import 'package:fitness_tracker/widgets/status_banner.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -49,6 +51,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ThemeProvider(initialThemeId)),
         ChangeNotifierProvider(create: (_) => NutstoreService()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => EpubLibraryService.instance),
       ],
       child: const FitnessApp(),
     ),
@@ -1031,8 +1034,14 @@ class FitnessApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          builder: (context, child) =>
-              AppBackdrop(child: child ?? const SizedBox.shrink()),
+          builder: (context, child) => AppBackdrop(
+            child: Stack(
+              children: [
+                if (child != null) Positioned.fill(child: child),
+                const BookDownloadToastHost(),
+              ],
+            ),
+          ),
           home: const SplashScreen(),
         );
       },
@@ -2083,15 +2092,32 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     ),
                   ],
                 ),
-                SectionHeader(
-                  title: '记录今天的铁',
-                  subtitle: '',
-                  trailing: Pill(
-                    label: '${projects.length} 个动作',
-                    icon: Icons.list_alt_rounded,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 4, 2, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        '记录今天的铁',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: spec.textPrimary,
+                          letterSpacing: .2,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Pill(
+                        label: '${projects.length} 个动作',
+                        icon: Icons.list_alt_rounded,
+                      ),
+                    ],
                   ),
                 ),
-                _dateCard(context, provider, spec),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: _dateCard(context, provider, spec),
+                ),
                 const SizedBox(height: 14),
                 for (var i = 0; i < projects.length; i++) _buildProjectCard(i),
                 const SizedBox(height: 2),
@@ -2148,12 +2174,41 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
-                SectionHeader(
-                  title: '最近训练',
-                  subtitle: '快速回看最近的训练节奏',
-                  trailing: TextButton(
-                    onPressed: () => _showHistory(context),
-                    child: const Text('全部记录'),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 34, 2, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '最近训练',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: spec.textPrimary,
+                                letterSpacing: .2,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '快速回看最近的训练节奏',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: spec.textSecondary,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => _showHistory(context),
+                        child: const Text('全部记录'),
+                      ),
+                    ],
                   ),
                 ),
                 if (recent.isEmpty)

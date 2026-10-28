@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_providers.dart';
 import '../services/epub_service.dart';
 import '../widgets/app_ui.dart';
+import '../widgets/book_download_dialog.dart';
 import 'epub_reader_page.dart';
 
 class BookLibraryPage extends StatefulWidget {
@@ -28,8 +29,6 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
   bool _gridView = true;
   int _shelfMaterial = 1;
   bool _introVisible = true;
-  bool _downloading = false;
-  double _downloadProgress = 0;
 
   static const List<String> _shelfMaterials = [
     '玻璃',
@@ -181,48 +180,19 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
   }
 
   Future<void> _downloadDefault() async {
-    setState(() {
-      _downloading = true;
-      _downloadProgress = 0;
-      _busy = true;
-      _busyMessage = '正在下载内置书…';
-    });
-    try {
-      await _library.downloadDefaultBook(onProgress: (progress) {
-        if (!mounted) return;
-        setState(() {
-          _downloadProgress = progress;
-          _busyMessage = '下载中 ${(progress * 100).toStringAsFixed(0)}%（可切到后台继续）';
-        });
-      });
-      if (!mounted) return;
-      setState(() {
-        _downloading = false;
-        _busy = false;
-      });
-      final book = await _library.ensureDefaultReady();
-      final prefs = await SharedPreferences.getInstance();
-      final saved =
-          prefs.getInt('epub_progress_${EpubLibraryService.defaultId}');
-      if (!mounted) return;
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => EpubReaderPage(
-            book: book,
-            initialChapter: saved,
-          ),
-        ),
-      );
-      if (mounted) setState(() {});
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _downloading = false;
-        _busy = false;
-      });
-      _showMessage('下载失败：$error');
+    if (_library.isDefaultDownloaded) {
+      final entry = _library.defaultBook;
+      if (entry != null) await _openBook(entry);
+      return;
     }
+    final dialog = showBookDownloadDialog(context);
+    try {
+      await _library.downloadDefaultBook();
+    } catch (error) {
+      if (mounted) _showMessage('下载失败：$error');
+    }
+    await dialog;
+    if (mounted) setState(() {});
   }
 
   Future<void> _openBook(EpubBookEntry entry) async {
@@ -259,6 +229,10 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _busy = false);
+      if (error.toString().contains('正在准备中')) {
+        _showMessage('书籍文件尚未准备完成');
+        return;
+      }
       _showMessage('打开失败：$error');
     }
   }
@@ -609,31 +583,15 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (_downloading) ...[
-                        SizedBox(
-                          width: 180,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: _downloadProgress,
-                              minHeight: 6,
-                              backgroundColor:
-                                  spec.textPrimary.withValues(alpha: .08),
-                              color: spec.primary,
-                            ),
-                          ),
+                      SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3.2,
+                          color: spec.primary,
                         ),
-                        const SizedBox(height: 12),
-                      ] else
-                        SizedBox(
-                          width: 48,
-                          height: 48,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3.2,
-                            color: spec.primary,
-                          ),
-                        ),
-                      if (!_downloading) const SizedBox(height: 16),
+                      ),
+                      const SizedBox(height: 16),
                       Text(
                         _busyMessage,
                         textAlign: TextAlign.center,
@@ -673,8 +631,10 @@ class _BookCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spec = context.watch<ThemeProvider>().currentSpec;
+    final library = context.watch<EpubLibraryService>();
     final coverFile = entry.coverPath == null ? null : File(entry.coverPath!);
     final hasCover = coverFile != null && coverFile.existsSync();
+    final downloadInfo = library.downloadProgressFor(entry.id);
 
     Widget cover = Container(
       decoration: BoxDecoration(
@@ -710,28 +670,30 @@ class _BookCard extends StatelessWidget {
                   size: 26,
                 ),
                 const Spacer(),
-                Text(
-                  entry.title,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                    height: 1.35,
-                  ),
-                ),
-                if (entry.author.isNotEmpty) ...[
-                  const SizedBox(height: 5),
+                if (downloadInfo == null) ...[
                   Text(
-                    entry.author,
-                    maxLines: 1,
+                    entry.title,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: .72),
-                      fontSize: 10.5,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      height: 1.35,
                     ),
                   ),
+                  if (entry.author.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      entry.author,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: .72),
+                        fontSize: 10.5,
+                      ),
+                    ),
+                  ],
                 ],
               ],
             ),
@@ -826,7 +788,61 @@ class _BookCard extends StatelessWidget {
                                 color: spec.textPrimary.withValues(alpha: .1),
                               ),
                             ),
-                            child: cover,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                cover,
+                                if (needsDownload && downloadInfo != null)
+                                  Positioned.fill(
+                                    child: Container(
+                                      color: Colors.black.withValues(alpha: .36),
+                                      alignment: Alignment.center,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          SizedBox(
+                                            width: 54,
+                                            height: 54,
+                                            child: Stack(
+                                              alignment: Alignment.center,
+                                              children: [
+                                                CircularProgressIndicator(
+                                                  value: downloadInfo.progress
+                                                      .clamp(0.0, 1.0),
+                                                  strokeWidth: 4,
+                                                  color: Colors.white,
+                                                  backgroundColor: Colors.white
+                                                      .withValues(alpha: .24),
+                                                ),
+                                                Text(
+                                                  '${(downloadInfo.progress * 100).toStringAsFixed(0)}%',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 5),
+                                          Text(
+                                            formatDownloadSpeed(
+                                                downloadInfo
+                                                    .speedBytesPerSecond),
+                                            style: TextStyle(
+                                              color: Colors.white.withValues(
+                                                  alpha: .86),
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
                         if (entry.deleted)
@@ -872,7 +888,7 @@ class _BookCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                        if (needsDownload)
+                        if (needsDownload && downloadInfo == null)
                           Positioned.fill(
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(16),
@@ -1231,8 +1247,10 @@ class _BookListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spec = context.watch<ThemeProvider>().currentSpec;
+    final library = context.watch<EpubLibraryService>();
     final coverFile = entry.coverPath == null ? null : File(entry.coverPath!);
     final hasCover = coverFile != null && coverFile.existsSync();
+    final downloadInfo = library.downloadProgressFor(entry.id);
 
     Widget thumb = Container(
       decoration: BoxDecoration(
@@ -1304,7 +1322,46 @@ class _BookListTile extends StatelessWidget {
               child: SizedBox(
                 width: 40,
                 height: 56,
-                child: thumb,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    thumb,
+                    if (needsDownload && downloadInfo != null)
+                      Positioned.fill(
+                        child: Container(
+                          color: Colors.black.withValues(alpha: .36),
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  value:
+                                      downloadInfo.progress.clamp(0.0, 1.0),
+                                  strokeWidth: 2.4,
+                                  color: Colors.white,
+                                  backgroundColor:
+                                      Colors.white.withValues(alpha: .24),
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                formatDownloadSpeed(
+                                    downloadInfo.speedBytesPerSecond),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 6.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -1327,7 +1384,9 @@ class _BookListTile extends StatelessWidget {
                     entry.deleted
                         ? '已删除 · 可恢复'
                         : needsDownload
-                            ? '未下载 · 点击下载'
+                            ? (downloadInfo != null
+                                ? '下载中 ${(downloadInfo.progress * 100).toStringAsFixed(0)}% · ${formatDownloadSpeed(downloadInfo.speedBytesPerSecond)}'
+                                : '未下载 · 点击下载')
                             : (entry.author.isEmpty ? 'EPUB' : entry.author),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
