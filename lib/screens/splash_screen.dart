@@ -24,9 +24,9 @@ class _SplashScreenState extends State<SplashScreen>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3400),
+      duration: const Duration(milliseconds: 1600),
     )..forward();
-    _navigationTimer = Timer(const Duration(milliseconds: 3550), _enterApp);
+    _navigationTimer = Timer(const Duration(milliseconds: 1750), _enterApp);
     WidgetsBinding.instance.addPostFrameCallback((_) => _precacheAssets());
   }
 
@@ -50,7 +50,7 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 380),
+        transitionDuration: const Duration(milliseconds: 260),
         pageBuilder: (_, animation, __) => const MainScreen(),
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(opacity: animation, child: child);

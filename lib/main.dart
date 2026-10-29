@@ -17,6 +17,7 @@ import 'package:fitness_tracker/screens/exercise_library_page.dart';
 import 'package:fitness_tracker/screens/history_page.dart';
 import 'package:fitness_tracker/screens/splash_screen.dart';
 import 'package:fitness_tracker/screens/theme_gallery_page.dart';
+import 'package:fitness_tracker/screens/video_collection_page.dart';
 import 'package:fitness_tracker/providers/app_providers.dart';
 import 'package:fitness_tracker/services/epub_service.dart';
 import 'package:fitness_tracker/services/work_energy.dart';
@@ -2000,55 +2001,34 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         titleSpacing: 16,
-        title: Row(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                gradient: spec.heroGradient,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: spec.primary.withValues(alpha: .28),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+            Text(
+              '铁镌',
+              style: TextStyle(
+                color: spec.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
               ),
-              child: Icon(Icons.fitness_center_rounded,
-                  color: spec.onHero, size: 20),
             ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '铁镌',
-                  style: TextStyle(
-                    color: spec.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1,
-                  ),
-                ),
-                Text(
-                  'IRON ETCH',
-                  style: TextStyle(
-                    color: spec.textSecondary,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 2.1,
-                  ),
-                ),
-              ],
+            Text(
+              'IRON ETCH',
+              style: TextStyle(
+                color: spec.textSecondary,
+                fontSize: 8,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2.1,
+              ),
             ),
           ],
         ),
         actions: [
           IconButton(
             tooltip: 'AI 训练舱',
+            visualDensity: VisualDensity.compact,
             onPressed: () {
               Navigator.push(
                 context,
@@ -2058,7 +2038,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             icon: const Icon(Icons.auto_awesome_rounded),
           ),
           IconButton(
+            tooltip: '视频合集',
+            visualDensity: VisualDensity.compact,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const VideoCollectionPage(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.tv_rounded),
+          ),
+          IconButton(
             tooltip: '阅读器',
+            visualDensity: VisualDensity.compact,
             onPressed: () {
               Navigator.push(
                 context,
@@ -2069,16 +2063,19 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           ),
           IconButton(
             tooltip: '训练历史',
+            visualDensity: VisualDensity.compact,
             onPressed: () => _showHistory(context),
             icon: const Icon(Icons.history_rounded),
           ),
           IconButton(
             tooltip: '主题工坊',
+            visualDensity: VisualDensity.compact,
             onPressed: () => _showThemeGallery(context),
             icon: const Icon(Icons.palette_outlined),
           ),
           IconButton(
             tooltip: '设置',
+            visualDensity: VisualDensity.compact,
             onPressed: () {
               Navigator.push(
                 context,
