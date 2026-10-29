@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/app_providers.dart';
+import '../services/bilibili_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
 import 'bilibili_player_page.dart';
@@ -18,6 +21,7 @@ class VideoCollectionPage extends StatefulWidget {
 
 class _VideoCollectionPageState extends State<VideoCollectionPage> {
   static const String _assetPath = 'assets/bili_list.json';
+  static const String _introPreferenceKey = 'video_intro_hidden';
 
   static const Map<String, String> _displayNames = {
     'chenbolin': '陈柏龄',
@@ -81,15 +85,43 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     'yang': 'BV1PAJv6oEy7',
   };
 
+  final BilibiliService _bilibili = BilibiliService();
+  final TextEditingController _searchController = TextEditingController();
+  final Set<String> _expandedCreators = <String>{};
+
   List<_VideoCategory> _categories = const [];
   bool _loading = true;
+  bool _refreshing = false;
+  bool _introVisible = true;
   String? _error;
   String _selected = '全部';
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
+    _loadPrefs();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _introVisible = !(prefs.getBool(_introPreferenceKey) ?? false);
+    });
+  }
+
+  Future<void> _hideIntro() async {
+    setState(() => _introVisible = false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_introPreferenceKey, true);
   }
 
   Future<void> _load() async {
@@ -113,16 +145,27 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
           final id = item['id'] as String;
           final mid = _bilibiliMids[id];
           final bvid = _bilibiliBvids[id];
-          if (mid == null || bvid == null) continue;
+          final midValue = int.tryParse(mid ?? '');
+          if (mid == null || bvid == null || midValue == null) continue;
+          final name = _displayNames[id] ?? item['name'] as String;
           items.add(
             _VideoCreator(
               id: id,
-              name: _displayNames[id] ?? item['name'] as String,
+              name: name,
               tags: (item['tags'] as List<dynamic>? ?? const [])
                   .map((tag) => tag.toString())
                   .toList(),
               audience: item['audience'] as String? ?? '',
-              bvid: bvid,
+              mid: midValue,
+              videos: [
+                BilibiliVideo(
+                  bvid: bvid,
+                  title: '精选跟练视频',
+                  author: name,
+                  duration: '',
+                  play: 0,
+                ),
+              ],
             ),
           );
         }
@@ -139,6 +182,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         _categories = categories;
         _loading = false;
       });
+      unawaited(_refreshVideos(_allCreators));
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -148,21 +192,56 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     }
   }
 
+  List<_VideoCreator> get _allCreators =>
+      _categories.expand((category) => category.items).toList();
+
   int get _totalCreators =>
       _categories.fold(0, (sum, category) => sum + category.items.length);
+
+  int get _totalVideos => _categories.fold(
+        0,
+        (sum, category) =>
+            sum +
+            category.items
+                .fold(0, (inner, creator) => inner + creator.videos.length),
+      );
 
   List<_VideoCategory> get _visibleCategories {
     if (_selected == '全部') return _categories;
     return _categories.where((category) => category.id == _selected).toList();
   }
 
-  void _openCreator(_VideoCreator creator) {
+  Future<void> _refreshVideos(List<_VideoCreator> creators) async {
+    if (_refreshing) return;
+    if (mounted) setState(() => _refreshing = true);
+    for (final creator in creators) {
+      if (!mounted) return;
+      final videos = await _bilibili.fetchCreatorVideos(
+        query: '${creator.name} 健身',
+        mid: creator.mid,
+        limit: 6,
+      );
+      if (!mounted) return;
+      if (videos.isNotEmpty) {
+        setState(() => creator.videos = videos);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 450));
+    }
+    if (mounted) setState(() => _refreshing = false);
+  }
+
+  void _refreshAll() {
+    if (_refreshing) return;
+    unawaited(_refreshVideos(_allCreators));
+  }
+
+  void _openVideo(_VideoCreator creator, BilibiliVideo video) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => BilibiliPlayerPage(
           name: creator.name,
-          bvid: creator.bvid,
+          bvid: video.bvid,
         ),
       ),
     );
@@ -190,7 +269,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
               ),
               const SizedBox(height: 10),
               Text(
-                '点击卡片会在应用内播放该 UP 主的 B 站视频，视频由 B 站播放器直接播放，不缓存、不代理。',
+                '每次进入页面会在后台静默刷新各 UP 主的视频列表；点击视频即可在应用内由 B 站播放器直接播放，不缓存、不代理。',
                 style: TextStyle(
                   color: spec.textSecondary,
                   fontSize: 12.5,
@@ -199,7 +278,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                '仅保留已确认可播放视频的 UP 主，找不到可用视频的已从列表移除。',
+                '支持按 UP 主名称、标签或视频标题搜索。仅保留已确认可播放视频的 UP 主。',
                 style: TextStyle(
                   color: spec.textSecondary,
                   fontSize: 12.5,
@@ -223,6 +302,11 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         surfaceTintColor: Colors.transparent,
         title: const Text('视频合集'),
         actions: [
+          IconButton(
+            tooltip: '刷新视频',
+            onPressed: _refreshing ? null : _refreshAll,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
           IconButton(
             tooltip: '说明',
             onPressed: () => _showInfo(spec),
@@ -277,6 +361,37 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
 
   Widget _content(AppThemeSpec spec) {
     final categories = _visibleCategories;
+    final query = _query.trim().toLowerCase();
+    final sections = <({_VideoCategory category, List<_VideoEntry> entries})>[];
+    for (final category in categories) {
+      final entries = <_VideoEntry>[];
+      for (final creator in category.items) {
+        final creatorText = [
+          creator.name,
+          ...creator.tags,
+          creator.audience,
+        ].join(' ').toLowerCase();
+        final creatorMatches = query.isEmpty || creatorText.contains(query);
+        final matchedVideos = creatorMatches
+            ? creator.videos
+            : creator.videos
+                .where(
+                  (video) =>
+                      video.title.toLowerCase().contains(query) ||
+                      video.author.toLowerCase().contains(query),
+                )
+                .toList();
+        if (creatorMatches || matchedVideos.isNotEmpty) {
+          entries.add(
+            _VideoEntry(creator: creator, videos: matchedVideos),
+          );
+        }
+      }
+      if (entries.isNotEmpty) {
+        sections.add((category: category, entries: entries));
+      }
+    }
+
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(
@@ -286,61 +401,74 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         28 + MediaQuery.paddingOf(context).bottom,
       ),
       children: [
-        GlassPanel(
-          padding: const EdgeInsets.all(16),
-          gradient: LinearGradient(
-            colors: [
-              spec.primary.withValues(alpha: .16),
-              spec.secondary.withValues(alpha: .06),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          child: Row(
-            children: [
-              GradientIconBadge(
-                icon: Icons.smart_display_rounded,
-                colors: [spec.primary, spec.secondary],
-                size: 46,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'B 站跟练入口',
-                      style: TextStyle(
-                        color: spec.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$_totalCreators 位 UP 主 · 应用内播放',
-                      style: TextStyle(
-                        color: spec.textSecondary,
-                        fontSize: 11.5,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
+        if (_introVisible) ...[
+          GlassPanel(
+            padding: const EdgeInsets.all(16),
+            gradient: LinearGradient(
+              colors: [
+                spec.primary.withValues(alpha: .16),
+                spec.secondary.withValues(alpha: .06),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            child: Row(
+              children: [
+                GradientIconBadge(
+                  icon: Icons.smart_display_rounded,
+                  colors: [spec.primary, spec.secondary],
+                  size: 46,
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'B 站跟练入口',
+                        style: TextStyle(
+                          color: spec.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$_totalCreators 位 UP 主 · $_totalVideos 个视频',
+                        style: TextStyle(
+                          color: spec.textSecondary,
+                          fontSize: 11.5,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _hideIntro,
+                  tooltip: '关闭',
+                  icon: Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: spec.textSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+          const SizedBox(height: 12),
+        ],
+        _searchField(spec),
         const SizedBox(height: 12),
         Text(
-          '按训练目标分类，点击卡片在应用内播放 UP 主的 B 站视频。',
+          '按训练目标分类，点击视频在应用内播放。',
           style: TextStyle(
             color: spec.textSecondary,
             fontSize: 11.5,
             height: 1.6,
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -353,20 +481,124 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
             ],
           ),
         ),
-        const SizedBox(height: 4),
-        for (final category in categories) ...[
-          SectionHeader(
-            title: category.name,
-            subtitle: '${category.items.length} 位 UP 主',
-            padding: const EdgeInsets.fromLTRB(2, 20, 2, 10),
-          ),
-          for (final creator in category.items)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 9),
-              child: _creatorCard(spec, creator),
+        if (_refreshing) ...[
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              backgroundColor: spec.textPrimary.withValues(alpha: .05),
+              color: spec.primary,
             ),
+          ),
         ],
+        const SizedBox(height: 4),
+        if (sections.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 30),
+            child: GlassPanel(
+              padding: const EdgeInsets.all(22),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.search_off_rounded,
+                    color: spec.textSecondary,
+                    size: 30,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '没有找到相关 UP 主或视频',
+                    style: TextStyle(
+                      color: spec.textPrimary,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '试试更短的关键词，或清空搜索。',
+                    style: TextStyle(
+                      color: spec.textSecondary,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          for (final section in sections) ...[
+            SectionHeader(
+              title: section.category.name,
+              subtitle: '${section.entries.length} 位 UP 主',
+              padding: const EdgeInsets.fromLTRB(2, 20, 2, 10),
+            ),
+            for (final entry in section.entries)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: _creatorCard(
+                  spec,
+                  entry.creator,
+                  entry.videos,
+                  searching: query.isNotEmpty,
+                ),
+              ),
+          ],
       ],
+    );
+  }
+
+  Widget _searchField(AppThemeSpec spec) {
+    return TextField(
+      controller: _searchController,
+      onChanged: (value) => setState(() => _query = value.trim()),
+      style: TextStyle(
+        color: spec.textPrimary,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w600,
+      ),
+      decoration: InputDecoration(
+        hintText: '搜索 UP 主 / 视频',
+        hintStyle: TextStyle(color: spec.textSecondary, fontSize: 12),
+        prefixIcon: Icon(
+          Icons.search_rounded,
+          color: spec.textSecondary,
+          size: 20,
+        ),
+        suffixIcon: _query.isEmpty
+            ? null
+            : IconButton(
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _query = '');
+                },
+                tooltip: '清空搜索',
+                icon: Icon(
+                  Icons.close_rounded,
+                  color: spec.textSecondary,
+                  size: 18,
+                ),
+              ),
+        isDense: true,
+        filled: true,
+        fillColor: spec.textPrimary.withValues(alpha: .04),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              BorderSide(color: spec.textPrimary.withValues(alpha: .08)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              BorderSide(color: spec.textPrimary.withValues(alpha: .08)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: spec.primary.withValues(alpha: .65)),
+        ),
+      ),
     );
   }
 
@@ -392,75 +624,205 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     );
   }
 
-  Widget _creatorCard(AppThemeSpec spec, _VideoCreator creator) {
+  Widget _creatorCard(
+    AppThemeSpec spec,
+    _VideoCreator creator,
+    List<BilibiliVideo> videos, {
+    required bool searching,
+  }) {
+    final expanded = searching || _expandedCreators.contains(creator.id);
+    final visible = expanded ? videos : videos.take(2).toList();
+    final hasMore = !searching && videos.length > 2;
+
+    void toggleExpanded() {
+      if (!hasMore) return;
+      setState(() {
+        if (expanded) {
+          _expandedCreators.remove(creator.id);
+        } else {
+          _expandedCreators.add(creator.id);
+        }
+      });
+    }
+
     return GlassPanel(
       padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
       radius: 18,
-      onTap: () => _openCreator(creator),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: spec.primary.withValues(alpha: .12),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(
-              Icons.play_arrow_rounded,
-              color: spec.primary,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: hasMore ? toggleExpanded : null,
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  creator.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: spec.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: spec.primary.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(
+                    Icons.play_arrow_rounded,
+                    color: spec.primary,
+                    size: 22,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 5,
-                  runSpacing: 5,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        creator.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: spec.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 5,
+                        runSpacing: 5,
+                        children: [
+                          for (final tag in creator.tags)
+                            Pill(label: tag, color: spec.secondary),
+                        ],
+                      ),
+                      if (creator.audience.isNotEmpty) ...[
+                        const SizedBox(height: 7),
+                        Text(
+                          '适合：${creator.audience}',
+                          style: TextStyle(
+                            color: spec.textSecondary,
+                            fontSize: 11,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    for (final tag in creator.tags)
-                      Pill(label: tag, color: spec.secondary),
+                    Text(
+                      '${videos.length} 个视频',
+                      style: TextStyle(
+                        color: spec.textSecondary,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (hasMore)
+                      Icon(
+                        expanded
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        color: spec.textSecondary,
+                        size: 19,
+                      ),
                   ],
                 ),
-                if (creator.audience.isNotEmpty) ...[
-                  const SizedBox(height: 7),
+              ],
+            ),
+          ),
+          if (visible.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            for (final video in visible) _videoTile(spec, creator, video),
+            if (hasMore)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: toggleExpanded,
+                  child: Text(
+                    expanded ? '收起' : '展开全部 ${videos.length} 个视频',
+                    style: TextStyle(
+                      color: spec.primary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+          ] else ...[
+            const SizedBox(height: 8),
+            Text(
+              '正在后台获取视频…',
+              style: TextStyle(
+                color: spec.textSecondary,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _videoTile(
+    AppThemeSpec spec,
+    _VideoCreator creator,
+    BilibiliVideo video,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _openVideo(creator, video),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+            decoration: BoxDecoration(
+              color: spec.textPrimary.withValues(alpha: .035),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: spec.textPrimary.withValues(alpha: .06),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.play_circle_fill_rounded,
+                  color: spec.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    video.title.isEmpty ? '未命名视频' : video.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: spec.textPrimary,
+                      fontSize: 12,
+                      height: 1.4,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (video.duration.isNotEmpty) ...[
+                  const SizedBox(width: 6),
                   Text(
-                    '适合：${creator.audience}',
+                    video.duration,
                     style: TextStyle(
                       color: spec.textSecondary,
-                      fontSize: 11,
-                      height: 1.4,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Icon(
-              Icons.chevron_right_rounded,
-              color: spec.textSecondary,
-              size: 19,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -483,13 +845,22 @@ class _VideoCreator {
   final String name;
   final List<String> tags;
   final String audience;
-  final String bvid;
+  final int mid;
+  List<BilibiliVideo> videos;
 
-  const _VideoCreator({
+  _VideoCreator({
     required this.id,
     required this.name,
     required this.tags,
     required this.audience,
-    required this.bvid,
+    required this.mid,
+    required this.videos,
   });
+}
+
+class _VideoEntry {
+  final _VideoCreator creator;
+  final List<BilibiliVideo> videos;
+
+  const _VideoEntry({required this.creator, required this.videos});
 }

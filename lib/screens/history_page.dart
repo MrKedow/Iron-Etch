@@ -843,12 +843,14 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
   ];
 
   late DateTime _date;
+  late int _statusBattery;
   late final List<_EditDraft> _drafts;
 
   @override
   void initState() {
     super.initState();
     _date = widget.record.date;
+    _statusBattery = widget.record.statusBattery.clamp(0, 100);
     _drafts = widget.record.projects.isEmpty
         ? [_EditDraft.empty()]
         : widget.record.projects.map(_EditDraft.fromProject).toList();
@@ -929,6 +931,7 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
         date: _date,
         sessionNumber: widget.record.sessionNumber,
         projects: projects,
+        statusBattery: _statusBattery,
         timestamp: DateTime.now(),
       ),
     );
@@ -991,6 +994,124 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: spec.primary.withValues(alpha: .65)),
         ),
+      ),
+    );
+  }
+
+  void _updateBattery(double dx, double width) {
+    final bodyWidth = width - 3.4;
+    final fraction =
+        ((dx - 1.9) / (bodyWidth - 2.8)).clamp(0.0, 1.0).toDouble();
+    final value = (fraction * 100).round();
+    if (value != _statusBattery) {
+      setState(() => _statusBattery = value);
+    }
+  }
+
+  Widget _batteryEditor(AppThemeSpec spec) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
+      decoration: BoxDecoration(
+        color: spec.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: spec.textPrimary.withValues(alpha: .07),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              GradientIconBadge(
+                icon: Icons.battery_charging_full_rounded,
+                size: 34,
+                iconSize: 17,
+                colors: [spec.primary, spec.secondary],
+              ),
+              const SizedBox(width: 9),
+              Text(
+                '状态编辑',
+                style: TextStyle(
+                  color: spec.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Pill(label: '电池', color: spec.secondary),
+              const Spacer(),
+              Text(
+                '$_statusBattery%',
+                style: TextStyle(
+                  color: spec.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final bodyWidth = width - 3.4;
+              final fraction = _statusBattery / 100;
+              final x = 1.9 + (bodyWidth - 2.8) * fraction;
+              final maxLeft = (width - 8).clamp(0.0, width).toDouble();
+              final pointerLeft = (x - 4).clamp(0.0, maxLeft).toDouble();
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (details) =>
+                    _updateBattery(details.localPosition.dx, width),
+                onHorizontalDragUpdate: (details) =>
+                    _updateBattery(details.localPosition.dx, width),
+                child: SizedBox(
+                  height: 54,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned(
+                        left: pointerLeft,
+                        top: 0,
+                        child: CustomPaint(
+                          size: const Size(8, 54),
+                          painter: _BatteryPointerPainter(
+                            color: spec.primary,
+                          ),
+                        ),
+                      ),
+                      Positioned.fill(
+                        top: 14,
+                        bottom: 14,
+                        left: 0,
+                        right: 0,
+                        child: StatusBattery(
+                          level: _statusBattery,
+                          height: 26,
+                          bodyColor: spec.card,
+                          outlineColor: spec.isDark
+                              ? null
+                              : spec.textPrimary.withValues(alpha: .42),
+                          textColor: spec.isDark ? null : spec.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '左右拖动指针，调整这一天记录的状态电量',
+            style: TextStyle(
+              color: spec.textSecondary,
+              fontSize: 10.5,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1266,6 +1387,7 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(18, 4, 18, 12),
             children: [
+              _batteryEditor(spec),
               for (var i = 0; i < _drafts.length; i++)
                 _draftCard(_drafts[i], i, spec),
               OutlinedButton.icon(
@@ -1319,4 +1441,25 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
       ],
     );
   }
+}
+
+class _BatteryPointerPainter extends CustomPainter {
+  final Color color;
+
+  _BatteryPointerPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width / 2, 0)
+      ..lineTo(size.width, size.height / 2)
+      ..lineTo(size.width / 2, size.height)
+      ..lineTo(0, size.height / 2)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color.withValues(alpha: .92));
+  }
+
+  @override
+  bool shouldRepaint(covariant _BatteryPointerPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

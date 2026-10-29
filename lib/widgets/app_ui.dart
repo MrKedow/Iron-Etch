@@ -542,6 +542,7 @@ class StatusBattery extends StatelessWidget {
   final double? width;
   final Color? outlineColor;
   final Color? textColor;
+  final Color? bodyColor;
 
   const StatusBattery({
     super.key,
@@ -550,6 +551,7 @@ class StatusBattery extends StatelessWidget {
     this.width,
     this.outlineColor,
     this.textColor,
+    this.bodyColor,
   });
 
   static Color fillColorFor(int value) {
@@ -572,6 +574,7 @@ class StatusBattery extends StatelessWidget {
           progress: clamped / 100,
           fillColor: fillColorFor(clamped),
           outlineColor: outlineColor ?? Colors.white.withValues(alpha: .62),
+          bodyColor: bodyColor,
         ),
         child: Center(
           child: Padding(
@@ -600,11 +603,13 @@ class _BatteryPainter extends CustomPainter {
   final double progress;
   final Color fillColor;
   final Color outlineColor;
+  final Color? bodyColor;
 
   _BatteryPainter({
     required this.progress,
     required this.fillColor,
     required this.outlineColor,
+    this.bodyColor,
   });
 
   @override
@@ -638,6 +643,10 @@ class _BatteryPainter extends CustomPainter {
       cap,
     );
 
+    if (bodyColor != null) {
+      canvas.drawRRect(body, Paint()..color = bodyColor!);
+    }
+
     if (progress > 0) {
       canvas.save();
       canvas.clipRRect(
@@ -658,7 +667,8 @@ class _BatteryPainter extends CustomPainter {
   bool shouldRepaint(covariant _BatteryPainter oldDelegate) =>
       oldDelegate.progress != progress ||
       oldDelegate.fillColor != fillColor ||
-      oldDelegate.outlineColor != outlineColor;
+      oldDelegate.outlineColor != outlineColor ||
+      oldDelegate.bodyColor != bodyColor;
 }
 
 String formatCompact(num value) {
