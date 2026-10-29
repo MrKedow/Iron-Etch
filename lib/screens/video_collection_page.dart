@@ -88,6 +88,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
   final BilibiliService _bilibili = BilibiliService();
   final TextEditingController _searchController = TextEditingController();
   final Set<String> _expandedCreators = <String>{};
+  final Set<String> _loadingAllCreators = <String>{};
 
   List<_VideoCategory> _categories = const [];
   bool _loading = true;
@@ -107,6 +108,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _bilibili.dispose();
     super.dispose();
   }
 
@@ -157,6 +159,8 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                   .toList(),
               audience: item['audience'] as String? ?? '',
               mid: midValue,
+              total: 1,
+              fromSearch: true,
               videos: [
                 BilibiliVideo(
                   bvid: bvid,
@@ -202,8 +206,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         0,
         (sum, category) =>
             sum +
-            category.items
-                .fold(0, (inner, creator) => inner + creator.videos.length),
+            category.items.fold(0, (inner, creator) => inner + creator.total),
       );
 
   List<_VideoCategory> get _visibleCategories {
@@ -214,20 +217,60 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
   Future<void> _refreshVideos(List<_VideoCreator> creators) async {
     if (_refreshing) return;
     if (mounted) setState(() => _refreshing = true);
-    for (final creator in creators) {
+
+    Future<void> refreshOne(_VideoCreator creator) async {
       if (!mounted) return;
-      final videos = await _bilibili.fetchCreatorVideos(
-        query: '${creator.name} 健身',
+      final page = await _bilibili.fetchCreatorVideos(
+        query: creator.name,
         mid: creator.mid,
-        limit: 6,
+        page: 1,
+        pageSize: 50,
       );
       if (!mounted) return;
-      if (videos.isNotEmpty) {
-        setState(() => creator.videos = videos);
+      if (page.videos.isNotEmpty) {
+        setState(() {
+          creator.videos = page.videos;
+          creator.total = page.total > 0 ? page.total : page.videos.length;
+          creator.fromSearch = page.fromSearch;
+        });
       }
-      await Future<void>.delayed(const Duration(milliseconds: 450));
     }
+
+    for (final creator in creators) {
+      if (!mounted) return;
+      await refreshOne(creator);
+      await Future<void>.delayed(const Duration(milliseconds: 550));
+    }
+
+    for (final creator
+        in creators.where((creator) => creator.total <= 1).toList()) {
+      if (!mounted) return;
+      await refreshOne(creator);
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+    }
+
     if (mounted) setState(() => _refreshing = false);
+  }
+
+  Future<void> _loadAllVideos(_VideoCreator creator) async {
+    if (_loadingAllCreators.contains(creator.id)) return;
+    setState(() => _loadingAllCreators.add(creator.id));
+    final videos = await _bilibili.fetchAllCreatorVideos(mid: creator.mid);
+    if (!mounted) return;
+    setState(() {
+      if (videos.isNotEmpty) {
+        creator.videos = videos;
+        creator.total = videos.length;
+        creator.fromSearch = false;
+        _expandedCreators.add(creator.id);
+      }
+      _loadingAllCreators.remove(creator.id);
+    });
+    if (videos.isEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('加载全部视频失败，请稍后重试')),
+      );
+    }
   }
 
   void _refreshAll() {
@@ -632,10 +675,19 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
   }) {
     final expanded = searching || _expandedCreators.contains(creator.id);
     final visible = expanded ? videos : videos.take(2).toList();
-    final hasMore = !searching && videos.length > 2;
+    final loadingAll = _loadingAllCreators.contains(creator.id);
+    final total = creator.total > 0 ? creator.total : videos.length;
+    final allLoaded = !creator.fromSearch && creator.videos.length >= total;
+    final canExpand =
+        !searching && (creator.fromSearch || videos.length > 2 || total > 2);
+    final showLoadAll = creator.fromSearch || !allLoaded;
+    final countLabel =
+        creator.fromSearch ? '${creator.videos.length}+ 个视频' : '$total 个视频';
+    final loadLabel = creator.fromSearch ? '加载全部视频' : '加载全部 $total 个视频';
 
     void toggleExpanded() {
-      if (!hasMore) return;
+      if (!canExpand) return;
+      final willExpand = !expanded;
       setState(() {
         if (expanded) {
           _expandedCreators.remove(creator.id);
@@ -643,6 +695,9 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
           _expandedCreators.add(creator.id);
         }
       });
+      if (willExpand && showLoadAll) {
+        _loadAllVideos(creator);
+      }
     }
 
     return GlassPanel(
@@ -653,7 +708,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         children: [
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: hasMore ? toggleExpanded : null,
+            onTap: canExpand ? toggleExpanded : null,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -713,14 +768,14 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${videos.length} 个视频',
+                      countLabel,
                       style: TextStyle(
                         color: spec.textSecondary,
                         fontSize: 10.5,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    if (hasMore)
+                    if (canExpand)
                       Icon(
                         expanded
                             ? Icons.expand_less_rounded
@@ -736,7 +791,45 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
           if (visible.isNotEmpty) ...[
             const SizedBox(height: 10),
             for (final video in visible) _videoTile(spec, creator, video),
-            if (hasMore)
+            if (showLoadAll)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: loadingAll ? null : () => _loadAllVideos(creator),
+                  child: loadingAll
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 13,
+                              height: 13,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.8,
+                                color: spec.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 7),
+                            Text(
+                              '正在加载全部视频…',
+                              style: TextStyle(
+                                color: spec.textSecondary,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          loadLabel,
+                          style: TextStyle(
+                            color: spec.primary,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
+              )
+            else if (canExpand)
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -846,6 +939,8 @@ class _VideoCreator {
   final List<String> tags;
   final String audience;
   final int mid;
+  int total;
+  bool fromSearch;
   List<BilibiliVideo> videos;
 
   _VideoCreator({
@@ -854,6 +949,8 @@ class _VideoCreator {
     required this.tags,
     required this.audience,
     required this.mid,
+    required this.total,
+    required this.fromSearch,
     required this.videos,
   });
 }

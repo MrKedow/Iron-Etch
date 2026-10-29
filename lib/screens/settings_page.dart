@@ -725,7 +725,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 4),
             Text(
-              '版本 3.1.5（Android）',
+              '版本 3.2.0（Android）',
               style: TextStyle(color: spec.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 14),
@@ -1497,7 +1497,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     _SettingsTile(
                       icon: Icons.fitness_center_rounded,
                       title: '铁镌',
-                      subtitle: '版本 3.1.5 · 镌刻每一次撸铁',
+                      subtitle: '版本 3.2.0 · 镌刻每一次撸铁',
                       onTap: _showAbout,
                     ),
                     _SettingsTile(

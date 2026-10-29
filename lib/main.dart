@@ -1902,23 +1902,37 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Text(
-                      '${DateFormat('yyyy年M月d日').format(selectedDate)} · ${weekdayLabel(selectedDate)}',
-                      style: TextStyle(
-                        color: spec.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${DateFormat('yyyy年M月d日').format(selectedDate)} · ${weekdayLabel(selectedDate)}',
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(
+                          color: spec.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              Pill(
-                label: hasRecord
-                    ? '第 $sessionNumber 次 · 合并'
-                    : '第 $sessionNumber 次',
-                icon: Icons.tag_rounded,
-                filled: true,
+              const SizedBox(width: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 138),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Pill(
+                    label: hasRecord
+                        ? '第 $sessionNumber 次 · 合并'
+                        : '第 $sessionNumber 次',
+                    icon: Icons.tag_rounded,
+                    filled: true,
+                  ),
+                ),
               ),
             ],
           ),
@@ -2134,8 +2148,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(2, 4, 2, 12),
+                  padding: const EdgeInsets.fromLTRB(2, 0, 2, 6),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -2156,10 +2171,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     ],
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: _dateCard(context, provider, spec),
-                ),
+                _dateCard(context, provider, spec),
                 const SizedBox(height: 14),
                 for (var i = 0; i < projects.length; i++) _buildProjectCard(i),
                 const SizedBox(height: 2),

@@ -256,15 +256,19 @@ class _HistoryPageState extends State<HistoryPage> {
                         return Row(
                           children: [
                             Flexible(
-                              flex: 3,
-                              child: Text(
-                                '第 ${record.sessionNumber ?? '-'} 次训练',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: spec.textPrimary,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w900,
+                              flex: 4,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  '第 ${record.sessionNumber ?? '-'} 次训练',
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    color: spec.textPrimary,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1360,12 +1364,18 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
                         size: 20, color: spec.primary),
                     const SizedBox(width: 9),
                     Expanded(
-                      child: Text(
-                        '${DateFormat('yyyy年M月d日').format(_date)} · ${weekdayLabel(_date)}',
-                        style: TextStyle(
-                          color: spec.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '${DateFormat('yyyy年M月d日').format(_date)} · ${weekdayLabel(_date)}',
+                          maxLines: 1,
+                          softWrap: false,
+                          style: TextStyle(
+                            color: spec.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
