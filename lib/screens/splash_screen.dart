@@ -81,14 +81,18 @@ class _SplashScreenState extends State<SplashScreen>
             final t = _controller.value;
             final imageScale =
                 1.08 + Curves.easeOut.transform(t.clamp(0, 1)) * .08;
-            final titleT = Curves.easeOutCubic
-                .transform(((t - .18) / .32).clamp(0.0, 1.0));
-            final subtitleT =
-                Curves.easeOutCubic.transform(((t - .36) / .3).clamp(0.0, 1.0));
-            final lineT =
-                Curves.easeOutCubic.transform(((t - .48) / .3).clamp(0.0, 1.0));
-            final progressT =
-                Curves.easeInOut.transform(((t - .55) / .4).clamp(0.0, 1.0));
+            final titleT = Curves.easeOutCubic.transform(
+              ((t - .18) / .32).clamp(0.0, 1.0),
+            );
+            final subtitleT = Curves.easeOutCubic.transform(
+              ((t - .36) / .3).clamp(0.0, 1.0),
+            );
+            final lineT = Curves.easeOutCubic.transform(
+              ((t - .48) / .3).clamp(0.0, 1.0),
+            );
+            final progressT = Curves.easeInOut.transform(
+              ((t - .55) / .4).clamp(0.0, 1.0),
+            );
 
             return Stack(
               fit: StackFit.expand,
@@ -99,9 +103,8 @@ class _SplashScreenState extends State<SplashScreen>
                     'assets/images/splash_strength.jpg',
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
-                    errorBuilder: (_, __, ___) => const ColoredBox(
-                      color: Color(0xFF090C11),
-                    ),
+                    errorBuilder: (_, __, ___) =>
+                        const ColoredBox(color: Color(0xFF090C11)),
                   ),
                 ),
                 DecoratedBox(
@@ -154,12 +157,24 @@ class _SplashScreenState extends State<SplashScreen>
                                   border: Border.all(
                                     color: Colors.white.withValues(alpha: .34),
                                   ),
-                                  color: Colors.white.withValues(alpha: .08),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: .22,
+                                      ),
+                                      blurRadius: 14,
+                                      offset: const Offset(0, 5),
+                                    ),
+                                  ],
                                 ),
-                                child: const Icon(
-                                  Icons.fitness_center_rounded,
-                                  color: Colors.white,
-                                  size: 22,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(13),
+                                  child: Image.asset(
+                                    'assets/icon/app_icon.png',
+                                    width: 42,
+                                    height: 42,
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -262,8 +277,9 @@ class _SplashScreenState extends State<SplashScreen>
                                   children: [
                                     Container(
                                       height: 4,
-                                      color:
-                                          Colors.white.withValues(alpha: .14),
+                                      color: Colors.white.withValues(
+                                        alpha: .14,
+                                      ),
                                     ),
                                     FractionallySizedBox(
                                       widthFactor: progressT,
