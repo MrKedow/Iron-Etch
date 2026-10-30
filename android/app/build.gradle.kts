@@ -16,16 +16,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-
     defaultConfig {
         applicationId = "com.MrKedow.FT"
         minSdk = flutter.minSdkVersion
         targetSdk = 34
-        versionCode = 6
-        versionName = "Android_v3.2.0"
+        versionCode = 7
+        versionName = "Android_v3.2.2"
     }
 
     signingConfigs {
@@ -46,6 +42,12 @@ android {
         getByName("release") {
             signingConfig = signingConfigs.getByName("release")
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
