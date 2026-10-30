@@ -2372,15 +2372,19 @@ class _RecentRecordCard extends StatelessWidget {
                     return Row(
                       children: [
                         Flexible(
-                          flex: 3,
-                          child: Text(
-                            '第 ${record.sessionNumber ?? '-'} 次训练',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: spec.textPrimary,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
+                          flex: 4,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              '第 ${record.sessionNumber ?? '-'} 次训练',
+                              maxLines: 1,
+                              softWrap: false,
+                              style: TextStyle(
+                                color: spec.textPrimary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                         ),

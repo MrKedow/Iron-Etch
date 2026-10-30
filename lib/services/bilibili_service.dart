@@ -31,6 +31,20 @@ class BilibiliVideoPage {
   });
 }
 
+class BilibiliUser {
+  final int mid;
+  final String name;
+  final String sign;
+  final int fans;
+
+  const BilibiliUser({
+    required this.mid,
+    required this.name,
+    required this.sign,
+    required this.fans,
+  });
+}
+
 class BilibiliService {
   static const String _userAgent = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) '
       'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -163,6 +177,66 @@ class BilibiliService {
       await Future<void>.delayed(const Duration(milliseconds: 550));
     }
     return videos;
+  }
+
+  Future<BilibiliUser?> findUserByName(String name) async {
+    final query = name.trim();
+    if (query.isEmpty) return null;
+    await _warmup();
+    await _ensureFingerprint();
+    final uri = Uri.https(
+      'api.bilibili.com',
+      '/x/web-interface/search/type',
+      {
+        'search_type': 'bili_user',
+        'keyword': query,
+        'page': '1',
+      },
+    );
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final decoded = await _requestJson(
+        uri,
+        referer: 'https://search.bilibili.com/',
+      );
+      final code = (decoded?['code'] as num?)?.toInt() ?? -1;
+      if (code == 0) {
+        final data = decoded?['data'];
+        final rawList = data is Map ? data['result'] : null;
+        if (rawList is! List) return null;
+        BilibiliUser? best;
+        for (final raw in rawList) {
+          if (raw is! Map) continue;
+          final uname = _cleanTitle(raw['uname']?.toString() ?? '');
+          if (uname != query) continue;
+          final mid =
+              (raw['mid'] as num?)?.toInt() ?? int.tryParse('${raw['mid']}');
+          if (mid == null) continue;
+          final user = BilibiliUser(
+            mid: mid,
+            name: uname,
+            sign: _cleanTitle(raw['usign']?.toString() ?? ''),
+            fans: (raw['fans'] as num?)?.toInt() ?? 0,
+          );
+          if (best == null || user.fans > best.fans) best = user;
+        }
+        return best;
+      }
+      if (decoded == null || code == -1) {
+        await Future<void>.delayed(
+          Duration(milliseconds: 1200 * (attempt + 1)),
+        );
+        continue;
+      }
+      if (code == -352 || code == -412) {
+        await _ensureFingerprint();
+        await Future<void>.delayed(
+          Duration(milliseconds: 1500 * (attempt + 1)),
+        );
+        continue;
+      }
+      return null;
+    }
+    return null;
   }
 
   void dispose() {

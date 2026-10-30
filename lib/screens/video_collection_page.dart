@@ -22,6 +22,7 @@ class VideoCollectionPage extends StatefulWidget {
 class _VideoCollectionPageState extends State<VideoCollectionPage> {
   static const String _assetPath = 'assets/bili_list.json';
   static const String _introPreferenceKey = 'video_intro_hidden';
+  static const String _customPreferenceKey = 'video_custom_state_v1';
 
   static const Map<String, String> _displayNames = {
     'chenbolin': '陈柏龄',
@@ -89,10 +90,15 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
   final TextEditingController _searchController = TextEditingController();
   final Set<String> _expandedCreators = <String>{};
   final Set<String> _loadingAllCreators = <String>{};
+  final Set<String> _collapsedCategories = <String>{};
+  final Map<String, List<_CustomCreator>> _customItems = {};
+  final Map<String, String> _customNames = {};
+  List<String> _collectionOrder = <String>[];
 
   List<_VideoCategory> _categories = const [];
   bool _loading = true;
   bool _refreshing = false;
+  bool _addingUp = false;
   bool _introVisible = true;
   String? _error;
   String _selected = '全部';
@@ -181,7 +187,9 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
           ),
         );
       }
+      await _loadCustomState();
       if (!mounted) return;
+      _mergeCustomCollections(categories);
       setState(() {
         _categories = categories;
         _loading = false;
@@ -194,6 +202,228 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _loadCustomState() async {
+    _customItems.clear();
+    _customNames.clear();
+    _collectionOrder = <String>[];
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_customPreferenceKey);
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      _collectionOrder = (data['order'] as List<dynamic>? ?? const [])
+          .map((id) => id.toString())
+          .toList();
+      for (final rawCollection
+          in (data['collections'] as List<dynamic>? ?? const [])) {
+        if (rawCollection is! Map) continue;
+        final collection = Map<String, dynamic>.from(rawCollection);
+        final id = collection['id']?.toString() ?? '';
+        if (id.isEmpty) continue;
+        _customNames[id] = collection['name']?.toString() ?? '我的合集';
+        final items = <_CustomCreator>[];
+        for (final rawItem
+            in (collection['items'] as List<dynamic>? ?? const [])) {
+          if (rawItem is! Map) continue;
+          final item = Map<String, dynamic>.from(rawItem);
+          final mid = (item['mid'] as num?)?.toInt();
+          final name = item['name']?.toString() ?? '';
+          if (mid == null || name.isEmpty) continue;
+          items.add(
+            _CustomCreator(
+              id: item['id']?.toString() ?? 'custom_${mid}_${items.length}',
+              name: name,
+              mid: mid,
+            ),
+          );
+        }
+        _customItems[id] = items;
+      }
+    } catch (_) {}
+  }
+
+  void _mergeCustomCollections(List<_VideoCategory> categories) {
+    final byId = {for (final category in categories) category.id: category};
+    for (final entry in _customItems.entries) {
+      final category = byId[entry.key];
+      if (category != null) {
+        for (final custom in entry.value) {
+          if (category.items.any((item) => item.mid == custom.mid)) continue;
+          category.items.add(_creatorFromCustom(custom));
+        }
+      } else {
+        final newCategory = _VideoCategory(
+          id: entry.key,
+          name: _customNames[entry.key] ?? '我的合集',
+          items: entry.value.map(_creatorFromCustom).toList(),
+        );
+        categories.add(newCategory);
+        byId[entry.key] = newCategory;
+      }
+    }
+    if (_collectionOrder.isEmpty) return;
+    final order = <String, int>{
+      for (var i = 0; i < _collectionOrder.length; i++) _collectionOrder[i]: i,
+    };
+    final fallback = <String, int>{
+      for (var i = 0; i < categories.length; i++) categories[i].id: i,
+    };
+    categories.sort((a, b) {
+      final aIndex =
+          order[a.id] ?? _collectionOrder.length + (fallback[a.id] ?? 0);
+      final bIndex =
+          order[b.id] ?? _collectionOrder.length + (fallback[b.id] ?? 0);
+      return aIndex.compareTo(bIndex);
+    });
+  }
+
+  _VideoCreator _creatorFromCustom(_CustomCreator custom) {
+    return _VideoCreator(
+      id: custom.id,
+      name: custom.name,
+      tags: const ['自定义'],
+      audience: '',
+      mid: custom.mid,
+      total: 0,
+      fromSearch: true,
+      videos: <BilibiliVideo>[],
+    );
+  }
+
+  Future<void> _saveCustomState() async {
+    final collections = <Map<String, dynamic>>[];
+    for (final category in _categories) {
+      final items = category.items
+          .where((creator) => creator.id.startsWith('custom_'))
+          .map(
+            (creator) => <String, dynamic>{
+              'id': creator.id,
+              'name': creator.name,
+              'mid': creator.mid,
+            },
+          )
+          .toList();
+      final isCustomCollection = category.id.startsWith('custom_');
+      if (items.isEmpty && !isCustomCollection) continue;
+      collections.add(
+        <String, dynamic>{
+          'id': category.id,
+          'name': category.name,
+          'items': items,
+        },
+      );
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _customPreferenceKey,
+      jsonEncode(
+        <String, dynamic>{
+          'order': _categories.map((category) => category.id).toList(),
+          'collections': collections,
+        },
+      ),
+    );
+  }
+
+  Future<void> _showAddUpDialog() async {
+    if (_addingUp) return;
+    final names = <String>[];
+    for (final category in _categories) {
+      if (!names.contains(category.name)) names.add(category.name);
+    }
+    final result = await showDialog<_UpSubmission>(
+      context: context,
+      builder: (_) => _AddUpDialog(collectionNames: names),
+    );
+    if (result == null || !mounted) return;
+    await _addUp(result);
+  }
+
+  Future<void> _addUp(_UpSubmission submission) async {
+    final upName = submission.upName.trim();
+    final collectionName = submission.collectionName.trim();
+    if (upName.isEmpty || collectionName.isEmpty) return;
+    setState(() => _addingUp = true);
+    try {
+      final user = await _bilibili.findUserByName(upName);
+      if (!mounted) return;
+      if (user == null) {
+        _snack('未找到该 UP 主，请检查名字是否准确无误。');
+        return;
+      }
+      final page = await _bilibili.fetchCreatorVideos(
+        query: user.name,
+        mid: user.mid,
+        page: 1,
+        pageSize: 50,
+      );
+      if (!mounted) return;
+      _VideoCategory? existing;
+      for (final category in _categories) {
+        if (category.name.trim().toLowerCase() ==
+            collectionName.toLowerCase()) {
+          existing = category;
+          break;
+        }
+      }
+      if (existing != null &&
+          existing.items.any((creator) => creator.mid == user.mid)) {
+        _snack('该 UP 主已在「${existing.name}」中。');
+        return;
+      }
+      final target = existing;
+      final collectionId =
+          target?.id ?? 'custom_${DateTime.now().microsecondsSinceEpoch}';
+      final creator = _VideoCreator(
+        id: 'custom_${user.mid}_${DateTime.now().microsecondsSinceEpoch}',
+        name: user.name,
+        tags: const ['自定义'],
+        audience: '',
+        mid: user.mid,
+        total: page.total > 0 ? page.total : page.videos.length,
+        fromSearch: page.fromSearch || page.videos.isEmpty,
+        videos: page.videos,
+      );
+      setState(() {
+        if (target == null) {
+          _categories.insert(
+            0,
+            _VideoCategory(
+              id: collectionId,
+              name: collectionName,
+              items: [creator],
+            ),
+          );
+        } else {
+          _categories.remove(target);
+          target.items.insert(0, creator);
+          _categories.insert(0, target);
+        }
+        _selected = '全部';
+        _query = '';
+        _searchController.clear();
+        _collapsedCategories.remove(collectionId);
+        _expandedCreators.add(creator.id);
+      });
+      await _saveCustomState();
+      _snack('已添加 ${user.name} 到「$collectionName」');
+      if (page.videos.isEmpty) {
+        unawaited(_refreshVideos([creator]));
+      }
+    } catch (_) {
+      _snack('添加失败，请检查网络后重试。');
+    } finally {
+      if (mounted) setState(() => _addingUp = false);
+    }
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   List<_VideoCreator> get _allCreators =>
@@ -346,8 +576,13 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         title: const Text('视频合集'),
         actions: [
           IconButton(
+            tooltip: '添加喜欢的 UP 主',
+            onPressed: _addingUp ? null : () => _showAddUpDialog(),
+            icon: const Icon(Icons.electrical_services_rounded),
+          ),
+          IconButton(
             tooltip: '刷新视频',
-            onPressed: _refreshing ? null : _refreshAll,
+            onPressed: _refreshing || _addingUp ? null : _refreshAll,
             icon: const Icon(Icons.refresh_rounded),
           ),
           IconButton(
@@ -524,7 +759,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
             ],
           ),
         ),
-        if (_refreshing) ...[
+        if (_refreshing || _addingUp) ...[
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
@@ -570,23 +805,63 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
             ),
           )
         else
-          for (final section in sections) ...[
-            SectionHeader(
-              title: section.category.name,
-              subtitle: '${section.entries.length} 位 UP 主',
-              padding: const EdgeInsets.fromLTRB(2, 20, 2, 10),
+          for (final section in sections)
+            _categorySection(
+              spec,
+              section.category,
+              section.entries,
+              searching: query.isNotEmpty,
             ),
-            for (final entry in section.entries)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 9),
-                child: _creatorCard(
-                  spec,
-                  entry.creator,
-                  entry.videos,
-                  searching: query.isNotEmpty,
-                ),
+      ],
+    );
+  }
+
+  Widget _categorySection(
+    AppThemeSpec spec,
+    _VideoCategory category,
+    List<_VideoEntry> entries, {
+    required bool searching,
+  }) {
+    final collapsed = !searching && _collapsedCategories.contains(category.id);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeader(
+          title: category.name,
+          subtitle: collapsed
+              ? '${entries.length} 位 UP 主 · 已折叠'
+              : '${entries.length} 位 UP 主',
+          padding: const EdgeInsets.fromLTRB(2, 20, 2, 10),
+          trailing: IconButton(
+            tooltip: collapsed ? '展开合集' : '折叠合集',
+            visualDensity: VisualDensity.compact,
+            onPressed: () {
+              setState(() {
+                if (collapsed) {
+                  _collapsedCategories.remove(category.id);
+                } else {
+                  _collapsedCategories.add(category.id);
+                }
+              });
+            },
+            icon: Icon(
+              collapsed ? Icons.expand_more_rounded : Icons.expand_less_rounded,
+              color: spec.textSecondary,
+              size: 20,
+            ),
+          ),
+        ),
+        if (!collapsed)
+          for (final entry in entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 9),
+              child: _creatorCard(
+                spec,
+                entry.creator,
+                entry.videos,
+                searching: searching,
               ),
-          ],
+            ),
       ],
     );
   }
@@ -846,12 +1121,29 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
               ),
           ] else ...[
             const SizedBox(height: 8),
-            Text(
-              '正在后台获取视频…',
-              style: TextStyle(
-                color: spec.textSecondary,
-                fontSize: 11,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '正在后台获取视频…',
+                    style: TextStyle(
+                      color: spec.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: loadingAll ? null : () => _loadAllVideos(creator),
+                  child: Text(
+                    loadingAll ? '获取中…' : '获取视频',
+                    style: TextStyle(
+                      color: spec.primary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ],
@@ -921,6 +1213,28 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
   }
 }
 
+class _CustomCreator {
+  final String id;
+  final String name;
+  final int mid;
+
+  const _CustomCreator({
+    required this.id,
+    required this.name,
+    required this.mid,
+  });
+}
+
+class _UpSubmission {
+  final String collectionName;
+  final String upName;
+
+  const _UpSubmission({
+    required this.collectionName,
+    required this.upName,
+  });
+}
+
 class _VideoCategory {
   final String id;
   final String name;
@@ -960,4 +1274,197 @@ class _VideoEntry {
   final List<BilibiliVideo> videos;
 
   const _VideoEntry({required this.creator, required this.videos});
+}
+
+class _AddUpDialog extends StatefulWidget {
+  final List<String> collectionNames;
+
+  const _AddUpDialog({required this.collectionNames});
+
+  @override
+  State<_AddUpDialog> createState() => _AddUpDialogState();
+}
+
+class _AddUpDialogState extends State<_AddUpDialog> {
+  late final TextEditingController _collectionController;
+  late final TextEditingController _upController;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _collectionController = TextEditingController();
+    _upController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _collectionController.dispose();
+    _upController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final collectionName = _collectionController.text.trim();
+    final upName = _upController.text.trim();
+    if (collectionName.isEmpty) {
+      setState(() => _error = '请输入或选择合集名称');
+      return;
+    }
+    if (upName.isEmpty) {
+      setState(() => _error = '请输入 UP 主名称');
+      return;
+    }
+    Navigator.pop(
+      context,
+      _UpSubmission(collectionName: collectionName, upName: upName),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = context.watch<ThemeProvider>().currentSpec;
+    final dialogWidth =
+        (MediaQuery.sizeOf(context).width - 96).clamp(240.0, 360.0);
+    return AlertDialog(
+      backgroundColor: spec.surface,
+      surfaceTintColor: Colors.transparent,
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '添加喜欢的Up主',
+            style: TextStyle(
+              color: spec.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            '一定要准确无误地输入TA的名字',
+            style: TextStyle(
+              color: spec.textSecondary,
+              fontSize: 11.5,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: SizedBox(
+          width: dialogWidth,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DropdownMenu<String>(
+                controller: _collectionController,
+                width: dialogWidth,
+                menuHeight: 220,
+                enableFilter: true,
+                requestFocusOnTap: true,
+                label: Text(
+                  '合集名称',
+                  style: TextStyle(
+                    color: spec.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+                hintText: '选择已有合集或输入新名称',
+                textStyle: TextStyle(
+                  color: spec.textPrimary,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                ),
+                dropdownMenuEntries: widget.collectionNames
+                    .map(
+                      (name) => DropdownMenuEntry<String>(
+                        value: name,
+                        label: name,
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _upController,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submit(),
+                style: TextStyle(
+                  color: spec.textPrimary,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'UP 主名称',
+                  hintText: '例如：帕梅拉PamelaReif',
+                  labelStyle: TextStyle(
+                    color: spec.textSecondary,
+                    fontSize: 12,
+                  ),
+                  hintStyle: TextStyle(
+                    color: spec.textSecondary,
+                    fontSize: 12,
+                  ),
+                  filled: true,
+                  fillColor: spec.textPrimary.withValues(alpha: .04),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: spec.textPrimary.withValues(alpha: .08),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: spec.textPrimary.withValues(alpha: .08),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: spec.primary.withValues(alpha: .65),
+                    ),
+                  ),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _error!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            '取消',
+            style: TextStyle(color: spec.textSecondary),
+          ),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          style: FilledButton.styleFrom(
+            backgroundColor: spec.primary,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('确认'),
+        ),
+      ],
+    );
+  }
 }
