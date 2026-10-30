@@ -920,13 +920,13 @@ class _RecentAnalysisCard extends StatelessWidget {
             child: Row(
               children: [
                 _miniMetric(
-                  '${(insights.lastWork / 1000).toStringAsFixed(1)}',
+                  (insights.lastWork / 1000).toStringAsFixed(1),
                   '本次做功 kJ',
                   spec,
                 ),
                 _miniDivider(spec),
                 _miniMetric(
-                  '${(insights.averageWork / 1000).toStringAsFixed(1)}',
+                  (insights.averageWork / 1000).toStringAsFixed(1),
                   '平均容量 kJ',
                   spec,
                 ),

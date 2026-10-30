@@ -69,11 +69,12 @@ class ThemeGalleryPage extends StatelessWidget {
                             const SizedBox(height: 2),
                             Text(
                               spec.subtitle,
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: spec.onHeroMuted,
                                 fontSize: 12,
+                                height: 1.4,
                               ),
                             ),
                           ],
@@ -639,11 +640,12 @@ class _ThemeCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     spec.subtitle,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: spec.textSecondary,
                       fontSize: 9.5,
+                      height: 1.35,
                     ),
                   ),
                 ],

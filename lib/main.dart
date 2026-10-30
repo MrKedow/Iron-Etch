@@ -257,7 +257,7 @@ class WorkoutProject {
     if (category == '柔韧' || category == '功能') {
       final minutes = durationMinutes > 0
           ? '${_trimNumber(durationMinutes)} 分钟'
-          : '${sets} 组 × ${repsPerSet} 次';
+          : '$sets 组 × $repsPerSet 次';
       if (weight > 0) {
         return '$minutes · ${_trimNumber(weight)} kg';
       }
@@ -338,7 +338,7 @@ class JsonStorageService {
       await file.writeAsString(jsonEncode(map));
       return file.path;
     } catch (e) {
-      print('保存 JSON 失败: $e');
+      debugPrint('保存 JSON 失败: $e');
       return null;
     }
   }
@@ -348,9 +348,9 @@ class JsonStorageService {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/$fileName');
       if (!await file.exists()) return [];
-      return _parseRecordsFile(file);
+      return await _parseRecordsFile(file);
     } catch (e) {
-      print('加载 JSON 失败: $e');
+      debugPrint('加载 JSON 失败: $e');
       return [];
     }
   }
@@ -562,12 +562,12 @@ class WorkoutProvider extends ChangeNotifier {
       try {
         final path = await _jsonService!.saveRecords(_records);
         if (path == null) {
-          print('保存 JSON 失败：返回路径为空');
+          debugPrint('保存 JSON 失败：返回路径为空');
         } else {
-          print('保存 JSON 成功：$path');
+          debugPrint('保存 JSON 成功：$path');
         }
       } catch (e) {
-        print('保存 JSON 异常：$e');
+        debugPrint('保存 JSON 异常：$e');
         // 尝试备用存储（如 SharedPreferences）
         await _saveRecordsToSharedPrefs();
       }
@@ -601,9 +601,9 @@ class WorkoutProvider extends ChangeNotifier {
           .toList();
       final jsonString = json.encode(recordsJson);
       await prefs.setString('workout_records', jsonString);
-      print('SharedPreferences 保存成功');
+      debugPrint('SharedPreferences 保存成功');
     } catch (e) {
-      print('SharedPreferences 保存失败：$e');
+      debugPrint('SharedPreferences 保存失败：$e');
     }
   }
 
@@ -1251,7 +1251,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       if (!isStillConnected) {
         _showToast('云服务认证已过期，请重新登录', isError: true);
         await nutstore.clearCredentials();
-        if (mounted) _showCloudLoginDialog(context);
+        if (context.mounted) _showCloudLoginDialog(context);
         return;
       }
 
@@ -1271,7 +1271,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         }
       }
 
-      if (!mounted) return;
+      if (!context.mounted) return;
 
       if (!cloudFileExists) {
         await _uploadCurrentData(context, provider, nutstore);
@@ -1285,6 +1285,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         return;
       }
 
+      if (!context.mounted) return;
       final choice = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -1309,6 +1310,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         ),
       );
 
+      if (!context.mounted) return;
       if (choice == 'upload') {
         await _uploadCurrentData(context, provider, nutstore);
       } else if (choice == 'merge') {
@@ -1435,7 +1437,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                         username: usernameController.text.trim(),
                         password: passwordController.text,
                       );
-                      if (!mounted) return;
+                      if (!dialogContext.mounted) return;
                       if (ok) {
                         Navigator.pop(dialogContext);
                         _showToast('坚果云连接成功');

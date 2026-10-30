@@ -91,9 +91,15 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
   final Set<String> _expandedCreators = <String>{};
   final Set<String> _loadingAllCreators = <String>{};
   final Set<String> _collapsedCategories = <String>{};
+  final Set<String> _refreshedCategoryOnTap = <String>{};
+  final Set<int> _refreshedCreatorOnTap = <int>{};
   final Map<String, List<_CustomCreator>> _customItems = {};
   final Map<String, String> _customNames = {};
   List<String> _collectionOrder = <String>[];
+
+  static bool _initialFullRefreshDone = false;
+  static final Map<int, _CachedCreatorVideos> _videoCache =
+      <int, _CachedCreatorVideos>{};
 
   List<_VideoCategory> _categories = const [];
   bool _loading = true;
@@ -190,11 +196,14 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
       await _loadCustomState();
       if (!mounted) return;
       _mergeCustomCollections(categories);
+      _restoreCachedVideos(categories);
       setState(() {
         _categories = categories;
         _loading = false;
       });
-      unawaited(_refreshVideos(_allCreators));
+      if (!_initialFullRefreshDone) {
+        unawaited(_refreshVideos(_allCreators, fullRefresh: true));
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -277,6 +286,27 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
           order[b.id] ?? _collectionOrder.length + (fallback[b.id] ?? 0);
       return aIndex.compareTo(bIndex);
     });
+  }
+
+  void _restoreCachedVideos(List<_VideoCategory> categories) {
+    for (final category in categories) {
+      for (final creator in category.items) {
+        final cached = _videoCache[creator.mid];
+        if (cached == null) continue;
+        creator.videos = List<BilibiliVideo>.of(cached.videos);
+        creator.total = cached.total;
+        creator.fromSearch = cached.fromSearch;
+      }
+    }
+  }
+
+  void _cacheCreator(_VideoCreator creator) {
+    if (creator.videos.isEmpty) return;
+    _videoCache[creator.mid] = _CachedCreatorVideos(
+      videos: List<BilibiliVideo>.of(creator.videos),
+      total: creator.total,
+      fromSearch: creator.fromSearch,
+    );
   }
 
   _VideoCreator _creatorFromCustom(_CustomCreator custom) {
@@ -407,6 +437,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         _collapsedCategories.remove(collectionId);
         _expandedCreators.add(creator.id);
       });
+      _cacheCreator(creator);
       await _saveCustomState();
       _snack('已添加 ${user.name} 到「$collectionName」');
       if (page.videos.isEmpty) {
@@ -444,7 +475,11 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     return _categories.where((category) => category.id == _selected).toList();
   }
 
-  Future<void> _refreshVideos(List<_VideoCreator> creators) async {
+  Future<void> _refreshVideos(
+    List<_VideoCreator> creators, {
+    bool fullRefresh = false,
+    bool preserveLoaded = false,
+  }) async {
     if (_refreshing) return;
     if (mounted) setState(() => _refreshing = true);
 
@@ -458,11 +493,18 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
       );
       if (!mounted) return;
       if (page.videos.isNotEmpty) {
+        final keepLoaded =
+            preserveLoaded && creator.videos.length > page.videos.length;
         setState(() {
-          creator.videos = page.videos;
-          creator.total = page.total > 0 ? page.total : page.videos.length;
-          creator.fromSearch = page.fromSearch;
+          if (keepLoaded) {
+            creator.total = page.total > 0 ? page.total : creator.total;
+          } else {
+            creator.videos = page.videos;
+            creator.total = page.total > 0 ? page.total : page.videos.length;
+            creator.fromSearch = page.fromSearch;
+          }
         });
+        _cacheCreator(creator);
       }
     }
 
@@ -479,6 +521,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
       await Future<void>.delayed(const Duration(milliseconds: 800));
     }
 
+    if (fullRefresh) _initialFullRefreshDone = true;
     if (mounted) setState(() => _refreshing = false);
   }
 
@@ -496,6 +539,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
       }
       _loadingAllCreators.remove(creator.id);
     });
+    if (videos.isNotEmpty) _cacheCreator(creator);
     if (videos.isEmpty && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('加载全部视频失败，请稍后重试')),
@@ -505,7 +549,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
 
   void _refreshAll() {
     if (_refreshing) return;
-    unawaited(_refreshVideos(_allCreators));
+    unawaited(_refreshVideos(_allCreators, fullRefresh: true));
   }
 
   void _openVideo(_VideoCreator creator, BilibiliVideo video) {
@@ -542,7 +586,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
               ),
               const SizedBox(height: 10),
               Text(
-                '每次进入页面会在后台静默刷新各 UP 主的视频列表；点击视频即可在应用内由 B 站播放器直接播放，不缓存、不代理。',
+                '首次进入页面会全量刷新各 UP 主的视频列表，之后直接使用本次运行缓存，仅在点击合集或 UP 主时按需刷新该项；也可点击右上角刷新按钮手动全量刷新。点击视频即可在应用内由 B 站播放器直接播放，不缓存、不代理。',
                 style: TextStyle(
                   color: spec.textSecondary,
                   fontSize: 12.5,
@@ -920,12 +964,29 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     );
   }
 
+  void _refreshClickedCategory(String id) {
+    if (id == '全部' || _refreshing) return;
+    if (!_refreshedCategoryOnTap.add(id)) return;
+    _VideoCategory? category;
+    for (final item in _categories) {
+      if (item.id == id) {
+        category = item;
+        break;
+      }
+    }
+    if (category == null) return;
+    unawaited(_refreshVideos(category.items, preserveLoaded: true));
+  }
+
   Widget _filterChip(AppThemeSpec spec, String id, String label) {
     final selected = _selected == id;
     return ChoiceChip(
       label: Text(label),
       selected: selected,
-      onSelected: (_) => setState(() => _selected = id),
+      onSelected: (_) {
+        setState(() => _selected = id);
+        _refreshClickedCategory(id);
+      },
       selectedColor: spec.primary.withValues(alpha: .16),
       labelStyle: TextStyle(
         color: selected ? spec.primary : spec.textSecondary,
@@ -970,8 +1031,11 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
           _expandedCreators.add(creator.id);
         }
       });
-      if (willExpand && showLoadAll) {
+      if (!willExpand) return;
+      if (showLoadAll) {
         _loadAllVideos(creator);
+      } else if (!_refreshing && _refreshedCreatorOnTap.add(creator.mid)) {
+        unawaited(_refreshVideos([creator], preserveLoaded: true));
       }
     }
 
@@ -1266,6 +1330,18 @@ class _VideoCreator {
     required this.total,
     required this.fromSearch,
     required this.videos,
+  });
+}
+
+class _CachedCreatorVideos {
+  final List<BilibiliVideo> videos;
+  final int total;
+  final bool fromSearch;
+
+  const _CachedCreatorVideos({
+    required this.videos,
+    required this.total,
+    required this.fromSearch,
   });
 }
 
