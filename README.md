@@ -72,20 +72,7 @@
 - 主题摘要完整显示
 - 主题卡片响应式排布
 
-## 安装
-
-推荐直接下载安装包：
-
-- `Iron-Etch_Win_v5.1.0_Setup.exe`：Windows 安装向导，支持开始菜单和可选桌面快捷方式
-- `Iron-Etch_Win_v5.1.0.msi`：标准 Windows Installer 包，适合静默部署
-
-安装后运行：
-
-```text
-Iron_Etch.exe
-```
-
-不再使用压缩包分发。
+> 正式 EXE / MSI 安装包、签名和发布流程由维护者通过私有发布文档管理，不在公开仓库提供。
 
 ## 环境要求
 
@@ -93,24 +80,23 @@ Iron_Etch.exe
 - Microsoft Edge WebView2 Runtime（Windows 11 通常已内置）
 - 构建需要 Flutter 3.47.9、Visual Studio 2022/2026（含 C++ 桌面开发）
 
-## 构建
+## 开发构建
+
+公开仓库仅提供桌面开发调试说明，不包含正式 EXE/MSI 打包、签名和发布流程。
 
 ```powershell
 flutter pub get
 flutter analyze
-flutter build windows --release
+flutter run -d windows
 ```
 
-输出目录：
+如需生成调试构建：
 
-```text
-build\windows\x64\runner\Release\
+```powershell
+flutter build windows --debug
 ```
 
-安装包构建：
-
-- EXE 安装程序：使用 Inno Setup 编译 `installer.iss`
-- MSI 安装程序：使用 WiX Toolset 3 编译 `installer.wxs` 与 harvest 文件
+正式发行版本由维护者使用私有发布文档构建和签名，公开源码不代表官方发行授权。
 
 ## 目录结构
 
@@ -130,8 +116,6 @@ assets/
   bili_list.json            B 站视频合集
 windows/                    Windows Runner 与图标资源
 third_party/webview_windows 兼容新版 MSVC 的 WebView2 插件
-installer.iss               Inno Setup 安装脚本
-installer.wxs               WiX MSI 安装定义
 ```
 
 ## 许可证
