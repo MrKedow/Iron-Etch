@@ -154,12 +154,23 @@ class _SplashScreenState extends State<SplashScreen>
                                   border: Border.all(
                                     color: Colors.white.withValues(alpha: .34),
                                   ),
-                                  color: Colors.white.withValues(alpha: .08),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.black.withValues(alpha: .22),
+                                      blurRadius: 14,
+                                      offset: const Offset(0, 5),
+                                    ),
+                                  ],
                                 ),
-                                child: const Icon(
-                                  Icons.fitness_center_rounded,
-                                  color: Colors.white,
-                                  size: 22,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(13),
+                                  child: Image.asset(
+                                    'assets/icon/app_icon.png',
+                                    width: 42,
+                                    height: 42,
+                                    fit: BoxFit.cover,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 12),

@@ -55,29 +55,13 @@ class ThemeGalleryPage extends StatelessWidget {
                       Text(spec.emoji, style: const TextStyle(fontSize: 34)),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              spec.name,
-                              style: TextStyle(
-                                color: spec.onHero,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              spec.subtitle,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: spec.onHeroMuted,
-                                fontSize: 12,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          spec.name,
+                          style: TextStyle(
+                            color: spec.onHero,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -90,7 +74,25 @@ class ThemeGalleryPage extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        spec.subtitle,
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(
+                          color: spec.onHeroMuted,
+                          fontSize: 12,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       _colorDot(spec, spec.primary),
