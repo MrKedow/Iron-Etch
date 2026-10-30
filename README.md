@@ -134,6 +134,22 @@ installer.iss               Inno Setup 安装脚本
 installer.wxs               WiX MSI 安装定义
 ```
 
+## 许可证
+
+本仓库采用 **Source-Available** 授权，不是 OSI 开源许可。源码仅允许查看、通过 GitHub 克隆/派生用于个人学习和评估，以及向官方仓库提交贡献。
+
+禁止商用、再分发、发布安装包、上架应用商店、制作衍生发行版，或使用“铁镌 / Iron Etch”名称与图标暗示官方授权。
+
+详见：
+
+- `LICENSE`
+- `NOTICE`
+- `TRADEMARK.md`
+
+官方安装包只通过授权应用商店和官方 GitHub Release 发布：
+
+<https://github.com/MrKedow/Iron-Etch/releases>
+
 ## 说明
 
 - 应用不缓存、不代理 B 站视频内容，播放由 B 站官方播放器提供。
