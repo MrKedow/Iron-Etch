@@ -5,9 +5,13 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
+
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
+
 import 'dart:convert';
+
 import 'package:excel/excel.dart' hide Border;
 import 'package:iron_etch/data/exercise_library.dart';
 import 'package:iron_etch/screens/book_library_page.dart';
@@ -15,6 +19,7 @@ import 'package:iron_etch/screens/settings_page.dart';
 import 'package:iron_etch/screens/coach_analysis_page.dart';
 import 'package:iron_etch/screens/exercise_library_page.dart';
 import 'package:iron_etch/screens/history_page.dart';
+import 'package:iron_etch/screens/knowledge_page.dart';
 import 'package:iron_etch/screens/splash_screen.dart';
 import 'package:iron_etch/screens/theme_gallery_page.dart';
 import 'package:iron_etch/screens/video_collection_page.dart';
@@ -26,9 +31,22 @@ import 'package:iron_etch/widgets/app_ui.dart';
 import 'package:iron_etch/widgets/book_download_toast.dart';
 import 'package:iron_etch/widgets/status_banner.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+  const windowOptions = WindowOptions(
+    size: Size(1360, 860),
+    minimumSize: Size(1100, 680),
+    center: true,
+    titleBarStyle: TitleBarStyle.hidden,
+    windowButtonVisibility: true,
+  );
+  windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.show();
+    await windowManager.focus();
+  });
   final prefs = await SharedPreferences.getInstance();
   final savedThemeId = prefs.getString('selected_theme_id');
   final savedThemeMode = prefs.getString('theme_mode');
@@ -49,16 +67,13 @@ void main() async {
         Provider(create: (_) => JsonStorageService()),
         // 2. 再注册 WorkoutProvider（依赖 JsonStorageService）
         ChangeNotifierProvider(
-          create: (context) => WorkoutProvider(
-            jsonService: context.read<JsonStorageService>(),
-          ),
+          create: (context) =>
+              WorkoutProvider(jsonService: context.read<JsonStorageService>()),
         ),
         // 3. 其他提供者
         ChangeNotifierProvider(
-          create: (_) => ThemeProvider(
-            initialThemeId,
-            initialMode: initialThemeMode,
-          ),
+          create: (_) =>
+              ThemeProvider(initialThemeId, initialMode: initialThemeMode),
         ),
         ChangeNotifierProvider(create: (_) => NutstoreService()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
@@ -310,14 +325,16 @@ List<WorkoutRecord> normalizeWorkoutRecords(Iterable<WorkoutRecord> records) {
       ...projects.map((project) => project.fingerprint),
     ].join('||');
     if (!seenContent.add(contentKey)) continue;
-    result.add(WorkoutRecord(
-      id: record.id,
-      date: record.date,
-      sessionNumber: record.sessionNumber,
-      projects: projects,
-      statusBattery: record.statusBattery,
-      timestamp: record.timestamp,
-    ));
+    result.add(
+      WorkoutRecord(
+        id: record.id,
+        date: record.date,
+        sessionNumber: record.sessionNumber,
+        projects: projects,
+        statusBattery: record.statusBattery,
+        timestamp: record.timestamp,
+      ),
+    );
   }
   return result;
 }
@@ -384,9 +401,9 @@ class JsonStorageService {
       date: DateTime.parse(json['date']),
       sessionNumber: json['sessionNumber'],
       projects: (json['projects'] as List)
-          .map((p) => WorkoutProject.fromJson(
-                Map<String, dynamic>.from(p as Map),
-              ))
+          .map(
+            (p) => WorkoutProject.fromJson(Map<String, dynamic>.from(p as Map)),
+          )
           .toList(),
       statusBattery: battery.clamp(0, 100).toInt(),
       timestamp: DateTime.parse(json['timestamp']),
@@ -424,8 +441,9 @@ class WorkoutProvider extends ChangeNotifier {
   }
 
   void addRecord(WorkoutRecord newRecord) {
-    final existingIndex =
-        _records.indexWhere((r) => isSameDay(r.date, newRecord.date));
+    final existingIndex = _records.indexWhere(
+      (r) => isSameDay(r.date, newRecord.date),
+    );
     if (existingIndex != -1) {
       final existing = _records[existingIndex];
       final mergedProjects = dedupeWorkoutProjects([
@@ -442,14 +460,16 @@ class WorkoutProvider extends ChangeNotifier {
       );
       _records[existingIndex] = updatedRecord;
     } else {
-      _records.add(WorkoutRecord(
-        id: newRecord.id,
-        date: newRecord.date,
-        sessionNumber: newRecord.sessionNumber,
-        projects: dedupeWorkoutProjects(newRecord.projects),
-        statusBattery: newRecord.statusBattery,
-        timestamp: newRecord.timestamp,
-      ));
+      _records.add(
+        WorkoutRecord(
+          id: newRecord.id,
+          date: newRecord.date,
+          sessionNumber: newRecord.sessionNumber,
+          projects: dedupeWorkoutProjects(newRecord.projects),
+          statusBattery: newRecord.statusBattery,
+          timestamp: newRecord.timestamp,
+        ),
+      );
     }
     recalculateSessionNumbers();
   }
@@ -580,24 +600,28 @@ class WorkoutProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     try {
       final recordsJson = _records
-          .map((record) => {
-                'id': record.id,
-                'date': record.date.toIso8601String(),
-                'sessionNumber': record.sessionNumber,
-                'statusBattery': record.statusBattery,
-                'projects': record.projects
-                    .map((project) => {
-                          'name': project.name,
-                          'part': project.part,
-                          'weight': project.weight,
-                          'sets': project.sets,
-                          'repsPerSet': project.repsPerSet,
-                          'feeling': project.feeling,
-                          'supplement': project.supplement,
-                        })
-                    .toList(),
-                'timestamp': record.timestamp.toIso8601String(),
-              })
+          .map(
+            (record) => {
+              'id': record.id,
+              'date': record.date.toIso8601String(),
+              'sessionNumber': record.sessionNumber,
+              'statusBattery': record.statusBattery,
+              'projects': record.projects
+                  .map(
+                    (project) => {
+                      'name': project.name,
+                      'part': project.part,
+                      'weight': project.weight,
+                      'sets': project.sets,
+                      'repsPerSet': project.repsPerSet,
+                      'feeling': project.feeling,
+                      'supplement': project.supplement,
+                    },
+                  )
+                  .toList(),
+              'timestamp': record.timestamp.toIso8601String(),
+            },
+          )
           .toList();
       final jsonString = json.encode(recordsJson);
       await prefs.setString('workout_records', jsonString);
@@ -624,9 +648,11 @@ class WorkoutProvider extends ChangeNotifier {
               date: DateTime.parse(item['date']),
               sessionNumber: item['sessionNumber'],
               projects: (item['projects'] as List)
-                  .map((project) => WorkoutProject.fromJson(
-                        Map<String, dynamic>.from(project as Map),
-                      ))
+                  .map(
+                    (project) => WorkoutProject.fromJson(
+                      Map<String, dynamic>.from(project as Map),
+                    ),
+                  )
                   .toList(),
               statusBattery: battery.clamp(0, 100).toInt(),
               timestamp: DateTime.parse(item['timestamp']),
@@ -662,12 +688,13 @@ class ExcelExportService {
         '做功(J)',
         '感受',
         '补剂',
-        '记录时间'
+        '记录时间',
       ];
       sheet.appendRow(headers.map((h) => TextCellValue(h)).toList());
       for (int i = 0; i < headers.length; i++) {
-        final cell =
-            sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+        final cell = sheet.cell(
+          CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0),
+        );
         cell.cellStyle = CellStyle(
           bold: true,
           horizontalAlign: HorizontalAlign.Center,
@@ -711,14 +738,19 @@ class ExcelExportService {
           endRow++;
         }
         if (endRow > currentRow) {
-          final startCell =
-              CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow);
-          final endCell =
-              CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: endRow);
+          final startCell = CellIndex.indexByColumnRow(
+            columnIndex: 0,
+            rowIndex: currentRow,
+          );
+          final endCell = CellIndex.indexByColumnRow(
+            columnIndex: 0,
+            rowIndex: endRow,
+          );
           sheet.merge(startCell, endCell);
           for (int r = currentRow; r <= endRow; r++) {
-            final cell = sheet
-                .cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: r));
+            final cell = sheet.cell(
+              CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: r),
+            );
             cell.cellStyle = CellStyle(
               horizontalAlign: HorizontalAlign.Center,
               verticalAlign: VerticalAlign.Center,
@@ -726,7 +758,8 @@ class ExcelExportService {
           }
         } else {
           final cell = sheet.cell(
-              CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow));
+            CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow),
+          );
           cell.cellStyle = CellStyle(
             horizontalAlign: HorizontalAlign.Center,
             verticalAlign: VerticalAlign.Center,
@@ -819,7 +852,10 @@ class NutstoreService extends ChangeNotifier {
       final password = prefs.getString('nutstore_password');
       if (username == null || password == null) return false;
       return await connect(
-          username: username, password: password, saveCredentials: false);
+        username: username,
+        password: password,
+        saveCredentials: false,
+      );
     } catch (e) {
       debugPrint('加载保存的配置失败: $e');
       return false;
@@ -828,8 +864,9 @@ class NutstoreService extends ChangeNotifier {
 
   Future<void> _ensureCloudFolder() async {
     try {
-      final folderUrl =
-          Uri.parse('$_baseUrl${Uri.encodeComponent(_cloudFolder)}');
+      final folderUrl = Uri.parse(
+        '$_baseUrl${Uri.encodeComponent(_cloudFolder)}',
+      );
       final client = http.Client();
       final checkReq = http.Request('PROPFIND', Uri.parse('$folderUrl/'));
       checkReq.headers['Authorization'] = _getAuthHeader();
@@ -887,9 +924,7 @@ class NutstoreService extends ChangeNotifier {
       final client = http.Client();
       final response = await client.get(
         url,
-        headers: {
-          'Authorization': _getAuthHeader(),
-        },
+        headers: {'Authorization': _getAuthHeader()},
       );
       client.close();
       if (response.statusCode == 200) {
@@ -921,14 +956,14 @@ class NutstoreService extends ChangeNotifier {
         return {
           'success': true,
           'statusCode': 200,
-          'bodyBytes': response.bodyBytes
+          'bodyBytes': response.bodyBytes,
         };
       } else {
         return {
           'success': false,
           'statusCode': response.statusCode,
           'bodyBytes': null,
-          'error': 'HTTP ${response.statusCode}'
+          'error': 'HTTP ${response.statusCode}',
         };
       }
     } catch (e) {
@@ -936,7 +971,7 @@ class NutstoreService extends ChangeNotifier {
         'success': false,
         'statusCode': null,
         'bodyBytes': null,
-        'error': e.toString()
+        'error': e.toString(),
       };
     }
   }
@@ -1068,7 +1103,7 @@ class FitnessApp extends StatelessWidget {
                   Positioned.fill(
                     child: Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1100),
+                        constraints: const BoxConstraints(maxWidth: 1400),
                         child: child,
                       ),
                     ),
@@ -1080,6 +1115,279 @@ class FitnessApp extends StatelessWidget {
           home: const SplashScreen(),
         );
       },
+    );
+  }
+}
+
+class _DesktopSidebar extends StatefulWidget {
+  final AppThemeSpec spec;
+
+  const _DesktopSidebar({required this.spec});
+
+  @override
+  State<_DesktopSidebar> createState() => _DesktopSidebarState();
+}
+
+class _DesktopSidebarState extends State<_DesktopSidebar> {
+  int _selected = 0;
+
+  static const List<(IconData, String)> _items = [
+    (Icons.fitness_center_rounded, '训练'),
+    (Icons.history_rounded, '训练历史'),
+    (Icons.auto_awesome_rounded, 'AI 教练'),
+    (Icons.tv_rounded, '视频合集'),
+    (Icons.menu_book_rounded, '书库'),
+    (Icons.sports_gymnastics_rounded, '动作库'),
+    (Icons.article_rounded, '知识库'),
+    (Icons.palette_outlined, '主题工坊'),
+    (Icons.settings_outlined, '设置'),
+  ];
+
+  Widget _pageFor(int index) {
+    switch (index) {
+      case 1:
+        return const HistoryPage();
+      case 2:
+        return const CoachAnalysisPage();
+      case 3:
+        return const VideoCollectionPage();
+      case 4:
+        return const BookLibraryPage();
+      case 5:
+        return const ExerciseLibraryPage(selectMode: false);
+      case 6:
+        return const KnowledgePage();
+      case 7:
+        return const ThemeGalleryPage();
+      case 8:
+        return const SettingsPage();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  void _select(int index) {
+    setState(() => _selected = index);
+    final navigator = Navigator.of(context);
+    if (index == 0) {
+      navigator.popUntil((route) => route.isFirst);
+    } else {
+      navigator.push(MaterialPageRoute<void>(builder: (_) => _pageFor(index)));
+    }
+  }
+
+  Future<void> _toggleMaximize() async {
+    if (await windowManager.isMaximized()) {
+      await windowManager.unmaximize();
+    } else {
+      await windowManager.maximize();
+    }
+  }
+
+  Widget _windowButton(IconData icon, String tooltip, VoidCallback onTap) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onTap,
+      icon: Icon(icon, size: 14),
+      color: widget.spec.textSecondary,
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints.tightFor(width: 24, height: 24),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = widget.spec;
+    return Material(
+      color: spec.card.withValues(alpha: .78),
+      child: Container(
+        width: 204,
+        decoration: BoxDecoration(
+          border: Border(
+            right: BorderSide(color: spec.textPrimary.withValues(alpha: .07)),
+          ),
+        ),
+        child: SafeArea(
+          right: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DragToMoveArea(
+                child: SizedBox(
+                  height: 28,
+                  child: Row(
+                    children: [
+                      const Spacer(),
+                      _windowButton(
+                        Icons.remove_rounded,
+                        '最小化',
+                        () => windowManager.minimize(),
+                      ),
+                      _windowButton(
+                        Icons.crop_square_rounded,
+                        '最大化 / 还原',
+                        _toggleMaximize,
+                      ),
+                      _windowButton(
+                        Icons.close_rounded,
+                        '关闭',
+                        () => windowManager.close(),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                  ),
+                ),
+              ),
+              DragToMoveArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 6, 16, 18),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(13),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: .18),
+                              blurRadius: 14,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(13),
+                          child: Image.asset(
+                            'assets/icon/app_icon.png',
+                            width: 42,
+                            height: 42,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '铁镌',
+                              style: TextStyle(
+                                color: spec.textPrimary,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: .8,
+                              ),
+                            ),
+                            Text(
+                              'IRON ETCH',
+                              style: TextStyle(
+                                color: spec.textSecondary,
+                                fontSize: 7.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.8,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Divider(
+                height: 1,
+                color: spec.textPrimary.withValues(alpha: .06),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(10, 12, 10, 12),
+                  itemCount: _items.length,
+                  itemBuilder: (context, index) {
+                    final (icon, label) = _items[index];
+                    final selected = _selected == index;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => _select(index),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 13,
+                            vertical: 11,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? spec.primary.withValues(alpha: .14)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selected
+                                  ? spec.primary.withValues(alpha: .18)
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                icon,
+                                size: 19,
+                                color: selected
+                                    ? spec.primary
+                                    : spec.textSecondary,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                label,
+                                style: TextStyle(
+                                  color: selected
+                                      ? spec.textPrimary
+                                      : spec.textSecondary,
+                                  fontSize: 13,
+                                  fontWeight: selected
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: spec.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      'Windows · v5.1.0',
+                      style: TextStyle(
+                        color: spec.textSecondary.withValues(alpha: .72),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1172,20 +1480,23 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     : partNotifiers[i].value == '专项'
                         ? '专项'
                         : '力量');
-        validProjects.add(WorkoutProject(
-          name: name,
-          part: partNotifiers[i].value,
-          weight: double.tryParse(weightControllers[i].text) ?? 0,
-          sets: int.tryParse(setsControllers[i].text) ?? 0,
-          repsPerSet: int.tryParse(repsControllers[i].text) ?? 0,
-          feeling: feelingControllers[i].text.trim(),
-          supplement: supplementControllers[i].text.trim(),
-          category: category,
-          durationMinutes:
-              double.tryParse(durationControllers[i].text.trim()) ?? 0,
-          distanceKm: double.tryParse(distanceControllers[i].text.trim()) ?? 0,
-          met: definition?.met ?? 0,
-        ));
+        validProjects.add(
+          WorkoutProject(
+            name: name,
+            part: partNotifiers[i].value,
+            weight: double.tryParse(weightControllers[i].text) ?? 0,
+            sets: int.tryParse(setsControllers[i].text) ?? 0,
+            repsPerSet: int.tryParse(repsControllers[i].text) ?? 0,
+            feeling: feelingControllers[i].text.trim(),
+            supplement: supplementControllers[i].text.trim(),
+            category: category,
+            durationMinutes:
+                double.tryParse(durationControllers[i].text.trim()) ?? 0,
+            distanceKm:
+                double.tryParse(distanceControllers[i].text.trim()) ?? 0,
+            met: definition?.met ?? 0,
+          ),
+        );
       }
     }
     if (validProjects.isEmpty) {
@@ -1226,16 +1537,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final provider = context.read<WorkoutProvider>();
     setState(() => _isLoading = true);
     try {
-      final filePath =
-          await ExcelExportService().exportToExcel(provider.records);
+      final filePath = await ExcelExportService().exportToExcel(
+        provider.records,
+      );
       if (filePath == null) {
         if (mounted) _showToast('导出失败', isError: true);
         return;
       }
-      await Share.shareXFiles(
-        [XFile(filePath)],
-        text: '铁镌训练数据',
-      );
+      await Share.shareXFiles([XFile(filePath)], text: '铁镌训练数据');
     } catch (e) {
       if (mounted) _showToast('导出失败：$e', isError: true);
     } finally {
@@ -1519,8 +1828,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           child: Container(
             decoration: BoxDecoration(
               color: spec.background,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
               border: Border.all(
                 color: spec.textPrimary.withValues(alpha: .08),
               ),
@@ -1598,8 +1908,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                     height: 13,
                                     outlineColor: spec.isDark
                                         ? null
-                                        : spec.textPrimary
-                                            .withValues(alpha: .42),
+                                        : spec.textPrimary.withValues(
+                                            alpha: .42,
+                                          ),
                                     textColor:
                                         spec.isDark ? null : spec.textPrimary,
                                   ),
@@ -1710,13 +2021,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
-  void _showThemeGallery(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const ThemeGalleryPage()),
-    );
-  }
-
   void _showToast(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1781,26 +2085,37 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _clearControllers();
     for (final project in projects) {
       nameControllers.add(TextEditingController(text: project.name));
-      weightControllers.add(TextEditingController(
-        text: project.weight == 0 ? '' : project.weight.toString(),
-      ));
-      setsControllers.add(TextEditingController(
-        text: project.sets == 0 ? '' : project.sets.toString(),
-      ));
-      repsControllers.add(TextEditingController(
-        text: project.repsPerSet == 0 ? '' : project.repsPerSet.toString(),
-      ));
+      weightControllers.add(
+        TextEditingController(
+          text: project.weight == 0 ? '' : project.weight.toString(),
+        ),
+      );
+      setsControllers.add(
+        TextEditingController(
+          text: project.sets == 0 ? '' : project.sets.toString(),
+        ),
+      );
+      repsControllers.add(
+        TextEditingController(
+          text: project.repsPerSet == 0 ? '' : project.repsPerSet.toString(),
+        ),
+      );
       feelingControllers.add(TextEditingController(text: project.feeling));
-      supplementControllers
-          .add(TextEditingController(text: project.supplement));
-      durationControllers.add(TextEditingController(
-        text: project.durationMinutes == 0
-            ? ''
-            : project.durationMinutes.toString(),
-      ));
-      distanceControllers.add(TextEditingController(
-        text: project.distanceKm == 0 ? '' : project.distanceKm.toString(),
-      ));
+      supplementControllers.add(
+        TextEditingController(text: project.supplement),
+      );
+      durationControllers.add(
+        TextEditingController(
+          text: project.durationMinutes == 0
+              ? ''
+              : project.durationMinutes.toString(),
+        ),
+      );
+      distanceControllers.add(
+        TextEditingController(
+          text: project.distanceKm == 0 ? '' : project.distanceKm.toString(),
+        ),
+      );
       partNotifiers.add(ValueNotifier<String>(project.part));
     }
   }
@@ -1884,8 +2199,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     WorkoutProvider provider,
     AppThemeSpec spec,
   ) {
-    final hasRecord =
-        provider.records.any((r) => _isSameDay(r.date, selectedDate));
+    final hasRecord = provider.records.any(
+      (r) => _isSameDay(r.date, selectedDate),
+    );
     final sessionNumber = provider.sessionNumberForDate(selectedDate);
     return GlassPanel(
       padding: const EdgeInsets.all(16),
@@ -1964,8 +2280,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.calendar_month_rounded,
-                        color: spec.primary, size: 21),
+                    Icon(
+                      Icons.calendar_month_rounded,
+                      color: spec.primary,
+                      size: 21,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -1979,14 +2298,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     ),
                     Text(
                       '更换日期',
-                      style: TextStyle(
-                        color: spec.textSecondary,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: spec.textSecondary, fontSize: 12),
                     ),
                     const SizedBox(width: 4),
-                    Icon(Icons.keyboard_arrow_down_rounded,
-                        color: spec.textSecondary),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: spec.textSecondary,
+                    ),
                   ],
                 ),
               ),
@@ -2017,309 +2335,311 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       final diff = now.difference(r.date).inDays;
       return diff >= 0 && diff < 7;
     }).length;
-    final totalWork =
-        provider.records.fold<double>(0, (sum, r) => sum + r.totalWork);
+    final totalWork = provider.records.fold<double>(
+      0,
+      (sum, r) => sum + r.totalWork,
+    );
     final recent = provider.sortedRecords.take(3).toList();
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      appBar: AppBar(
-        titleSpacing: 16,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '铁镌',
-              style: TextStyle(
-                color: spec.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1,
-              ),
-            ),
-            Text(
-              'IRON ETCH',
-              style: TextStyle(
-                color: spec.textSecondary,
-                fontSize: 8,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 2.1,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'AI 训练舱',
-            visualDensity: VisualDensity.compact,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const CoachAnalysisPage()),
-              );
-            },
-            icon: const Icon(Icons.auto_awesome_rounded),
-          ),
-          IconButton(
-            tooltip: '视频合集',
-            visualDensity: VisualDensity.compact,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const VideoCollectionPage(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.tv_rounded),
-          ),
-          IconButton(
-            tooltip: '阅读器',
-            visualDensity: VisualDensity.compact,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const BookLibraryPage()),
-              );
-            },
-            icon: const Icon(Icons.menu_book_rounded),
-          ),
-          IconButton(
-            tooltip: '训练历史',
-            visualDensity: VisualDensity.compact,
-            onPressed: () => _showHistory(context),
-            icon: const Icon(Icons.history_rounded),
-          ),
-          IconButton(
-            tooltip: '主题工坊',
-            visualDensity: VisualDensity.compact,
-            onPressed: () => _showThemeGallery(context),
-            icon: const Icon(Icons.palette_outlined),
-          ),
-          IconButton(
-            tooltip: '设置',
-            visualDensity: VisualDensity.compact,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SettingsPage()),
-              );
-            },
-            icon: const Icon(Icons.settings_outlined),
-          ),
-        ],
-      ),
-      body: Stack(
+    final summary = <Widget>[
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(
-                18,
-                6,
-                18,
-                34 + MediaQuery.paddingOf(context).bottom,
-              ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                StatusBanner(startedAt: settings.streakStart),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: StatTile(
-                        label: '累计训练',
-                        value: '${provider.totalSessions}',
-                        unit: '次',
-                        icon: Icons.fitness_center_rounded,
-                        accent: spec.primary,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: StatTile(
-                        label: '本周训练',
-                        value: '$weekSessions',
-                        unit: '次',
-                        icon: Icons.local_fire_department_rounded,
-                        accent: const Color(0xFFF97316),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: StatTile(
-                        label: '累计做功',
-                        value: formatCompact(totalWork),
-                        unit: 'J',
-                        icon: Icons.bolt_rounded,
-                        accent: spec.secondary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(2, 0, 2, 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        '记录今天的铁',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: spec.textPrimary,
-                          letterSpacing: .2,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Pill(
-                        label: '${projects.length} 个动作',
-                        icon: Icons.list_alt_rounded,
-                      ),
-                    ],
+                Text(
+                  '训练概览',
+                  style: TextStyle(
+                    color: spec.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .2,
                   ),
                 ),
-                _dateCard(context, provider, spec),
-                const SizedBox(height: 14),
-                for (var i = 0; i < projects.length; i++) _buildProjectCard(i),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _addProject,
-                        icon: const Icon(Icons.add_rounded),
-                        label: const Text('添加动作'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
-                          side: BorderSide(
-                            color: spec.primary.withValues(alpha: .32),
-                          ),
-                          foregroundColor: spec.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                GestureDetector(
-                  onTap: () => _saveWorkout(context),
-                  child: Container(
-                    height: 58,
-                    decoration: BoxDecoration(
-                      gradient: spec.heroGradient,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: spec.primary.withValues(alpha: .34),
-                          blurRadius: 24,
-                          offset: const Offset(0, 12),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.check_circle_rounded,
-                            color: spec.onHero, size: 22),
-                        const SizedBox(width: 9),
-                        Text(
-                          '保存训练记录',
-                          style: TextStyle(
-                            color: spec.onHero,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: .4,
-                          ),
-                        ),
-                      ],
-                    ),
+                const SizedBox(height: 4),
+                Text(
+                  DateFormat('yyyy年M月d日').format(now),
+                  style: TextStyle(
+                    color: spec.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(2, 34, 2, 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '最近训练',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: spec.textPrimary,
-                                letterSpacing: .2,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              '快速回看最近的训练节奏',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: spec.textSecondary,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => _showHistory(context),
-                        child: const Text('全部记录'),
-                      ),
-                    ],
-                  ),
-                ),
-                if (recent.isEmpty)
-                  GlassPanel(
-                    padding: const EdgeInsets.all(22),
-                    child: Column(
-                      children: [
-                        Icon(Icons.self_improvement_rounded,
-                            color: spec.primary, size: 34),
-                        const SizedBox(height: 10),
-                        Text(
-                          '还没有训练记录',
-                          style: TextStyle(
-                            color: spec.textPrimary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '填写上方的动作和重量，保存你的第一次铁镌。',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: spec.textSecondary,
-                            fontSize: 12.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  for (final record in recent)
-                    _RecentRecordCard(
-                      record: record,
-                      onTap: () => _showRecordDetail(context, record),
-                    ),
               ],
             ),
           ),
-          if (_isLoading)
-            Positioned.fill(
-              child: ColoredBox(
-                color: spec.background.withValues(alpha: .55),
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-            ),
+          IconButton(
+            tooltip: '刷新',
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          IconButton(
+            tooltip: '云同步',
+            onPressed: () => _syncWithCloud(context),
+            icon: const Icon(Icons.cloud_sync_outlined),
+          ),
+          IconButton(
+            tooltip: '导出 Excel',
+            onPressed: () => _exportToExcel(context),
+            icon: const Icon(Icons.ios_share_rounded),
+          ),
         ],
       ),
+      const SizedBox(height: 16),
+      StatusBanner(startedAt: settings.streakStart),
+      const SizedBox(height: 14),
+      Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          SizedBox(
+            width: 176,
+            child: StatTile(
+              label: '累计训练',
+              value: '${provider.totalSessions}',
+              unit: '次',
+              icon: Icons.fitness_center_rounded,
+              accent: spec.primary,
+            ),
+          ),
+          SizedBox(
+            width: 176,
+            child: StatTile(
+              label: '本周训练',
+              value: '$weekSessions',
+              unit: '次',
+              icon: Icons.local_fire_department_rounded,
+              accent: const Color(0xFFF97316),
+            ),
+          ),
+          SizedBox(
+            width: 176,
+            child: StatTile(
+              label: '累计做功',
+              value: formatCompact(totalWork),
+              unit: 'J',
+              icon: Icons.bolt_rounded,
+              accent: spec.secondary,
+            ),
+          ),
+        ],
+      ),
+    ];
+
+    final form = <Widget>[
+      Row(
+        children: [
+          Text(
+            '记录今天的铁',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: spec.textPrimary,
+              letterSpacing: .2,
+            ),
+          ),
+          const SizedBox(width: 9),
+          Pill(label: '${projects.length} 个动作', icon: Icons.list_alt_rounded),
+        ],
+      ),
+      const SizedBox(height: 12),
+      _dateCard(context, provider, spec),
+      const SizedBox(height: 14),
+      for (var i = 0; i < projects.length; i++) _buildProjectCard(i),
+      const SizedBox(height: 4),
+      OutlinedButton.icon(
+        onPressed: _addProject,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('添加动作'),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          side: BorderSide(color: spec.primary.withValues(alpha: .32)),
+          foregroundColor: spec.primary,
+        ),
+      ),
+      const SizedBox(height: 18),
+      GestureDetector(
+        onTap: () => _saveWorkout(context),
+        child: Container(
+          height: 58,
+          decoration: BoxDecoration(
+            gradient: spec.heroGradient,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: spec.primary.withValues(alpha: .34),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.check_circle_rounded, color: spec.onHero, size: 22),
+              const SizedBox(width: 9),
+              Text(
+                '保存训练记录',
+                style: TextStyle(
+                  color: spec.onHero,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: .4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
+
+    final recentWidgets = <Widget>[
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '最近训练',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: spec.textPrimary,
+                    letterSpacing: .2,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '快速回看最近的训练节奏',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: spec.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => _showHistory(context),
+            child: const Text('全部记录'),
+          ),
+        ],
+      ),
+      if (recent.isEmpty)
+        GlassPanel(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            children: [
+              Icon(
+                Icons.self_improvement_rounded,
+                color: spec.primary,
+                size: 34,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '还没有训练记录',
+                style: TextStyle(
+                  color: spec.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '填写右侧的动作和重量，保存你的第一次铁镌。',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: spec.textSecondary, fontSize: 12.5),
+              ),
+            ],
+          ),
+        )
+      else
+        for (final record in recent)
+          _RecentRecordCard(
+            record: record,
+            onTap: () => _showRecordDetail(context, record),
+          ),
+    ];
+
+    return Row(
+      children: [
+        _DesktopSidebar(spec: spec),
+        Expanded(
+          child: Scaffold(
+            resizeToAvoidBottomInset: true,
+            body: Stack(
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final wide = constraints.maxWidth >= 900;
+                    if (!wide) {
+                      return RefreshIndicator(
+                        onRefresh: _refresh,
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: EdgeInsets.fromLTRB(
+                            18,
+                            16,
+                            18,
+                            34 + MediaQuery.paddingOf(context).bottom,
+                          ),
+                          children: [
+                            ...summary,
+                            const SizedBox(height: 18),
+                            ...form,
+                            const SizedBox(height: 24),
+                            ...recentWidgets,
+                          ],
+                        ),
+                      );
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 18, 22, 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: ListView(
+                              padding:
+                                  const EdgeInsets.only(right: 12, bottom: 24),
+                              children: [
+                                ...summary,
+                                const SizedBox(height: 26),
+                                ...recentWidgets,
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 7,
+                            child: ListView(
+                              padding:
+                                  const EdgeInsets.only(left: 12, bottom: 24),
+                              children: form,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                if (_isLoading)
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: spec.background.withValues(alpha: .55),
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2448,10 +2768,7 @@ class _RecentRecordCard extends StatelessWidget {
                       .join(' · '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: spec.textSecondary,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: spec.textSecondary, fontSize: 12),
                 ),
               ],
             ),
@@ -2674,8 +2991,10 @@ class _ProjectCardState extends State<_ProjectCard> {
             isDense: true,
             filled: true,
             fillColor: spec.textPrimary.withValues(alpha: .04),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 13,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
               borderSide: BorderSide(
@@ -2720,8 +3039,10 @@ class _ProjectCardState extends State<_ProjectCard> {
             isDense: true,
             filled: true,
             fillColor: spec.textPrimary.withValues(alpha: .04),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 13,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
               borderSide: BorderSide(
@@ -2838,7 +3159,9 @@ class _ProjectCardState extends State<_ProjectCard> {
                     filled: true,
                     fillColor: spec.textPrimary.withValues(alpha: .04),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 12),
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(13),
                       borderSide: BorderSide(
@@ -2889,16 +3212,14 @@ class _ProjectCardState extends State<_ProjectCard> {
             Row(
               children: [
                 Pill(
-                    label: _definition!.kind.label,
-                    icon: Icons.category_rounded),
+                  label: _definition!.kind.label,
+                  icon: Icons.category_rounded,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     _definition!.equipment,
-                    style: TextStyle(
-                      color: spec.textSecondary,
-                      fontSize: 10.5,
-                    ),
+                    style: TextStyle(color: spec.textSecondary, fontSize: 10.5),
                   ),
                 ),
                 TextButton.icon(
@@ -2921,9 +3242,7 @@ class _ProjectCardState extends State<_ProjectCard> {
           Wrap(
             spacing: 7,
             runSpacing: 7,
-            children: [
-              for (final part in _parts) _partChip(part, spec),
-            ],
+            children: [for (final part in _parts) _partChip(part, spec)],
           ),
           const SizedBox(height: 14),
           if (_isTimeBased)
@@ -2976,21 +3295,11 @@ class _ProjectCardState extends State<_ProjectCard> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _numberField(
-                    spec,
-                    widget.setsController,
-                    '组数',
-                    '0',
-                  ),
+                  child: _numberField(spec, widget.setsController, '组数', '0'),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _numberField(
-                    spec,
-                    widget.repsController,
-                    '每组次数',
-                    '0',
-                  ),
+                  child: _numberField(spec, widget.repsController, '每组次数', '0'),
                 ),
               ],
             ),

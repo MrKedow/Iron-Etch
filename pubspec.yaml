@@ -1,7 +1,7 @@
 name: iron_etch
 description: 铁镌 - 镌刻每一次撸铁的现代化个人健身数据管理系统（Windows）。
 publish_to: "none"
-version: 5.0.1+1
+version: 5.1.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -29,6 +29,7 @@ dependencies:
   file_picker: ^11.0.3
   archive: ^3.6.1
   path: ^1.9.0
+  window_manager: ^0.4.3
 
 dev_dependencies:
   flutter_test:
@@ -56,5 +57,6 @@ flutter:
     - assets/一起跳舞.gif
     - assets/coach_rules.json
     - assets/bili_list.json
+    - assets/icon/app_icon.png
     - assets/images/
     - assets/exercises/

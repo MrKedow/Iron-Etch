@@ -31,9 +31,9 @@ class ThemeGalleryPage extends StatelessWidget {
               await themeProvider.setTheme(AppThemes.ironForge.id);
               await themeProvider.setMode(AppThemeMode.light);
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('已恢复黑金主题与昼间模式')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('已恢复黑金主题与昼间模式')));
               }
             },
             icon: const Icon(Icons.restart_alt_rounded),
@@ -119,11 +119,11 @@ class ThemeGalleryPage extends StatelessWidget {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: AppThemes.all.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 190,
               mainAxisSpacing: 14,
               crossAxisSpacing: 14,
-              childAspectRatio: .78,
+              childAspectRatio: .82,
             ),
             itemBuilder: (context, index) {
               final theme = AppThemes.all[index];
@@ -218,8 +218,10 @@ class ThemeGalleryPage extends StatelessWidget {
                               );
                             }
                           },
-                          icon: const Icon(Icons.add_photo_alternate_outlined,
-                              size: 19),
+                          icon: const Icon(
+                            Icons.add_photo_alternate_outlined,
+                            size: 19,
+                          ),
                           label: Text(hasCustom ? '更换图片' : '导入图片'),
                         ),
                       ),
@@ -229,8 +231,10 @@ class ThemeGalleryPage extends StatelessWidget {
                           onPressed: () async {
                             await themeProvider.clearCustomBackground();
                           },
-                          icon: const Icon(Icons.delete_outline_rounded,
-                              color: Colors.redAccent),
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            color: Colors.redAccent,
+                          ),
                           tooltip: '移除自定义背景',
                         ),
                       ],
@@ -338,10 +342,12 @@ class _ThemeModeSwitchState extends State<_ThemeModeSwitch>
       alpha: widget.spec.isDark ? .20 : .14,
     );
     final markerColor = widget.spec.onHero.withValues(alpha: .48);
-    final thumbColor =
-        widget.spec.isDark ? Colors.white : widget.spec.textPrimary;
-    final thumbForeground =
-        widget.spec.isDark ? const Color(0xFF101216) : Colors.white;
+    final thumbColor = widget.spec.isDark
+        ? Colors.white
+        : widget.spec.textPrimary;
+    final thumbForeground = widget.spec.isDark
+        ? const Color(0xFF101216)
+        : Colors.white;
 
     return Semantics(
       button: true,
@@ -408,9 +414,7 @@ class _ThemeModeSwitchState extends State<_ThemeModeSwitch>
                           turns: _spin,
                           child: const SizedBox.square(
                             dimension: 17,
-                            child: CustomPaint(
-                              painter: _TaijiPainter(),
-                            ),
+                            child: CustomPaint(painter: _TaijiPainter()),
                           ),
                         )
                       : Text(
@@ -561,7 +565,7 @@ class _ThemeCard extends StatelessWidget {
                     color: spec.primary.withValues(alpha: .35),
                     blurRadius: 22,
                     offset: const Offset(0, 10),
-                  )
+                  ),
                 ]
               : null,
         ),
@@ -577,8 +581,11 @@ class _ThemeCard extends StatelessWidget {
                       Text(spec.emoji, style: const TextStyle(fontSize: 20)),
                       const Spacer(),
                       if (selected)
-                        Icon(Icons.check_circle_rounded,
-                            size: 18, color: spec.primary),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 18,
+                          color: spec.primary,
+                        ),
                     ],
                   ),
                   const Spacer(),

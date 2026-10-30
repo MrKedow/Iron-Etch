@@ -337,23 +337,19 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
           .toList();
       final isCustomCollection = category.id.startsWith('custom_');
       if (items.isEmpty && !isCustomCollection) continue;
-      collections.add(
-        <String, dynamic>{
-          'id': category.id,
-          'name': category.name,
-          'items': items,
-        },
-      );
+      collections.add(<String, dynamic>{
+        'id': category.id,
+        'name': category.name,
+        'items': items,
+      });
     }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _customPreferenceKey,
-      jsonEncode(
-        <String, dynamic>{
-          'order': _categories.map((category) => category.id).toList(),
-          'collections': collections,
-        },
-      ),
+      jsonEncode(<String, dynamic>{
+        'order': _categories.map((category) => category.id).toList(),
+        'collections': collections,
+      }),
     );
   }
 
@@ -452,9 +448,8 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   List<_VideoCreator> get _allCreators =>
@@ -464,11 +459,10 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
       _categories.fold(0, (sum, category) => sum + category.items.length);
 
   int get _totalVideos => _categories.fold(
-        0,
-        (sum, category) =>
-            sum +
-            category.items.fold(0, (inner, creator) => inner + creator.total),
-      );
+    0,
+    (sum, category) =>
+        sum + category.items.fold(0, (inner, creator) => inner + creator.total),
+  );
 
   List<_VideoCategory> get _visibleCategories {
     if (_selected == '全部') return _categories;
@@ -541,9 +535,8 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     });
     if (videos.isNotEmpty) _cacheCreator(creator);
     if (videos.isEmpty && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('加载全部视频失败，请稍后重试')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('加载全部视频失败，请稍后重试')));
     }
   }
 
@@ -556,10 +549,8 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => BilibiliPlayerPage(
-          name: creator.name,
-          bvid: video.bvid,
-        ),
+        builder: (_) =>
+            BilibiliPlayerPage(name: creator.name, bvid: video.bvid),
       ),
     );
   }
@@ -639,8 +630,8 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? _errorView(spec)
-              : _content(spec),
+          ? _errorView(spec)
+          : _content(spec),
     );
   }
 
@@ -697,16 +688,14 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         final matchedVideos = creatorMatches
             ? creator.videos
             : creator.videos
-                .where(
-                  (video) =>
-                      video.title.toLowerCase().contains(query) ||
-                      video.author.toLowerCase().contains(query),
-                )
-                .toList();
+                  .where(
+                    (video) =>
+                        video.title.toLowerCase().contains(query) ||
+                        video.author.toLowerCase().contains(query),
+                  )
+                  .toList();
         if (creatorMatches || matchedVideos.isNotEmpty) {
-          entries.add(
-            _VideoEntry(creator: creator, videos: matchedVideos),
-          );
+          entries.add(_VideoEntry(creator: creator, videos: matchedVideos));
         }
       }
       if (entries.isNotEmpty) {
@@ -839,10 +828,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                   const SizedBox(height: 4),
                   Text(
                     '试试更短的关键词，或清空搜索。',
-                    style: TextStyle(
-                      color: spec.textSecondary,
-                      fontSize: 11.5,
-                    ),
+                    style: TextStyle(color: spec.textSecondary, fontSize: 11.5),
                   ),
                 ],
               ),
@@ -896,16 +882,33 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
           ),
         ),
         if (!collapsed)
-          for (final entry in entries)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 9),
-              child: _creatorCard(
-                spec,
-                entry.creator,
-                entry.videos,
-                searching: searching,
-              ),
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 1100
+                  ? 3
+                  : constraints.maxWidth >= 700
+                  ? 2
+                  : 1;
+              final width =
+                  (constraints.maxWidth - (columns - 1) * 12) / columns;
+              return Wrap(
+                spacing: 12,
+                runSpacing: 10,
+                children: [
+                  for (final entry in entries)
+                    SizedBox(
+                      width: width,
+                      child: _creatorCard(
+                        spec,
+                        entry.creator,
+                        entry.videos,
+                        searching: searching,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
       ],
     );
   }
@@ -944,17 +947,21 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         isDense: true,
         filled: true,
         fillColor: spec.textPrimary.withValues(alpha: .04),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              BorderSide(color: spec.textPrimary.withValues(alpha: .08)),
+          borderSide: BorderSide(
+            color: spec.textPrimary.withValues(alpha: .08),
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              BorderSide(color: spec.textPrimary.withValues(alpha: .08)),
+          borderSide: BorderSide(
+            color: spec.textPrimary.withValues(alpha: .08),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -1017,8 +1024,9 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     final canExpand =
         !searching && (creator.fromSearch || videos.length > 2 || total > 2);
     final showLoadAll = creator.fromSearch || !allLoaded;
-    final countLabel =
-        creator.fromSearch ? '${creator.videos.length}+ 个视频' : '$total 个视频';
+    final countLabel = creator.fromSearch
+        ? '${creator.videos.length}+ 个视频'
+        : '$total 个视频';
     final loadLabel = creator.fromSearch ? '加载全部视频' : '加载全部 $total 个视频';
 
     void toggleExpanded() {
@@ -1190,10 +1198,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                 Expanded(
                   child: Text(
                     '正在后台获取视频…',
-                    style: TextStyle(
-                      color: spec.textSecondary,
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: spec.textSecondary, fontSize: 11),
                   ),
                 ),
                 TextButton(
@@ -1293,10 +1298,7 @@ class _UpSubmission {
   final String collectionName;
   final String upName;
 
-  const _UpSubmission({
-    required this.collectionName,
-    required this.upName,
-  });
+  const _UpSubmission({required this.collectionName, required this.upName});
 }
 
 class _VideoCategory {
@@ -1400,8 +1402,10 @@ class _AddUpDialogState extends State<_AddUpDialog> {
   @override
   Widget build(BuildContext context) {
     final spec = context.watch<ThemeProvider>().currentSpec;
-    final dialogWidth =
-        (MediaQuery.sizeOf(context).width - 96).clamp(240.0, 360.0);
+    final dialogWidth = (MediaQuery.sizeOf(context).width - 96).clamp(
+      240.0,
+      360.0,
+    );
     return AlertDialog(
       backgroundColor: spec.surface,
       surfaceTintColor: Colors.transparent,
@@ -1442,10 +1446,7 @@ class _AddUpDialogState extends State<_AddUpDialog> {
                 requestFocusOnTap: true,
                 label: Text(
                   '合集名称',
-                  style: TextStyle(
-                    color: spec.textSecondary,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: spec.textSecondary, fontSize: 12),
                 ),
                 hintText: '选择已有合集或输入新名称',
                 textStyle: TextStyle(
@@ -1455,10 +1456,8 @@ class _AddUpDialogState extends State<_AddUpDialog> {
                 ),
                 dropdownMenuEntries: widget.collectionNames
                     .map(
-                      (name) => DropdownMenuEntry<String>(
-                        value: name,
-                        label: name,
-                      ),
+                      (name) =>
+                          DropdownMenuEntry<String>(value: name, label: name),
                     )
                     .toList(),
               ),
@@ -1479,10 +1478,7 @@ class _AddUpDialogState extends State<_AddUpDialog> {
                     color: spec.textSecondary,
                     fontSize: 12,
                   ),
-                  hintStyle: TextStyle(
-                    color: spec.textSecondary,
-                    fontSize: 12,
-                  ),
+                  hintStyle: TextStyle(color: spec.textSecondary, fontSize: 12),
                   filled: true,
                   fillColor: spec.textPrimary.withValues(alpha: .04),
                   contentPadding: const EdgeInsets.symmetric(
@@ -1527,10 +1523,7 @@ class _AddUpDialogState extends State<_AddUpDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: Text(
-            '取消',
-            style: TextStyle(color: spec.textSecondary),
-          ),
+          child: Text('取消', style: TextStyle(color: spec.textSecondary)),
         ),
         FilledButton(
           onPressed: _submit,
