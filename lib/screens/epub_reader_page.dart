@@ -17,11 +17,7 @@ class EpubReaderPage extends StatefulWidget {
   final EpubBook book;
   final int? initialChapter;
 
-  const EpubReaderPage({
-    super.key,
-    required this.book,
-    this.initialChapter,
-  });
+  const EpubReaderPage({super.key, required this.book, this.initialChapter});
 
   @override
   State<EpubReaderPage> createState() => _EpubReaderPageState();
@@ -258,9 +254,7 @@ class _EpubReaderPageState extends State<EpubReaderPage>
                 controller: controller,
                 autofocus: true,
                 maxLines: 4,
-                decoration: const InputDecoration(
-                  hintText: '写下你的想法…',
-                ),
+                decoration: const InputDecoration(hintText: '写下你的想法…'),
               ),
             ],
           ),
@@ -563,8 +557,9 @@ class _EpubReaderPageState extends State<EpubReaderPage>
           child: Container(
             decoration: BoxDecoration(
               color: spec.background,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(26)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(26),
+              ),
             ),
             child: SafeArea(
               top: false,
@@ -738,10 +733,7 @@ class _EpubReaderPageState extends State<EpubReaderPage>
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => _NotesSheet(
-        notes: _notes,
-        onDelete: _removeNote,
-      ),
+      builder: (_) => _NotesSheet(notes: _notes, onDelete: _removeNote),
     );
     if (result != null) await _goToChapter(result);
   }
@@ -789,10 +781,7 @@ class _EpubReaderPageState extends State<EpubReaderPage>
                     const SizedBox(height: 4),
                     Text(
                       '正文会随字号重新排版',
-                      style: TextStyle(
-                        color: spec.textSecondary,
-                        fontSize: 11,
-                      ),
+                      style: TextStyle(color: spec.textSecondary, fontSize: 11),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -848,9 +837,8 @@ class _EpubReaderPageState extends State<EpubReaderPage>
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _tapZone({required VoidCallback? onTap, required IconData icon}) {
@@ -883,8 +871,9 @@ class _EpubReaderPageState extends State<EpubReaderPage>
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
             decoration: BoxDecoration(
               color: spec.background,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(26)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(26),
+              ),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -912,10 +901,7 @@ class _EpubReaderPageState extends State<EpubReaderPage>
                 const SizedBox(height: 4),
                 Text(
                   '选择舒适的阅读背景',
-                  style: TextStyle(
-                    color: spec.textSecondary,
-                    fontSize: 11,
-                  ),
+                  style: TextStyle(color: spec.textSecondary, fontSize: 11),
                 ),
                 const SizedBox(height: 14),
                 Wrap(
@@ -924,11 +910,26 @@ class _EpubReaderPageState extends State<EpubReaderPage>
                   children: [
                     _bgOption(sheetContext, 0, '默认', null, spec),
                     _bgOption(
-                        sheetContext, 1, '米黄', const Color(0xFFF6EFE3), spec),
+                      sheetContext,
+                      1,
+                      '米黄',
+                      const Color(0xFFF6EFE3),
+                      spec,
+                    ),
                     _bgOption(
-                        sheetContext, 2, '护眼绿', const Color(0xFFE8F0E3), spec),
+                      sheetContext,
+                      2,
+                      '护眼绿',
+                      const Color(0xFFE8F0E3),
+                      spec,
+                    ),
                     _bgOption(
-                        sheetContext, 3, '夜间', const Color(0xFF15181D), spec),
+                      sheetContext,
+                      3,
+                      '夜间',
+                      const Color(0xFF15181D),
+                      spec,
+                    ),
                   ],
                 ),
               ],
@@ -986,9 +987,7 @@ class _EpubReaderPageState extends State<EpubReaderPage>
     if (!_ready) {
       return Scaffold(
         backgroundColor: spec.background,
-        body: Center(
-          child: CircularProgressIndicator(color: spec.primary),
-        ),
+        body: Center(child: CircularProgressIndicator(color: spec.primary)),
       );
     }
     return Scaffold(
@@ -1054,22 +1053,10 @@ class _EpubReaderPageState extends State<EpubReaderPage>
               if (value == 'bg') _showBgSettings();
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'highlights',
-                child: Text('我的划线'),
-              ),
-              PopupMenuItem(
-                value: 'notes',
-                child: Text('我的小笺'),
-              ),
-              PopupMenuItem(
-                value: 'font',
-                child: Text('调整字号'),
-              ),
-              PopupMenuItem(
-                value: 'bg',
-                child: Text('阅读底色'),
-              ),
+              PopupMenuItem(value: 'highlights', child: Text('我的划线')),
+              PopupMenuItem(value: 'notes', child: Text('我的小笺')),
+              PopupMenuItem(value: 'font', child: Text('调整字号')),
+              PopupMenuItem(value: 'bg', child: Text('阅读底色')),
             ],
           ),
         ],
@@ -1094,64 +1081,69 @@ class _EpubReaderPageState extends State<EpubReaderPage>
                   icon: Icons.chevron_left_rounded,
                 ),
                 Expanded(
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: Webview(_web),
-                      ),
-                      if (_pageLoading)
-                        Positioned.fill(
-                          child: ColoredBox(
-                            color: spec.background,
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: spec.primary,
-                                strokeWidth: 2.8,
-                              ),
-                            ),
-                          ),
-                        ),
-                      if (_error != null)
-                        Positioned.fill(
-                          child: ColoredBox(
-                            color: spec.background,
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(28),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.menu_book_rounded,
-                                      size: 38,
-                                      color: spec.textSecondary,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 820),
+                      child: SizedBox.expand(
+                        child: Stack(
+                          children: [
+                            Positioned.fill(child: Webview(_web)),
+                            if (_pageLoading)
+                              Positioned.fill(
+                                child: ColoredBox(
+                                  color: spec.background,
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      color: spec.primary,
+                                      strokeWidth: 2.8,
                                     ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      _error!,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: spec.textSecondary,
-                                        fontSize: 12,
-                                        height: 1.6,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    FilledButton.icon(
-                                      onPressed: _loadChapter,
-                                      icon: const Icon(
-                                        Icons.refresh_rounded,
-                                        size: 18,
-                                      ),
-                                      label: const Text('重试'),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
+                            if (_error != null)
+                              Positioned.fill(
+                                child: ColoredBox(
+                                  color: spec.background,
+                                  child: Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(28),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.menu_book_rounded,
+                                            size: 38,
+                                            color: spec.textSecondary,
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            _error!,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: spec.textSecondary,
+                                              fontSize: 12,
+                                              height: 1.6,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 14),
+                                          FilledButton.icon(
+                                            onPressed: _loadChapter,
+                                            icon: const Icon(
+                                              Icons.refresh_rounded,
+                                              size: 18,
+                                            ),
+                                            label: const Text('重试'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                    ],
+                      ),
+                    ),
                   ),
                 ),
                 _tapZone(
@@ -1437,10 +1429,8 @@ class _SearchSheetState extends State<_SearchSheet> {
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
-                              onTap: () => Navigator.pop(
-                                context,
-                                result.chapterIndex,
-                              ),
+                              onTap: () =>
+                                  Navigator.pop(context, result.chapterIndex),
                             );
                           },
                         ),
@@ -1599,9 +1589,7 @@ class _HighlightsSheetState extends State<_HighlightsSheet> {
                                   ),
                                 ),
                                 onTap: () => Navigator.pop(
-                                  context,
-                                  highlight.chapterIndex,
-                                ),
+                                    context, highlight.chapterIndex),
                                 trailing: IconButton(
                                   tooltip: '删除划线',
                                   onPressed: () => _delete(highlight),

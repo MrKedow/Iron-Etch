@@ -182,7 +182,7 @@ class EpubLibraryService extends ChangeNotifier {
   static const String defaultAssetPath =
       'flutter_assets/assets/books/iron_book.epub';
   static const String defaultDownloadUrl =
-      'https://github.com/MrKedow/Iron-Etch/releases/download/v3.0.0/iron_book.epub';
+      'https://github.com/MrKedow/Iron-Etch/releases/download/Android_v3.0.0/iron_book.epub';
   static const String jianguoyunDownloadUrl =
       'https://www.jianguoyun.com/c/dl-pubfile/%E5%8C%97%E7%A7%91%C2%B7%E5%81%A5%E8%BA%AB%E5%85%A8%E4%B9%A6%E3%80%90%E5%85%A89%E5%86%8C%E3%80%91.epub?td=tnknl8&xy=RXRob2Nhc0BvdXRsb29rLmNvbQ&ip=112.0.130.19&w=FmJ7oI3u0RVubNAJzpmWR9lLRmkxNXcIQ_KtfYNnaow&ha=DQaP5GgQ2omXCRj5468GIAA&cid=x7pEuJsSsfAM279rYpeQrQ';
 
@@ -256,8 +256,10 @@ class EpubLibraryService extends ChangeNotifier {
         if (data is List) {
           _books = data
               .whereType<Map>()
-              .map((item) =>
-                  EpubBookEntry.fromJson(Map<String, dynamic>.from(item)))
+              .map(
+                (item) =>
+                    EpubBookEntry.fromJson(Map<String, dynamic>.from(item)),
+              )
               .where((item) => item.id.isNotEmpty)
               .toList();
         }
@@ -420,25 +422,29 @@ class EpubLibraryService extends ChangeNotifier {
             await epubFile.delete();
           } catch (_) {}
         }
-        await _retrieveEpub(epubFile, (progress) {
-          _defaultDownloadProgress = progress;
-          onProgress?.call(progress);
-          _downloadProgressMap[defaultId] = BookDownloadProgress(
-            progress: progress,
-            speedBytesPerSecond: _defaultDownloadSpeed,
-            updatedAt: DateTime.now(),
-          );
-          notifyListeners();
-        }, (speed) {
-          _defaultDownloadSpeed = speed;
-          onProgressWithSpeed?.call(_defaultDownloadProgress, speed);
-          _downloadProgressMap[defaultId] = BookDownloadProgress(
-            progress: _defaultDownloadProgress,
-            speedBytesPerSecond: speed,
-            updatedAt: DateTime.now(),
-          );
-          notifyListeners();
-        });
+        await _retrieveEpub(
+          epubFile,
+          (progress) {
+            _defaultDownloadProgress = progress;
+            onProgress?.call(progress);
+            _downloadProgressMap[defaultId] = BookDownloadProgress(
+              progress: progress,
+              speedBytesPerSecond: _defaultDownloadSpeed,
+              updatedAt: DateTime.now(),
+            );
+            notifyListeners();
+          },
+          (speed) {
+            _defaultDownloadSpeed = speed;
+            onProgressWithSpeed?.call(_defaultDownloadProgress, speed);
+            _downloadProgressMap[defaultId] = BookDownloadProgress(
+              progress: _defaultDownloadProgress,
+              speedBytesPerSecond: speed,
+              updatedAt: DateTime.now(),
+            );
+            notifyListeners();
+          },
+        );
       }
       if (!_looksLikeCompleteZip(epubFile)) {
         try {
@@ -478,8 +484,10 @@ class EpubLibraryService extends ChangeNotifier {
     if (!await epubFile.exists()) {
       throw const EpubException('内置书尚未下载，请先下载');
     }
-    await (_defaultExtraction ??= _extractFile(epubFile.path, entry.rootPath)
-        .whenComplete(() => _defaultExtraction = null));
+    await (_defaultExtraction ??= _extractFile(
+      epubFile.path,
+      entry.rootPath,
+    ).whenComplete(() => _defaultExtraction = null));
     if (!isExtracted(entry)) {
       throw const EpubException('书籍解压失败，请重新下载');
     }
@@ -521,10 +529,9 @@ class EpubLibraryService extends ChangeNotifier {
   Future<bool> _adoptExternal(File epubFile) async {
     if (!Platform.isAndroid) return false;
     try {
-      final path = await _channel.invokeMethod<String>(
-        'externalDownloadPath',
-        {'fileName': _downloadFileName},
-      );
+      final path = await _channel.invokeMethod<String>('externalDownloadPath', {
+        'fileName': _downloadFileName,
+      });
       if (path == null) return false;
       final file = File(path);
       if (_looksLikeCompleteZip(file)) {
@@ -562,8 +569,9 @@ class EpubLibraryService extends ChangeNotifier {
           await client.send(request).timeout(const Duration(seconds: 5));
       if (response.statusCode != 200 && response.statusCode != 206) return null;
       final bytes = <int>[];
-      await for (final chunk
-          in response.stream.timeout(const Duration(seconds: 5))) {
+      await for (final chunk in response.stream.timeout(
+        const Duration(seconds: 5),
+      )) {
         bytes.addAll(chunk);
         if (bytes.length >= 512) break;
       }
@@ -657,8 +665,9 @@ class EpubLibraryService extends ChangeNotifier {
       final sink = partFile.openWrite();
       final sw = Stopwatch()..start();
       try {
-        await for (final chunk
-            in response.stream.timeout(const Duration(seconds: 60))) {
+        await for (final chunk in response.stream.timeout(
+          const Duration(seconds: 60),
+        )) {
           sink.add(chunk);
           received += chunk.length;
           if (sw.elapsedMilliseconds > 300) {
@@ -676,6 +685,9 @@ class EpubLibraryService extends ChangeNotifier {
       }
       if (!_looksLikeCompleteZip(partFile)) {
         throw const EpubException('下载文件不完整，请重试');
+      }
+      if (await epubFile.exists()) {
+        await epubFile.delete();
       }
       await partFile.rename(epubFile.path);
     } catch (_) {
@@ -819,8 +831,10 @@ class EpubLibraryService extends ChangeNotifier {
         if (list is List) {
           _highlightCache[bookId] = list
               .whereType<Map>()
-              .map((item) =>
-                  EpubHighlight.fromJson(Map<String, dynamic>.from(item)))
+              .map(
+                (item) =>
+                    EpubHighlight.fromJson(Map<String, dynamic>.from(item)),
+              )
               .toList();
           return List.unmodifiable(_highlightCache[bookId]!);
         }
@@ -936,9 +950,7 @@ class EpubLibraryService extends ChangeNotifier {
     _searchIndexCache[book.id] = built;
     try {
       await file.writeAsString(
-        jsonEncode(
-          built.map((key, value) => MapEntry(key.toString(), value)),
-        ),
+        jsonEncode(built.map((key, value) => MapEntry(key.toString(), value))),
       );
     } catch (_) {}
     return built;
@@ -1108,13 +1120,9 @@ class EpubLibraryService extends ChangeNotifier {
         if (tocItem.mediaType.contains('xhtml') ||
             tocItem.href.toLowerCase().endsWith('.xhtml') ||
             tocItem.href.toLowerCase().endsWith('.html')) {
-          toc.addAll(
-            await _parseNavToc(tocItem.filePath, chapterByPath),
-          );
+          toc.addAll(await _parseNavToc(tocItem.filePath, chapterByPath));
         } else {
-          toc.addAll(
-            await _parseNcxToc(tocItem.filePath, chapterByPath),
-          );
+          toc.addAll(await _parseNcxToc(tocItem.filePath, chapterByPath));
         }
       } catch (_) {}
     }
@@ -1178,9 +1186,9 @@ class EpubLibraryService extends ChangeNotifier {
     final doc = XmlDocument.parse(await File(filePath).readAsString());
     final base = File(filePath).parent.path;
     final result = <EpubTocEntry>[];
-    for (final navPoint in doc.descendants
-        .whereType<XmlElement>()
-        .where((element) => element.localName == 'navPoint')) {
+    for (final navPoint in doc.descendants.whereType<XmlElement>().where(
+          (element) => element.localName == 'navPoint',
+        )) {
       final label = _firstText(navPoint, 'text')?.trim() ?? '';
       final content = _firstElement(navPoint, 'content');
       final src = content?.getAttribute('src') ?? '';
@@ -1215,11 +1223,7 @@ class EpubLibraryService extends ChangeNotifier {
       final chapterIndex = chapterByPath[_resolve(base, href)];
       if (chapterIndex == null) continue;
       result.add(
-        EpubTocEntry(
-          title: title,
-          chapterIndex: chapterIndex,
-          level: 0,
-        ),
+        EpubTocEntry(title: title, chapterIndex: chapterIndex, level: 0),
       );
     }
     return result;
@@ -1255,9 +1259,9 @@ class EpubLibraryService extends ChangeNotifier {
 
   Iterable<XmlElement> _elements(XmlNode? node, String localName) {
     if (node == null) return const [];
-    return node.descendants
-        .whereType<XmlElement>()
-        .where((element) => element.localName == localName);
+    return node.descendants.whereType<XmlElement>().where(
+          (element) => element.localName == localName,
+        );
   }
 
   String? _firstText(XmlNode? node, String localName) {
@@ -1268,9 +1272,11 @@ class EpubLibraryService extends ChangeNotifier {
 
   String _resolve(String base, String href) {
     final clean = Uri.decodeFull(href.split('#').first);
-    final baseUri = Uri.directory(base.endsWith(Platform.pathSeparator)
-        ? base
-        : '$base${Platform.pathSeparator}');
+    final baseUri = Uri.directory(
+      base.endsWith(Platform.pathSeparator)
+          ? base
+          : '$base${Platform.pathSeparator}',
+    );
     return baseUri.resolve(clean).toFilePath();
   }
 

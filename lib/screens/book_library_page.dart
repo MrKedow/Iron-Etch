@@ -51,8 +51,10 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
     if (!mounted) return;
     setState(() {
       _gridView = prefs.getBool('library_grid_view') ?? true;
-      _shelfMaterial =
-          (prefs.getInt('library_shelf_material') ?? 1).clamp(0, 5);
+      _shelfMaterial = (prefs.getInt('library_shelf_material') ?? 1).clamp(
+        0,
+        5,
+      );
       _introVisible = !(prefs.getBool('library_intro_hidden') ?? false);
     });
   }
@@ -80,8 +82,9 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
             decoration: BoxDecoration(
               color: spec.background,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(26)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(26),
+              ),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -117,7 +120,9 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 160),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
                           color: active
                               ? spec.primary.withValues(alpha: .18)
@@ -219,10 +224,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => EpubReaderPage(
-            book: book,
-            initialChapter: saved,
-          ),
+          builder: (_) => EpubReaderPage(book: book, initialChapter: saved),
         ),
       );
       if (mounted) setState(() {});
@@ -252,9 +254,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
       setState(() => _busy = false);
       await Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => EpubReaderPage(book: book),
-        ),
+        MaterialPageRoute(builder: (_) => EpubReaderPage(book: book)),
       );
       if (mounted) setState(() {});
     } catch (error) {
@@ -334,9 +334,8 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -376,9 +375,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
       ),
       body: Stack(
         children: [
-          Positioned.fill(
-            child: _ShelfBackground(material: _shelfMaterial),
-          ),
+          Positioned.fill(child: _ShelfBackground(material: _shelfMaterial)),
           AnimatedBuilder(
             animation: _library,
             builder: (context, _) {
@@ -506,11 +503,11 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: _library.books.length,
                       gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 20,
-                        childAspectRatio: .5,
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 190,
+                        crossAxisSpacing: 14,
+                        mainAxisSpacing: 18,
+                        childAspectRatio: .55,
                       ),
                       itemBuilder: (context, index) {
                         final entry = _library.books[index];
@@ -564,8 +561,10 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                 child: Container(
                   width: 246,
                   margin: const EdgeInsets.symmetric(horizontal: 28),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 22,
+                    vertical: 24,
+                  ),
                   decoration: BoxDecoration(
                     color: spec.card,
                     borderRadius: BorderRadius.circular(24),
@@ -795,7 +794,9 @@ class _BookCard extends StatelessWidget {
                                 if (needsDownload && downloadInfo != null)
                                   Positioned.fill(
                                     child: Container(
-                                      color: Colors.black.withValues(alpha: .36),
+                                      color: Colors.black.withValues(
+                                        alpha: .36,
+                                      ),
                                       alignment: Alignment.center,
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
@@ -828,11 +829,12 @@ class _BookCard extends StatelessWidget {
                                           const SizedBox(height: 5),
                                           Text(
                                             formatDownloadSpeed(
-                                                downloadInfo
-                                                    .speedBytesPerSecond),
+                                              downloadInfo.speedBytesPerSecond,
+                                            ),
                                             style: TextStyle(
                                               color: Colors.white.withValues(
-                                                  alpha: .86),
+                                                alpha: .86,
+                                              ),
                                               fontSize: 8.5,
                                               fontWeight: FontWeight.w800,
                                             ),
@@ -861,8 +863,9 @@ class _BookCard extends StatelessWidget {
                                     color: Colors.black.withValues(alpha: .48),
                                     borderRadius: BorderRadius.circular(999),
                                     border: Border.all(
-                                      color:
-                                          Colors.white.withValues(alpha: .28),
+                                      color: Colors.white.withValues(
+                                        alpha: .28,
+                                      ),
                                     ),
                                   ),
                                   child: const Row(
@@ -904,8 +907,9 @@ class _BookCard extends StatelessWidget {
                                     color: Colors.black.withValues(alpha: .48),
                                     borderRadius: BorderRadius.circular(999),
                                     border: Border.all(
-                                      color:
-                                          Colors.white.withValues(alpha: .28),
+                                      color: Colors.white.withValues(
+                                        alpha: .28,
+                                      ),
                                     ),
                                   ),
                                   child: const Row(
@@ -1025,18 +1029,42 @@ class _ShelfSpec {
 }
 
 const List<_ShelfSpec> _shelfSpecs = [
-  _ShelfSpec(_ShelfMaterial.glass, [Color(0xFF33556A), Color(0xFF1B2C38)],
-      Color(0xFF5B7D92), Color(0xFF33556A)),
-  _ShelfSpec(_ShelfMaterial.wood, [Color(0xFF8A5A2B), Color(0xFF4E2E12)],
-      Color(0xFF9A6A38), Color(0xFF5C3A1A)),
-  _ShelfSpec(_ShelfMaterial.steel, [Color(0xFF4A515C), Color(0xFF22262C)],
-      Color(0xFF6A737F), Color(0xFF3A4048)),
-  _ShelfSpec(_ShelfMaterial.porcelain, [Color(0xFFF2ECE2), Color(0xFFD8CEBC)],
-      Color(0xFFFBF6EC), Color(0xFFC9BEA9)),
-  _ShelfSpec(_ShelfMaterial.lattice, [Color(0xFF23272E), Color(0xFF12151A)],
-      Color(0xFF3A3230), Color(0xFF221D1B)),
-  _ShelfSpec(_ShelfMaterial.rattan, [Color(0xFF4E6B3A), Color(0xFF2C3E1F)],
-      Color(0xFF6B8A52), Color(0xFF39502A)),
+  _ShelfSpec(
+    _ShelfMaterial.glass,
+    [Color(0xFF33556A), Color(0xFF1B2C38)],
+    Color(0xFF5B7D92),
+    Color(0xFF33556A),
+  ),
+  _ShelfSpec(
+    _ShelfMaterial.wood,
+    [Color(0xFF8A5A2B), Color(0xFF4E2E12)],
+    Color(0xFF9A6A38),
+    Color(0xFF5C3A1A),
+  ),
+  _ShelfSpec(
+    _ShelfMaterial.steel,
+    [Color(0xFF4A515C), Color(0xFF22262C)],
+    Color(0xFF6A737F),
+    Color(0xFF3A4048),
+  ),
+  _ShelfSpec(
+    _ShelfMaterial.porcelain,
+    [Color(0xFFF2ECE2), Color(0xFFD8CEBC)],
+    Color(0xFFFBF6EC),
+    Color(0xFFC9BEA9),
+  ),
+  _ShelfSpec(
+    _ShelfMaterial.lattice,
+    [Color(0xFF23272E), Color(0xFF12151A)],
+    Color(0xFF3A3230),
+    Color(0xFF221D1B),
+  ),
+  _ShelfSpec(
+    _ShelfMaterial.rattan,
+    [Color(0xFF4E6B3A), Color(0xFF2C3E1F)],
+    Color(0xFF6B8A52),
+    Color(0xFF39502A),
+  ),
 ];
 
 class _ShelfBackground extends StatelessWidget {
@@ -1046,8 +1074,9 @@ class _ShelfBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter:
-          _ShelfPainter(_shelfSpecs[material.clamp(0, _shelfSpecs.length - 1)]),
+      painter: _ShelfPainter(
+        _shelfSpecs[material.clamp(0, _shelfSpecs.length - 1)],
+      ),
     );
   }
 }
@@ -1102,8 +1131,9 @@ class _ShelfPainter extends CustomPainter {
     final rnd = math.Random(7);
     final grain = Paint()..strokeWidth = 1;
     for (double y = 6; y < size.height; y += 5 + rnd.nextDouble() * 6) {
-      grain.color =
-          Colors.black.withValues(alpha: .05 + rnd.nextDouble() * .07);
+      grain.color = Colors.black.withValues(
+        alpha: .05 + rnd.nextDouble() * .07,
+      );
       final path = Path()..moveTo(0, y);
       for (double x = 0; x <= size.width; x += 48) {
         path.lineTo(x, y + math.sin(x * .018 + y) * 2.6);
@@ -1135,8 +1165,9 @@ class _ShelfPainter extends CustomPainter {
     }
     final band = Paint();
     for (double y = 0; y < size.height; y += 48) {
-      band.color =
-          Colors.white.withValues(alpha: ((y ~/ 48) % 2 == 0) ? .04 : 0);
+      band.color = Colors.white.withValues(
+        alpha: ((y ~/ 48) % 2 == 0) ? .04 : 0,
+      );
       canvas.drawRect(Rect.fromLTWH(0, y, size.width, 24), band);
     }
     final highlight = Paint()
@@ -1162,7 +1193,10 @@ class _ShelfPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     for (double x = -size.height; x < size.width; x += size.width / 4) {
       canvas.drawLine(
-          Offset(x, 0), Offset(x + size.height, size.height), streak);
+        Offset(x, 0),
+        Offset(x + size.height, size.height),
+        streak,
+      );
     }
     final edge = Paint()
       ..color = Colors.white.withValues(alpha: .16)
@@ -1176,10 +1210,7 @@ class _ShelfPainter extends CustomPainter {
       ..shader = RadialGradient(
         center: const Alignment(-.4, -.6),
         radius: 1.3,
-        colors: [
-          Colors.white.withValues(alpha: .55),
-          Colors.transparent,
-        ],
+        colors: [Colors.white.withValues(alpha: .55), Colors.transparent],
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, highlight);
   }
@@ -1338,18 +1369,19 @@ class _BookListTile extends StatelessWidget {
                                 width: 22,
                                 height: 22,
                                 child: CircularProgressIndicator(
-                                  value:
-                                      downloadInfo.progress.clamp(0.0, 1.0),
+                                  value: downloadInfo.progress.clamp(0.0, 1.0),
                                   strokeWidth: 2.4,
                                   color: Colors.white,
-                                  backgroundColor:
-                                      Colors.white.withValues(alpha: .24),
+                                  backgroundColor: Colors.white.withValues(
+                                    alpha: .24,
+                                  ),
                                 ),
                               ),
                               const SizedBox(height: 3),
                               Text(
                                 formatDownloadSpeed(
-                                    downloadInfo.speedBytesPerSecond),
+                                  downloadInfo.speedBytesPerSecond,
+                                ),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 6.5,
@@ -1400,11 +1432,7 @@ class _BookListTile extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(
-              Icons.more_vert_rounded,
-              size: 18,
-              color: spec.textSecondary,
-            ),
+            Icon(Icons.more_vert_rounded, size: 18, color: spec.textSecondary),
           ],
         ),
       ),
