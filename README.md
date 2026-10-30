@@ -73,7 +73,7 @@
 ### 从源码构建
 ```bash
 从本仓库下载.dart和.yaml文件，在当前目录进入命令行（以下为示例）：
-cd fitness_tracker
+cd Iron_Etch
 flutter pub get
 flutter run -d android
 无问题后运行：

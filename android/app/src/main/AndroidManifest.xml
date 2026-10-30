@@ -1,10 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.fitness_tracker">
+    package="com.mrkedow.iron_etch">
     
     <uses-permission android:name="android.permission.INTERNET"/>
     
     <application
-        android:label="fitness_tracker"
+        android:label="铁镌"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false">
         

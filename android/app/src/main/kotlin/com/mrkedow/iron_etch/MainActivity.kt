@@ -1,4 +1,4 @@
-package com.example.fitness_tracker
+package com.mrkedow.iron_etch
 
 import io.flutter.embedding.android.FlutterActivity
 

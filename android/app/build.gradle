@@ -30,7 +30,7 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 android {
-    namespace 'com.example.fitness_tracker'
+    namespace 'com.mrkedow.iron_etch'
     compileSdkVersion 34
 
     compileOptions {
@@ -47,7 +47,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.fitness_tracker"
+        applicationId "com.mrkedow.iron_etch"
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion 34
         versionCode flutterVersionCode.toInteger()

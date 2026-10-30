@@ -1,11 +1,11 @@
 ; 脚本由 Inno Setup 脚本向导生成！
 ; 有关创建 Inno Setup 脚本文件的详细资料，请查阅帮助文档！
 
-#define MyAppName "健身数据管理系统"
-#define MyAppVersion "1.0.0"
-#define MyAppPublisher "健身数据管理系统"
-#define MyAppURL "https://example.com/"
-#define MyAppExeName "fitness_tracker.exe"
+#define MyAppName "铁镌"
+#define MyAppVersion "4.1.2"
+#define MyAppPublisher "MrKedow"
+#define MyAppURL "https://github.com/MrKedow/Fitness-Tracker"
+#define MyAppExeName "Iron_Etch.exe"
 
 [Setup]
 ; 注: AppId 的值为单独标识该应用程序。

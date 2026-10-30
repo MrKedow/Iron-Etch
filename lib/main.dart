@@ -6,10 +6,10 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:fitness_tracker/widgets/coach_character.dart';
+import 'package:iron_etch/widgets/coach_character.dart';
 // import 'package:excel/excel.dart';
 import 'package:excel/excel.dart' hide Border; // 避免与 Flutter 的 Border 冲突
-import 'package:fitness_tracker/widgets/draggable_cat.dart';
+import 'package:iron_etch/widgets/draggable_cat.dart';
 
 // ==================== Python 脚本服务 ====================
 class PythonUpdateService {
@@ -46,7 +46,7 @@ void main() async {
         Provider(create: (_) => ExcelCSVService()),
         ChangeNotifierProvider(create: (_) => NutstoreService()),
       ],
-      child: const FitnessApp(),
+      child: const IronEtchApp(),
     ),
   );
 }
@@ -446,6 +446,7 @@ class WorkoutProvider extends ChangeNotifier {
 
   void loadRecords(List<WorkoutRecord> newRecords) {
     _records = newRecords;
+    _saveRecords();
     notifyListeners();
   }
 
@@ -1006,20 +1007,53 @@ class NutstoreService extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>> downloadFileWithInfo(String savePath) async {
+    try {
+      final remotePath =
+          '$_baseUrl${Uri.encodeComponent(_cloudFolder)}/$_defaultFilename';
+      final url = Uri.parse(remotePath);
+      final client = http.Client();
+      final response = await client
+          .get(url, headers: {'Authorization': _getAuthHeader()})
+          .timeout(const Duration(seconds: 30));
+      client.close();
+      if (response.statusCode == 200) {
+        await File(savePath).writeAsBytes(response.bodyBytes);
+        return {
+          'success': true,
+          'statusCode': response.statusCode,
+          'error': null,
+        };
+      }
+      return {
+        'success': false,
+        'statusCode': response.statusCode,
+        'error': 'HTTP ${response.statusCode}',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'statusCode': null,
+        'error': e.toString(),
+      };
+    }
+  }
+
   Future<bool> checkFileExists() async {
     try {
       final remotePath =
           '$_baseUrl${Uri.encodeComponent(_cloudFolder)}/$_defaultFilename';
       final url = Uri.parse(remotePath);
       final client = http.Client();
-      final response = await client.head(
-        url,
-        headers: {
-          'Authorization': _getAuthHeader(),
-        },
-      );
+      final request = http.Request('PROPFIND', url);
+      request.headers['Authorization'] = _getAuthHeader();
+      request.headers['Depth'] = '0';
+      final response = await client
+          .send(request)
+          .timeout(const Duration(seconds: 15));
+      final body = await http.Response.fromStream(response);
       client.close();
-      return response.statusCode == 200;
+      return body.statusCode == 207;
     } catch (e) {
       debugPrint('检查文件存在失败: $e');
       return false;
@@ -1067,14 +1101,14 @@ class NutstoreService extends ChangeNotifier {
 }
 
 // ==================== 主应用 ====================
-class FitnessApp extends StatelessWidget {
-  const FitnessApp({super.key});
+class IronEtchApp extends StatelessWidget {
+  const IronEtchApp({super.key});
   @override
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         return MaterialApp(
-          title: '健身数据管理系统 Fitness-Tracker_Win_v4.0.2',
+          title: '铁镌 Iron_Etch Win_v4.1.2',
           debugShowCheckedModeBanner: false,
           theme: themeProvider.currentTheme,
           home: const MainScreen(),
@@ -1424,7 +1458,10 @@ class _MainScreenState extends State<MainScreen> {
       final filePath = await excelService.exportToExcel(provider.records);
       if (filePath == null) throw Exception('导出数据失败');
       provider.setLastExportPath(filePath);
-      await nutstore.uploadFile(filePath);
+      final uploaded = await nutstore.uploadFile(filePath);
+      if (!uploaded) {
+        throw Exception('坚果云返回失败，请检查应用密码或网络');
+      }
       _showToast('数据已成功上传到坚果云！');
     } catch (e) {
       _showToast('上传失败: $e', isError: true);
@@ -1441,11 +1478,6 @@ class _MainScreenState extends State<MainScreen> {
       _showCloudLoginDialog(context);
       return;
     }
-    final fileExists = await nutstore.checkFileExists();
-    if (!fileExists) {
-      _showToast('云文件中不存在，请先上传', isError: true);
-      return;
-    }
     setState(() => _isLoading = true);
     try {
       String savePath;
@@ -1456,9 +1488,20 @@ class _MainScreenState extends State<MainScreen> {
       } else {
         savePath = provider.lastExportPath!;
       }
-      await nutstore.downloadFile(savePath);
+      final result = await nutstore.downloadFileWithInfo(savePath);
+      if (result['success'] != true) {
+        final status = result['statusCode'];
+        if (status == 404) {
+          if (mounted) _showToast('云文件中不存在，请先上传', isError: true);
+        } else {
+          final reason = result['error'] ?? '未知错误';
+          if (mounted) _showToast('下载失败: $reason', isError: true);
+        }
+        return;
+      }
       final records = await excelService.importFromExcel(savePath);
       if (records.isNotEmpty) {
+        provider.loadRecords(records);
         if (mounted) {
           _showDownloadSuccessDialog(context, savePath);
         }

@@ -1,7 +1,7 @@
-name: fitness_tracker
+name: iron_etch
 description: 适用于Windows平台，是一个专为Windows平台设计的现代化个人健身数据管理系统。
 publish_to: "none"
-version: 3.1.1+1
+version: 4.1.2+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -27,6 +27,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+
+dependency_overrides:
+  webview_windows:
+    path: third_party/webview_windows
 
 flutter:
   uses-material-design: true
