@@ -1,13 +1,15 @@
 name: iron_etch
-description: 适用于Windows平台，是一个专为Windows平台设计的现代化个人健身数据管理系统。
+description: 铁镌 - 镌刻每一次撸铁的现代化个人健身数据管理系统（Windows）。
 publish_to: "none"
-version: 4.1.2+1
+version: 5.0.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
   cupertino_icons: ^1.0.5
   provider: ^6.1.1
@@ -17,11 +19,16 @@ dependencies:
   image_picker: ^1.0.5
   flutter_spinkit: ^5.2.0
   http: ^1.1.0
-  fluttertoast: ^9.0.0
+  crypto: ^3.0.6
   url_launcher: ^6.2.5
   webview_windows: ^0.4.0
   excel: ^4.0.0
-  process_run: ^1.1.0
+  html: ^0.15.4
+  xml: ^6.3.0
+  share_plus: ^10.0.0
+  file_picker: ^11.0.3
+  archive: ^3.6.1
+  path: ^1.9.0
 
 dev_dependencies:
   flutter_test:
@@ -48,3 +55,6 @@ flutter:
     - assets/熊猫头.gif
     - assets/一起跳舞.gif
     - assets/coach_rules.json
+    - assets/bili_list.json
+    - assets/images/
+    - assets/exercises/

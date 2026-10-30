@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "MrKedow" "\0"
-            VALUE "FileDescription", "Iron_Etch Win_v4.1.2" "\0"
+            VALUE "FileDescription", "Iron_Etch Win_v5.0.0" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "健身数据管理系统 by MrKedow" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 MrKedow. All rights reserved." "\0"
             VALUE "OriginalFilename", "健身数据管理系统 by MrKedow.exe" "\0"
-            VALUE "ProductName", "Iron_Etch Win_v4.1.2" "\0"
+            VALUE "ProductName", "Iron_Etch Win_v5.0.0" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

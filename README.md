@@ -3,6 +3,7 @@
 ---
 #### Newest CSDN：[Android_v1.1](https://blog.csdn.net/Ethocas/article/details/160692111)
 ---
+#### 2026.10.30 [Win_v5.0.0 Release](https://github.com/MrKedow/Iron-Etch/releases/tag/Win_v5.0.0)
 #### 2026.04.30 [Android_v1.1 Release](https://github.com/MrKedow/Fitness-Tracker/releases/tag/Android_v1.1)
 #### 2026.04.24 [Android_v1.0 Release](https://github.com/MrKedow/Fitness-Tracker/releases/tag/Android_v1.0)
 #### 2026.04.20 [Win_v4.0 Release](https://github.com/MrKedow/Fitness-Tracker/releases/tag/Win_v4.0)

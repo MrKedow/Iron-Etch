@@ -2,7 +2,7 @@
 ; 有关创建 Inno Setup 脚本文件的详细资料，请查阅帮助文档！
 
 #define MyAppName "铁镌"
-#define MyAppVersion "4.1.2"
+#define MyAppVersion "5.0.0"
 #define MyAppPublisher "MrKedow"
 #define MyAppURL "https://github.com/MrKedow/Fitness-Tracker"
 #define MyAppExeName "Iron_Etch.exe"
@@ -24,7 +24,7 @@ DisableProgramGroupPage=yes
 ; 移除以下行中的注释以在安装时运行一些管理任务（需要重新启动）
 ;PrivilegesRequired=admin
 ; 为安装程序设置图标
-SetupIconFile=app_icon.ico
+SetupIconFile=windows\runner\resources\app_icon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

@@ -50,20 +50,20 @@ flutter:
   
   # 声明图标资源
   assets:
-    - assets/icon/icon.png
+    - assets/icon/launcher_icon.png
 
 # 配置应用图标
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/icon/icon.png"
+  image_path: "assets/icon/launcher_icon.png"
   # Windows配置
   windows:
-    image_path: "assets/icon/icon.png"
+    image_path: "assets/icon/launcher_icon.png"
     icon_size: 48  # 可以指定大小，但通常自动生成所有尺寸
   # macOS配置
   macos:
-    image_path: "assets/icon/icon.png"
+    image_path: "assets/icon/launcher_icon.png"
   # Linux配置
   linux:
-    image_path: "assets/icon/icon.png"
+    image_path: "assets/icon/launcher_icon.png"
