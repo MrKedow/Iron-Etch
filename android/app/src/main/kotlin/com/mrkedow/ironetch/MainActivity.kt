@@ -1,4 +1,4 @@
-package com.example.fitness_tracker
+package com.mrkedow.ironetch
 
 import android.app.DownloadManager
 import android.content.Context
@@ -13,7 +13,7 @@ import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
 
 class MainActivity : FlutterActivity() {
-    private val channelName = "com.MrKedow.FT/epub"
+    private val channelName = "com.mrkedow.ironetch/epub"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

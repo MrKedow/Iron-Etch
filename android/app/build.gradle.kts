@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.fitness_tracker"
+    namespace = "com.mrkedow.ironetch"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -17,12 +17,13 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.MrKedow.FT"
+        applicationId = "com.mrkedow.ironetch"
         minSdk = flutter.minSdkVersion
         targetSdk = 34
         versionCode = 7
         versionName = "Android_v3.2.2"
     }
+
 
     signingConfigs {
         create("release") {

@@ -1,0 +1,62 @@
+# Iron Etch Source-Available License v1.0
+
+Copyright (c) 2026 MrKedow. All rights reserved.
+
+This repository and its contents, including source code, assets, artwork, documentation, and configuration files (the "Software"), are made available for viewing, cloning, and forking solely for personal study, evaluation, and contribution purposes.
+
+This is a source-available license. It is NOT an OSI-approved open-source license.
+
+## 1. Limited Permission
+
+Subject to the terms below, you are granted a limited, non-exclusive, non-transferable, revocable permission to:
+
+- view and read the Software;
+- clone or fork the Software through GitHub's built-in functionality for personal study and evaluation;
+- submit bug reports, suggestions, or pull requests to the official repository.
+
+No other rights are granted, whether by implication, estoppel, or otherwise.
+
+## 2. Prohibited Uses
+
+Without prior written permission from the copyright holder, you may NOT:
+
+1. copy, reproduce, publish, distribute, sublicense, sell, rent, lease, or otherwise make the Software or any derivative work available to any third party;
+2. use the Software, in whole or in part, for any commercial purpose;
+3. publish, upload, or distribute any application, package, installer, or binary built from the Software;
+4. publish any build of the Software on Google Play, Huawei AppGallery, Honor App Market, Xiaomi GetApps, OPPO Software Store, vivo App Store, or any other application store or distribution platform;
+5. modify, adapt, translate, or create derivative works for distribution;
+6. remove, obscure, or alter any copyright, license, trademark, or attribution notices;
+7. use the names "铁镌", "Iron Etch", "IronEtch", associated logos, icons, or other brand features;
+8. use the Software in any way that suggests official authorization, endorsement, or affiliation.
+
+## 3. Contributions
+
+By submitting a pull request, patch, issue, or other contribution, you grant the copyright holder a perpetual, worldwide, royalty-free, irrevocable license to use, reproduce, modify, distribute, and relicense your contribution as part of the Software.
+
+## 4. Official Builds
+
+Official binaries are distributed only through channels authorized by the copyright holder, including official application-store listings and official GitHub releases. Any other build is unauthorized and must not be represented as an official version.
+
+## 5. No Trademark or Patent License
+
+No trademark, service mark, trade name, logo, or patent rights are granted by this license. See TRADEMARK.md.
+
+## 6. Termination
+
+Any violation of this license automatically terminates all permissions granted to you. Upon termination, you must stop using the Software and delete all copies and derivative works in your possession or control.
+
+## 7. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
+
+## 8. Chinese Summary
+
+本许可证仅为方便阅读提供摘要，英文正文为准：
+
+- 本项目属于“源码可见”，不是 OSI 开源许可。
+- 只允许查看、通过 GitHub 克隆/派生用于个人学习和评估，以及向官方仓库提交贡献。
+- 禁止商用、再分发、发布安装包、上架任何应用商店、制作衍生发行版。
+- 禁止使用“铁镌 / Iron Etch”名称、图标、Logo 或暗示官方授权。
+- 官方安装包只能由版权持有人通过官方渠道发布。
+
+For permissions beyond this license, contact the copyright holder.

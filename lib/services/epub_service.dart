@@ -99,15 +99,15 @@ class EpubBookEntry {
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'author': author,
-    'rootPath': rootPath,
-    'builtIn': builtIn,
-    'deleted': deleted,
-    'coverPath': coverPath,
-    'addedAt': addedAt,
-  };
+        'id': id,
+        'title': title,
+        'author': author,
+        'rootPath': rootPath,
+        'builtIn': builtIn,
+        'deleted': deleted,
+        'coverPath': coverPath,
+        'addedAt': addedAt,
+      };
 }
 
 class EpubHighlight {
@@ -139,13 +139,13 @@ class EpubHighlight {
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'bookId': bookId,
-    'chapterIndex': chapterIndex,
-    'chapterTitle': chapterTitle,
-    'text': text,
-    'createdAt': createdAt,
-  };
+        'id': id,
+        'bookId': bookId,
+        'chapterIndex': chapterIndex,
+        'chapterTitle': chapterTitle,
+        'text': text,
+        'createdAt': createdAt,
+      };
 }
 
 class EpubSearchResult {
@@ -209,7 +209,8 @@ class EpubLibraryService extends ChangeNotifier {
     'https://gh-proxy.ygxz.in/',
   ];
   static const String _downloadFileName = 'iron_book.epub';
-  static const MethodChannel _channel = MethodChannel('com.MrKedow.FT/epub');
+  static const MethodChannel _channel =
+      MethodChannel('com.mrkedow.ironetch/epub');
 
   Directory? _baseDir;
   Directory? _coverDir;
@@ -564,9 +565,8 @@ class EpubLibraryService extends ChangeNotifier {
       final sw = Stopwatch()..start();
       final request = http.Request('GET', Uri.parse(url));
       request.headers['Range'] = 'bytes=0-4095';
-      final response = await client
-          .send(request)
-          .timeout(const Duration(seconds: 5));
+      final response =
+          await client.send(request).timeout(const Duration(seconds: 5));
       if (response.statusCode != 200 && response.statusCode != 206) return null;
       final bytes = <int>[];
       await for (final chunk in response.stream.timeout(
@@ -655,9 +655,8 @@ class EpubLibraryService extends ChangeNotifier {
     final client = http.Client();
     try {
       final request = http.Request('GET', Uri.parse(url));
-      final response = await client
-          .send(request)
-          .timeout(const Duration(seconds: 30));
+      final response =
+          await client.send(request).timeout(const Duration(seconds: 30));
       if (response.statusCode != 200) {
         throw EpubException('下载失败：HTTP ${response.statusCode}');
       }
@@ -966,8 +965,7 @@ class EpubLibraryService extends ChangeNotifier {
     final textColor = dark ? '#F4EFE7' : '#29231D';
     final mutedColor = dark ? '#B9B0A4' : '#756B61';
     final bodyBackground = background ?? (dark ? 'transparent' : 'transparent');
-    final themeStyles =
-        '''
+    final themeStyles = '''
 <style id="ft-reader-style">
   :root { color-scheme: ${dark ? 'dark' : 'light'}; }
   html, body { background: $bodyBackground !important; color: $textColor !important; }
@@ -1052,8 +1050,7 @@ class EpubLibraryService extends ChangeNotifier {
       if (item == null) continue;
       final type = item.mediaType.toLowerCase();
       final href = item.href.toLowerCase();
-      final isHtml =
-          type.contains('xhtml') ||
+      final isHtml = type.contains('xhtml') ||
           type.contains('html') ||
           href.endsWith('.html') ||
           href.endsWith('.htm') ||
@@ -1160,8 +1157,8 @@ class EpubLibraryService extends ChangeNotifier {
     final base = File(filePath).parent.path;
     final result = <EpubTocEntry>[];
     for (final navPoint in doc.descendants.whereType<XmlElement>().where(
-      (element) => element.localName == 'navPoint',
-    )) {
+          (element) => element.localName == 'navPoint',
+        )) {
       final label = _firstText(navPoint, 'text')?.trim() ?? '';
       final content = _firstElement(navPoint, 'content');
       final src = content?.getAttribute('src') ?? '';
@@ -1233,8 +1230,8 @@ class EpubLibraryService extends ChangeNotifier {
   Iterable<XmlElement> _elements(XmlNode? node, String localName) {
     if (node == null) return const [];
     return node.descendants.whereType<XmlElement>().where(
-      (element) => element.localName == localName,
-    );
+          (element) => element.localName == localName,
+        );
   }
 
   String? _firstText(XmlNode? node, String localName) {
@@ -1254,9 +1251,8 @@ class EpubLibraryService extends ChangeNotifier {
   }
 
   Future<String> _cacheCover(String bookId, File cover) async {
-    final extension = cover.path.toLowerCase().endsWith('.png')
-        ? '.png'
-        : '.jpg';
+    final extension =
+        cover.path.toLowerCase().endsWith('.png') ? '.png' : '.jpg';
     final target = File('${_coverDir!.path}/$bookId$extension');
     await cover.copy(target.path);
     return target.path;

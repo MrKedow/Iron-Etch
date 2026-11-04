@@ -10,6 +10,8 @@
 - 默认分支：`Windows`
 - 其他分支：`Android`、`HTML`
 
+> 正式商店发行、签名配置、渠道打包与发布流程由维护者通过私有发布流程管理，不在公开仓库提供。
+
 ## 功能
 
 ### 训练记录
@@ -71,26 +73,23 @@
 - Gradle 9.2.0、Android Gradle Plugin 9.0.1、Kotlin 2.3.20
 - compileSdk 36
 
-## 构建
+## 开发构建
+
+公开仓库仅提供开发调试构建说明，不包含商店签名、AAB 打包、渠道发布和正式分发流程。
 
 ```powershell
 flutter pub get
 flutter analyze
-flutter build apk --release
+flutter build apk --debug
 ```
 
-输出：
-
-```text
-build\app\outputs\flutter-apk\app-release.apk
-```
-
-调试安装：
+安装调试包：
 
 ```powershell
-flutter build apk --debug
 adb install -r build\app\outputs\flutter-apk\app-debug.apk
 ```
+
+正式发行版本由维护者使用私有发布文档构建和签名，公开源码不代表官方发行授权。
 
 ## 目录结构
 
@@ -108,6 +107,22 @@ assets/
   coach_rules.json          AI 教练知识库
   bili_list.json            B 站视频合集
 ```
+
+## 许可证
+
+本仓库采用 **Source-Available** 授权，不是 OSI 开源许可。源码仅允许查看、通过 GitHub 克隆/派生用于个人学习和评估，以及向官方仓库提交贡献。
+
+禁止商用、再分发、发布安装包、上架应用商店、制作衍生发行版，或使用“铁镌 / Iron Etch”名称与图标暗示官方授权。
+
+详见：
+
+- `LICENSE`
+- `NOTICE`
+- `TRADEMARK.md`
+
+官方安装包只通过授权应用商店和官方 GitHub Release 发布：
+
+<https://github.com/MrKedow/Iron-Etch/releases>
 
 ## 说明
 
