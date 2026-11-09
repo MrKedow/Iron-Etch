@@ -29,6 +29,7 @@ import 'package:fitness_tracker/widgets/status_banner.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:fitness_tracker/services/ai_coach_service.dart';
+import 'package:fitness_tracker/services/media_permission.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -2823,6 +2824,13 @@ class _ProjectCardState extends State<_ProjectCard> {
     if (_scanningDashboard) return;
     final source = await _choosePhotoSource();
     if (source == null || !mounted) return;
+    final granted = await MediaPermission.request(
+      context,
+      source == ImageSource.camera
+          ? MediaPermissionType.camera
+          : MediaPermissionType.gallery,
+    );
+    if (!granted || !mounted) return;
     final picked = await ImagePicker().pickImage(
       source: source,
       imageQuality: 88,
@@ -3271,41 +3279,44 @@ class _ProjectCardState extends State<_ProjectCard> {
                 if (_isCardio && settings.dashboardCameraEnabled) ...[
                   const SizedBox(width: 2),
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
-                    child: ValueListenableBuilder<String?>(
-                      valueListenable: widget.photoNotifier,
-                      builder: (context, photoPath, _) => Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          _DashboardCameraButton(
-                            spec: spec,
-                            scanning: _scanningDashboard,
-                            onPressed:
-                                _scanningDashboard ? null : _pickCheckinPhoto,
-                          ),
-                          if (photoPath != null)
-                            Positioned(
-                              right: -2,
-                              top: -2,
-                              child: Container(
-                                width: 15,
-                                height: 15,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF22C55E),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: spec.card,
-                                    width: 1.5,
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Transform.translate(
+                      offset: const Offset(7, 0),
+                      child: ValueListenableBuilder<String?>(
+                        valueListenable: widget.photoNotifier,
+                        builder: (context, photoPath, _) => Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            _DashboardCameraButton(
+                              spec: spec,
+                              scanning: _scanningDashboard,
+                              onPressed:
+                                  _scanningDashboard ? null : _pickCheckinPhoto,
+                            ),
+                            if (photoPath != null)
+                              Positioned(
+                                right: -2,
+                                top: -2,
+                                child: Container(
+                                  width: 15,
+                                  height: 15,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF22C55E),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: spec.card,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.check_rounded,
+                                    size: 10,
+                                    color: Colors.white,
                                   ),
                                 ),
-                                child: const Icon(
-                                  Icons.check_rounded,
-                                  size: 10,
-                                  color: Colors.white,
-                                ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),

@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../main.dart';
 import '../providers/app_providers.dart';
 import '../services/ai_coach_service.dart';
+import '../services/media_permission.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
 import '../widgets/status_banner.dart';
@@ -124,6 +125,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _pickAvatar(SettingsProvider settings) async {
     try {
+      final granted =
+          await MediaPermission.request(context, MediaPermissionType.gallery);
+      if (!granted || !mounted) return;
       final picked = await ImagePicker().pickImage(
         source: ImageSource.gallery,
         maxWidth: 1200,

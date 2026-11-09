@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_providers.dart';
+import '../services/media_permission.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
 
@@ -202,6 +203,9 @@ class ThemeGalleryPage extends StatelessWidget {
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () async {
+                            final granted = await MediaPermission.request(
+                                context, MediaPermissionType.gallery);
+                            if (!granted || !context.mounted) return;
                             final picker = ImagePicker();
                             final picked = await picker.pickImage(
                               source: ImageSource.gallery,
