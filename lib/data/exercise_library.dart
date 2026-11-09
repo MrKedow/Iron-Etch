@@ -1,3 +1,5 @@
+import 'exercise_library_generated.dart';
+
 enum ExerciseKind {
   strength('力量', '💪'),
   cardio('有氧', '🏃'),
@@ -36,6 +38,7 @@ class ExerciseDefinition {
   final List<String> emphasis;
   final String cue;
   final double met;
+  final String? imageSlug;
 
   const ExerciseDefinition({
     required this.name,
@@ -48,6 +51,7 @@ class ExerciseDefinition {
     required this.emphasis,
     required this.cue,
     required this.met,
+    this.imageSlug,
   });
 
   bool get isTimeBased =>
@@ -58,7 +62,10 @@ class ExerciseDefinition {
 
 class ExerciseLibrary {
   static const String source =
-      '动作分类与肌群命名参考 ExRx.net 肌肉目录、ACE 动作库、NASM 矫正训练体系与 ACSM 运动测试与处方指南。';
+      '动作分类与肌群命名参考 ExRx.net、ACE、NASM 与 ACSM。动作数据与演示图来自 '
+      'exercises-dataset / exercises-dataset-zh（MIT；媒体 © Gym visual — '
+      'https://gymvisual.com/，180×180）、free-exercise-db / exercises.json'
+      '（Public Domain），并使用 open-exercisedb（MIT）交叉校验。';
 
   static const Map<String, MuscleGroup> groups = {
     '胸': MuscleGroup(
@@ -168,6 +175,34 @@ class ExerciseLibrary {
     '有氧',
   ];
 
+  static ExerciseKind _kindFromLabel(String label) {
+    return ExerciseKind.values.firstWhere(
+      (kind) => kind.label == label,
+      orElse: () => ExerciseKind.strength,
+    );
+  }
+
+  static ExerciseDefinition _fromGenerated(Map<String, Object?> item) {
+    return ExerciseDefinition(
+      name: item['name'] as String,
+      group: item['group'] as String,
+      kind: _kindFromLabel(item['kind'] as String),
+      equipment: item['equipment'] as String,
+      pattern: item['pattern'] as String,
+      difficulty: item['difficulty'] as int,
+      aliases: (item['aliases'] as List).cast<String>(),
+      emphasis: (item['emphasis'] as List).cast<String>(),
+      cue: item['cue'] as String,
+      met: (item['met'] as num).toDouble(),
+      imageSlug: item['imageSlug'] as String?,
+    );
+  }
+
+  static final List<ExerciseDefinition> _generated = [
+    for (final item in generatedExercises) _fromGenerated(item),
+    for (final item in freeGeneratedExercises) _fromGenerated(item),
+  ];
+
   static final List<ExerciseDefinition> all = [
     ..._chest,
     ..._back,
@@ -182,6 +217,7 @@ class ExerciseLibrary {
     ..._mobility,
     ..._functional,
     ..._sport,
+    ..._generated,
   ];
 
   static ExerciseDefinition? findByName(String name) {

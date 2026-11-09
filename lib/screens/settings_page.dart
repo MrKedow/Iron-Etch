@@ -725,7 +725,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 4),
             Text(
-              '版本 3.2.2（Android）',
+              '版本 3.3.2（Android）',
               style: TextStyle(color: spec.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 14),
@@ -781,9 +781,30 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             _ackItem(
               spec,
-              'free-exercise-db',
-              '动作教学示意图（约 876 个动作的开源动作库）',
+              'exercises-dataset / exercises-dataset-zh',
+              '动作数据、中文名称与演示图（MIT；媒体 © Gym visual，180×180）',
+              'https://github.com/hasaneyldrm/exercises-dataset',
+            ),
+            const SizedBox(height: 12),
+            _ackItem(
+              spec,
+              'Gym visual',
+              'exercises-dataset 动作演示图版权方',
+              'https://gymvisual.com/',
+            ),
+            const SizedBox(height: 12),
+            _ackItem(
+              spec,
+              'free-exercise-db / exercises.json',
+              '动作教学示意图与动作数据（Public Domain）',
               'https://github.com/yuhonas/free-exercise-db',
+            ),
+            const SizedBox(height: 12),
+            _ackItem(
+              spec,
+              'open-exercisedb',
+              '动作数据交叉校验（MIT）',
+              'https://github.com/Glowupp-app/open-exercisedb',
             ),
             const SizedBox(height: 12),
             _ackItem(
@@ -1497,7 +1518,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     _SettingsTile(
                       icon: Icons.fitness_center_rounded,
                       title: '铁镌',
-                      subtitle: '版本 3.2.2 · 镌刻每一次撸铁',
+                      subtitle: '版本 3.3.2 · 镌刻每一次撸铁',
                       onTap: _showAbout,
                     ),
                     _SettingsTile(

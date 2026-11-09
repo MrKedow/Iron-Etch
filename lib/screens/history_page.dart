@@ -460,8 +460,7 @@ class _HistoryPageState extends State<HistoryPage> {
       groups.putIfAbsent(key, () => []).add(record);
     }
 
-    final totalWork =
-        provider.records.fold<double>(0, (sum, r) => sum + r.totalWork);
+    final totalWork = provider.totalWork;
 
     final children = <Widget>[
       const SizedBox(height: 4),
@@ -490,8 +489,8 @@ class _HistoryPageState extends State<HistoryPage> {
           Expanded(
             child: StatTile(
               label: '累计做功',
-              value: formatCompact(totalWork),
-              unit: 'J',
+              value: formatCompact(totalWork / 1000),
+              unit: 'kJ',
               icon: Icons.bolt_rounded,
               accent: const Color(0xFFF59E0B),
             ),
@@ -848,6 +847,7 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
 
   late DateTime _date;
   late int _statusBattery;
+  double? _batteryDragFraction;
   late final List<_EditDraft> _drafts;
 
   @override
@@ -1007,9 +1007,10 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
     final fraction =
         ((dx - 1.9) / (bodyWidth - 2.8)).clamp(0.0, 1.0).toDouble();
     final value = (fraction * 100).round();
-    if (value != _statusBattery) {
-      setState(() => _statusBattery = value);
-    }
+    setState(() {
+      _batteryDragFraction = fraction;
+      _statusBattery = value;
+    });
   }
 
   Widget _batteryEditor(AppThemeSpec spec) {
@@ -1061,7 +1062,8 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
             builder: (context, constraints) {
               final width = constraints.maxWidth;
               final bodyWidth = width - 3.4;
-              final fraction = _statusBattery / 100;
+              final fraction =
+                  (_batteryDragFraction ?? (_statusBattery / 100)).clamp(0.0, 1.0);
               final x = 1.9 + (bodyWidth - 2.8) * fraction;
               final maxLeft = (width - 8).clamp(0.0, width).toDouble();
               final pointerLeft = (x - 4).clamp(0.0, maxLeft).toDouble();
@@ -1071,6 +1073,12 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
                     _updateBattery(details.localPosition.dx, width),
                 onHorizontalDragUpdate: (details) =>
                     _updateBattery(details.localPosition.dx, width),
+                onHorizontalDragEnd: (_) =>
+                    setState(() => _batteryDragFraction = null),
+                onHorizontalDragCancel: () =>
+                    setState(() => _batteryDragFraction = null),
+                onTapUp: (_) =>
+                    setState(() => _batteryDragFraction = null),
                 child: SizedBox(
                   height: 54,
                   child: Stack(

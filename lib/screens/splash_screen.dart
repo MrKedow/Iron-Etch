@@ -307,7 +307,7 @@ class _SplashScreenState extends State<SplashScreen>
                                     ),
                                   ),
                                   const Text(
-                                    'v3.2.2',
+                                    'v3.3.2',
                                     style: TextStyle(
                                       color: Colors.white38,
                                       fontSize: 11,

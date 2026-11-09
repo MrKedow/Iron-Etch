@@ -1128,28 +1128,44 @@ class _ShelfPainter extends CustomPainter {
 
   void _paintSteel(Canvas canvas, Size size) {
     final brush = Paint()
-      ..color = Colors.white.withValues(alpha: .05)
+      ..color = Colors.white.withValues(alpha: .035)
       ..strokeWidth = 1;
-    for (double y = 0; y < size.height; y += 3) {
+    for (double y = 0; y < size.height; y += 2.5) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), brush);
     }
-    final band = Paint();
-    for (double y = 0; y < size.height; y += 48) {
-      band.color =
-          Colors.white.withValues(alpha: ((y ~/ 48) % 2 == 0) ? .04 : 0);
-      canvas.drawRect(Rect.fromLTWH(0, y, size.width, 24), band);
+    final seam = Paint()
+      ..color = Colors.black.withValues(alpha: .20)
+      ..strokeWidth = 1.4;
+    for (double x = size.width / 3; x < size.width; x += size.width / 3) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), seam);
     }
+    final rust = Paint()..color = const Color(0xFF8B98A8).withValues(alpha: .08);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height * .18), rust);
     final highlight = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.white.withValues(alpha: .14),
+          Colors.white.withValues(alpha: .22),
           Colors.transparent,
-          Colors.white.withValues(alpha: .05),
+          Colors.white.withValues(alpha: .08),
         ],
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, highlight);
+    final rivet = Paint()..color = const Color(0xFFDCE3EA).withValues(alpha: .22);
+    for (double x = size.width * .12; x < size.width; x += size.width * .22) {
+      for (double y = 40; y < size.height; y += 66) {
+        canvas.drawCircle(Offset(x, y), 2.6, rivet);
+        canvas.drawCircle(
+          Offset(x, y),
+          2.6,
+          Paint()
+            ..color = Colors.black.withValues(alpha: .25)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = .8,
+        );
+      }
+    }
   }
 
   void _paintGlass(Canvas canvas, Size size) {
@@ -1185,44 +1201,78 @@ class _ShelfPainter extends CustomPainter {
   }
 
   void _paintLattice(Canvas canvas, Size size) {
-    final carve = Paint()
-      ..color = const Color(0xFF5C4638).withValues(alpha: .55)
+    final frame = Paint()
+      ..color = const Color(0xFF7A5C3A).withValues(alpha: .92)
+      ..strokeWidth = 3.2;
+    final shadow = Paint()
+      ..color = Colors.black.withValues(alpha: .24)
       ..strokeWidth = 2;
-    const step = 30.0;
-    for (double y = -size.height; y < size.height * 2; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y + size.width), carve);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y - size.width), carve);
-    }
     final hole = Paint()
-      ..color = Colors.black.withValues(alpha: .18)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+      ..color = const Color(0xFF12100D).withValues(alpha: .30)
+      ..style = PaintingStyle.fill;
+    const step = 34.0;
+    for (double y = 0; y < size.height; y += step) {
+      final line = Path()
+        ..moveTo(0, y)
+        ..quadraticBezierTo(size.width * .5, y + 2.5, size.width, y);
+      canvas.drawPath(line, frame);
+      canvas.drawPath(
+        line.shift(const Offset(0, 1.5)),
+        shadow,
+      );
+    }
+    for (double x = step / 2; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), frame);
+      canvas.drawLine(Offset(x + 1.5, 0), Offset(x + 1.5, size.height), shadow);
+    }
     for (double y = step / 2; y < size.height; y += step) {
       for (double x = step / 2; x < size.width; x += step) {
-        canvas.drawCircle(Offset(x, y), 4, hole);
+        canvas.drawCircle(Offset(x, y), 6.5, hole);
+        canvas.drawCircle(
+          Offset(x, y),
+          6.5,
+          Paint()
+            ..color = const Color(0xFFB39A7A).withValues(alpha: .35)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = .8,
+        );
       }
     }
   }
 
   void _paintRattan(Canvas canvas, Size size) {
-    const step = 22.0;
-    final h = Paint()
-      ..color = const Color(0xFF4E6B3A)
-      ..strokeWidth = 3;
-    final v = Paint()
-      ..color = const Color(0xFF2C3E1F)
-      ..strokeWidth = 3;
-    for (double y = step / 2; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), h);
-    }
+    const step = 20.0;
+    final vertical = Paint()
+      ..color = const Color(0xFF2C3E1F).withValues(alpha: .92)
+      ..strokeWidth = 5;
+    final horizontal = Paint()
+      ..color = const Color(0xFF6E8A52).withValues(alpha: .92)
+      ..strokeWidth = 5;
+    final highlight = Paint()
+      ..color = const Color(0xFF9BB876).withValues(alpha: .38)
+      ..strokeWidth = 1.2;
     for (double x = step / 2; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), v);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), vertical);
+      canvas.drawLine(Offset(x + 2, 0), Offset(x + 2, size.height), highlight);
     }
-    final hl = Paint()
-      ..color = const Color(0xFF7FA060).withValues(alpha: .45)
-      ..strokeWidth = 1.5;
-    for (double y = step / 2; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), hl);
+    for (double y = 0; y < size.height; y += step) {
+      final row = (y ~/ step) % 2;
+      for (double x = row == 0 ? 0 : step / 2; x < size.width; x += step) {
+        final rect = Rect.fromLTWH(
+          x,
+          y + 4,
+          step * .85,
+          step - 8,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(rect, const Radius.circular(3)),
+          horizontal,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(rect.deflate(1.2), const Radius.circular(2)),
+          highlight,
+        );
+      }
     }
   }
 

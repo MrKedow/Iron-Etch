@@ -9,6 +9,16 @@ This repository is source-available, not open source. See LICENSE.
 
 The application uses third-party software packages, including Flutter and packages listed in `pubspec.yaml`. Those components remain subject to their own licenses.
 
+## Exercise Data and Media Attribution
+
+The exercise library uses data and media from the following sources:
+
+- **exercises-dataset / exercises-dataset-zh** — MIT License, Copyright (c) 2026 Hasan Emir Yıldırım. Exercise media in this dataset is the property of **Gym visual** and is used with permission at 180×180 resolution only. Required attribution: **© Gym visual — https://gymvisual.com/**.
+- **free-exercise-db / exercises.json** — Public Domain (Unlicense).
+- **open-exercisedb** — MIT License, Copyright (c) 2026 Glowupp-app. Used for data cross-checking.
+
+The generation and validation scripts are in `tool/generate_exercise_library.py` and `tool/validate_exercise_library.py`.
+
 ## Content and Services
 
 - Bilibili videos, player pages, UP-host names, and related content belong to Bilibili and their respective rights holders. The application does not claim ownership of such content.

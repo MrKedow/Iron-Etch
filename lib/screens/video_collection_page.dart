@@ -23,6 +23,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
   static const String _assetPath = 'assets/bili_list.json';
   static const String _introPreferenceKey = 'video_intro_hidden';
   static const String _customPreferenceKey = 'video_custom_state_v1';
+  static const String _hiddenPreferenceKey = 'video_hidden_state_v1';
 
   static const Map<String, String> _displayNames = {
     'chenbolin': '陈柏龄',
@@ -106,6 +107,9 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
   bool _refreshing = false;
   bool _addingUp = false;
   bool _introVisible = true;
+  bool _editMode = false;
+  final Set<String> _hiddenCollectionIds = <String>{};
+  final Set<String> _hiddenCreatorKeys = <String>{};
   String? _error;
   String _selected = '全部';
   String _query = '';
@@ -217,7 +221,23 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     _customItems.clear();
     _customNames.clear();
     _collectionOrder = <String>[];
+    _hiddenCollectionIds.clear();
+    _hiddenCreatorKeys.clear();
     final prefs = await SharedPreferences.getInstance();
+    final hiddenRaw = prefs.getString(_hiddenPreferenceKey);
+    if (hiddenRaw != null && hiddenRaw.isNotEmpty) {
+      try {
+        final hidden = jsonDecode(hiddenRaw) as Map<String, dynamic>;
+        _hiddenCollectionIds.addAll(
+          (hidden['collections'] as List? ?? const [])
+              .map((value) => value.toString()),
+        );
+        _hiddenCreatorKeys.addAll(
+          (hidden['creators'] as List? ?? const [])
+              .map((value) => value.toString()),
+        );
+      } catch (_) {}
+    }
     final raw = prefs.getString(_customPreferenceKey);
     if (raw == null || raw.isEmpty) return;
     try {
@@ -271,6 +291,16 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         categories.add(newCategory);
         byId[entry.key] = newCategory;
       }
+    }
+    categories.removeWhere(
+      (category) => _hiddenCollectionIds.contains(category.id),
+    );
+    for (final category in categories) {
+      category.items.removeWhere(
+        (creator) =>
+            _hiddenCreatorKeys.contains('${category.id}|${creator.id}') ||
+            _hiddenCreatorKeys.contains('${category.id}|${creator.mid}'),
+      );
     }
     if (_collectionOrder.isEmpty) return;
     final order = <String, int>{
@@ -354,6 +384,224 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
           'collections': collections,
         },
       ),
+    );
+  }
+
+  Future<void> _resetCollections() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('恢复内置合集'),
+        content: const Text('将清除自定义合集、UP 主和排序，恢复为软件内置默认样式。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('恢复'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_customPreferenceKey);
+    await prefs.remove(_introPreferenceKey);
+    await prefs.remove(_hiddenPreferenceKey);
+    _customItems.clear();
+    _customNames.clear();
+    _collectionOrder = <String>[];
+    _hiddenCollectionIds.clear();
+    _hiddenCreatorKeys.clear();
+    _editMode = false;
+    _expandedCreators.clear();
+    _collapsedCategories.clear();
+    _videoCache.clear();
+    await _load();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已恢复内置视频合集')),
+      );
+    }
+  }
+
+  Future<void> _persistHiddenState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _hiddenPreferenceKey,
+      jsonEncode(<String, dynamic>{
+        'collections': _hiddenCollectionIds.toList(),
+        'creators': _hiddenCreatorKeys.toList(),
+      }),
+    );
+  }
+
+  Future<void> _deleteCollection(_VideoCategory category) async {
+    final isCustom =
+        category.id.startsWith('custom_') ||
+        category.items.any((item) => item.id.startsWith('custom_')) ||
+        _customItems.containsKey(category.id);
+    setState(() {
+      _categories.remove(category);
+      if (isCustom) {
+        _customItems.remove(category.id);
+        _customNames.remove(category.id);
+      } else {
+        _hiddenCollectionIds.add(category.id);
+      }
+    });
+    if (isCustom) {
+      await _saveCustomState();
+    } else {
+      await _persistHiddenState();
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已删除「${category.name}」')),
+      );
+    }
+  }
+
+  Future<void> _deleteCreator(_VideoCategory category, _VideoCreator creator) async {
+    final isCustom = creator.id.startsWith('custom_');
+    final key = '${category.id}|${creator.id}';
+    setState(() {
+      category.items.remove(creator);
+      if (isCustom) {
+        final customItems =
+            _customItems.putIfAbsent(category.id, () => <_CustomCreator>[]);
+        customItems.removeWhere((item) => item.id == creator.id);
+      } else {
+        _hiddenCreatorKeys.add(key);
+        _hiddenCreatorKeys.add('${category.id}|${creator.mid}');
+      }
+    });
+    if (isCustom) {
+      await _saveCustomState();
+    } else {
+      await _persistHiddenState();
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已删除「${creator.name}」')),
+      );
+    }
+  }
+
+  void _reorderCategories(int oldIndex, int newIndex) {
+    setState(() {
+      final moved = _categories.removeAt(oldIndex);
+      _categories.insert(newIndex, moved);
+      _collectionOrder = _categories.map((category) => category.id).toList();
+    });
+    _saveCustomState();
+  }
+
+  void _reorderCreators(_VideoCategory category, int oldIndex, int newIndex) {
+    setState(() {
+      final moved = category.items.removeAt(oldIndex);
+      category.items.insert(newIndex, moved);
+    });
+    _saveCustomState();
+  }
+
+  Widget _editContent(AppThemeSpec spec) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        6,
+        16,
+        28 + MediaQuery.paddingOf(context).bottom,
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            '编辑模式：拖动手柄排序，叉号删除合集或 UP。长按任一名称可再次进入/退出编辑。',
+            style: TextStyle(color: spec.textSecondary, fontSize: 12),
+          ),
+        ),
+        ReorderableListView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          onReorderItem: _reorderCategories,
+          children: _categories.map((category) {
+            return GlassPanel(
+              key: ValueKey('collection_${category.id}'),
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      ReorderableDragStartListener(
+                        index: _categories.indexOf(category),
+                        child: const Padding(
+                          padding: EdgeInsets.only(right: 8),
+                          child: Icon(Icons.drag_handle_rounded),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onLongPress: () => setState(() => _editMode = false),
+                          child: Text(
+                            category.name,
+                            style: TextStyle(
+                              color: spec.textPrimary,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '删除合集',
+                        onPressed: () => _deleteCollection(category),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  if (category.items.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        '暂无 UP 主',
+                        style: TextStyle(color: spec.textSecondary),
+                      ),
+                    )
+                  else
+                    ReorderableListView(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      onReorderItem: (oldIndex, newIndex) =>
+                          _reorderCreators(category, oldIndex, newIndex),
+                      children: category.items.map((creator) {
+                        return ListTile(
+                          key: ValueKey('${category.id}_${creator.id}'),
+                          leading: ReorderableDragStartListener(
+                            index: category.items.indexOf(creator),
+                            child: const Icon(Icons.drag_indicator_rounded),
+                          ),
+                          title: Text(creator.name),
+                          trailing: IconButton(
+                            tooltip: '删除 UP 主',
+                            onPressed: () =>
+                                _deleteCreator(category, creator),
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
@@ -619,6 +867,17 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         surfaceTintColor: Colors.transparent,
         title: const Text('视频合集'),
         actions: [
+          if (_editMode)
+            IconButton(
+              tooltip: '完成编辑',
+              onPressed: () => setState(() => _editMode = false),
+              icon: const Icon(Icons.check_rounded),
+            ),
+          IconButton(
+            tooltip: '恢复内置合集',
+            onPressed: _resetCollections,
+            icon: const Icon(Icons.restart_alt_rounded),
+          ),
           IconButton(
             tooltip: '添加喜欢的 UP 主',
             onPressed: _addingUp ? null : () => _showAddUpDialog(),
@@ -714,6 +973,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
       }
     }
 
+    if (_editMode) return _editContent(spec);
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(
@@ -867,9 +1127,11 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     required bool searching,
   }) {
     final collapsed = !searching && _collapsedCategories.contains(category.id);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    return GestureDetector(
+      onLongPress: () => setState(() => _editMode = true),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
         SectionHeader(
           title: category.name,
           subtitle: collapsed
@@ -907,6 +1169,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
               ),
             ),
       ],
+    ),
     );
   }
 
@@ -1069,14 +1332,17 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        creator.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: spec.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
+                      GestureDetector(
+                        onLongPress: () => setState(() => _editMode = true),
+                        child: Text(
+                          creator.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: spec.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 6),

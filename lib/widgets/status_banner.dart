@@ -704,7 +704,7 @@ Future<void> showStatusEditor(BuildContext context) async {
   var tone = settings.statusTone;
   var motion = settings.statusMotion;
   var streakStart = settings.streakStart;
-  var battery = settings.statusBattery;
+  final batteryNotifier = ValueNotifier<int>(settings.statusBattery);
   String? imagePath = settings.statusImagePath;
 
   await showModalBottomSheet(
@@ -803,14 +803,17 @@ Future<void> showStatusEditor(BuildContext context) async {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    _StatusPreview(
-                      text: textController.text,
-                      emoji: emoji,
-                      tone: tone,
-                      motion: motion,
-                      imagePath: imagePath,
-                      nickname: settings.nickname,
-                      battery: battery,
+                    ValueListenableBuilder<int>(
+                      valueListenable: batteryNotifier,
+                      builder: (context, battery, _) => _StatusPreview(
+                        text: textController.text,
+                        emoji: emoji,
+                        tone: tone,
+                        motion: motion,
+                        imagePath: imagePath,
+                        nickname: settings.nickname,
+                        battery: battery,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     Text(
@@ -998,30 +1001,35 @@ Future<void> showStatusEditor(BuildContext context) async {
                           color: palette.first.withValues(alpha: .22),
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: StatusBattery(
-                              level: battery,
-                              height: 20,
-                              outlineColor: spec.isDark
-                                  ? null
-                                  : spec.textPrimary.withValues(alpha: .42),
-                              textColor: spec.isDark ? null : spec.textPrimary,
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: batteryNotifier,
+                        builder: (context, battery, _) => Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: StatusBattery(
+                                level: battery,
+                                height: 20,
+                                outlineColor: spec.isDark
+                                    ? null
+                                    : spec.textPrimary
+                                        .withValues(alpha: .42),
+                                textColor:
+                                    spec.isDark ? null : spec.textPrimary,
+                              ),
                             ),
-                          ),
-                          Slider(
-                            value: battery.toDouble(),
-                            min: 0,
-                            max: 100,
-                            divisions: 100,
-                            label: '$battery%',
-                            onChanged: (value) =>
-                                setSheetState(() => battery = value.round()),
-                          ),
-                        ],
+                            Slider(
+                              value: battery.toDouble(),
+                              min: 0,
+                              max: 100,
+                              divisions: 100,
+                              label: '$battery%',
+                              onChanged: (value) =>
+                                  batteryNotifier.value = value.round(),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 18),
@@ -1131,7 +1139,7 @@ Future<void> showStatusEditor(BuildContext context) async {
                             motion: motion,
                             imagePath: imagePath,
                             clearImage: imagePath == null,
-                            battery: battery,
+                            battery: batteryNotifier.value,
                           );
                           if (sheetContext.mounted) {
                             Navigator.pop(sheetContext);
@@ -1150,6 +1158,7 @@ Future<void> showStatusEditor(BuildContext context) async {
       );
     },
   );
+  batteryNotifier.dispose();
   textController.dispose();
 }
 

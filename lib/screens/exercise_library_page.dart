@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/exercise_library.dart';
+import '../data/exercise_library_generated.dart';
 import '../data/exercise_illustrations.dart';
 import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
@@ -157,7 +158,9 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                   ],
                 ),
                 const SizedBox(height: 18),
-                Container(
+                GestureDetector(
+                  onTap: () => _openExerciseImage(sheetContext, exercise, spec),
+                  child: Container(
                   height: 210,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -191,6 +194,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                       ),
                     ],
                   ),
+                ),
                 ),
                 const SizedBox(height: 12),
                 _detailSection(
@@ -247,8 +251,50 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
     });
   }
 
+  void _openExerciseImage(
+    BuildContext context,
+    ExerciseDefinition exercise,
+    AppThemeSpec spec,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog.fullscreen(
+          backgroundColor: spec.background,
+          child: Scaffold(
+            backgroundColor: spec.background,
+            appBar: AppBar(
+              backgroundColor: spec.background,
+              surfaceTintColor: Colors.transparent,
+              title: Text(exercise.name),
+              actions: [
+                IconButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            body: InteractiveViewer(
+              minScale: .5,
+              maxScale: 4,
+              child: Center(
+                child: SizedBox(
+                  width: MediaQuery.sizeOf(context).width - 28,
+                  height: MediaQuery.sizeOf(context).height * .55,
+                  child: _exerciseIllustration(exercise, spec),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _exerciseIllustration(ExerciseDefinition exercise, AppThemeSpec spec) {
-    final slug = exerciseImageSlugs[exercise.name];
+    final slug = generatedImageOverrides[exercise.name] ??
+        exercise.imageSlug ??
+        exerciseImageSlugs[exercise.name];
     if (slug == null) {
       return ExerciseIllustration(
         pattern: exercise.pattern,

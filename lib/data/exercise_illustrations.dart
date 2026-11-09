@@ -121,4 +121,7 @@ const Map<String, String> exerciseImageSlugs = {
   '跳深': 'Depth_Jump_Leap',
   '单臂壶铃摆荡': 'One-Arm_Kettlebell_Swings',
   '借力推举': 'Push_Press',
+  '战绳': 'Battling_Ropes',
+  '跳绳': 'Rope_Jumping',
+  '跑步': 'Running_Treadmill',
 };

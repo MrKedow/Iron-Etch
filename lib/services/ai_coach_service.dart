@@ -55,7 +55,7 @@ class AiCoachService {
       'https://opencode.ai/inference/openai/v1/chat/completions';
 
   static Future<AiCoachReply> chat({
-    required List<Map<String, String>> messages,
+    required List<Map<String, dynamic>> messages,
     String? endpoint,
     String? model,
     String? apiKey,
@@ -159,9 +159,49 @@ class AiCoachService {
     );
   }
 
+  /// 读取跑步机/椭圆机仪表盘照片，返回包含时长、距离、速度和热量的文本。
+  /// 返回内容优先为 JSON，便于上层解析；不支持视觉的模型会返回失败信息。
+  static Future<AiCoachReply> readCardioDashboard({
+    required String imageBase64,
+    String mimeType = 'image/jpeg',
+    String? endpoint,
+    String? model,
+    String? apiKey,
+  }) {
+    return chat(
+      endpoint: endpoint,
+      model: model,
+      apiKey: apiKey,
+      messages: [
+        {
+          'role': 'system',
+          'content': '你是健身器械仪表盘识别助手。只输出一个 JSON 对象，不要解释、不要 markdown。',
+        },
+        {
+          'role': 'user',
+          'content': [
+            {
+              'type': 'text',
+              'text':
+                  '读取图片中跑步机/椭圆机仪表盘的数字，输出 JSON：'
+                  '{"durationMinutes":数字,"distanceKm":数字,"speedKmH":数字,"calories":数字}。'
+                  '无法识别的字段填 0，不要臆造。',
+            },
+            {
+              'type': 'image_url',
+              'image_url': {
+                'url': 'data:$mimeType;base64,$imageBase64',
+              },
+            },
+          ],
+        },
+      ],
+    );
+  }
+
   static Future<AiCoachReply> _attempt(
     _AiTarget target,
-    List<Map<String, String>> messages, {
+    List<Map<String, dynamic>> messages, {
     required String apiKey,
     required Duration timeout,
   }) async {

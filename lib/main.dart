@@ -26,6 +26,8 @@ import 'package:fitness_tracker/widgets/app_ui.dart';
 import 'package:fitness_tracker/widgets/book_download_toast.dart';
 import 'package:fitness_tracker/widgets/status_banner.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:fitness_tracker/services/ai_coach_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -112,6 +114,7 @@ class WorkoutProject {
   String category;
   double durationMinutes;
   double distanceKm;
+  double speedKmH;
   double met;
 
   WorkoutProject({
@@ -125,6 +128,7 @@ class WorkoutProject {
     this.category = '力量',
     this.durationMinutes = 0,
     this.distanceKm = 0,
+    this.speedKmH = 0,
     this.met = 0,
   });
 
@@ -163,6 +167,7 @@ class WorkoutProject {
                       : '力量'),
       durationMinutes: (json['durationMinutes'] as num?)?.toDouble() ?? 0,
       distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0,
+      speedKmH: (json['speedKmH'] as num?)?.toDouble() ?? 0,
       met: (json['met'] as num?)?.toDouble() ?? definition?.met ?? 0,
     );
   }
@@ -179,6 +184,7 @@ class WorkoutProject {
       category: category,
       durationMinutes: durationMinutes,
       distanceKm: distanceKm,
+      speedKmH: speedKmH,
       met: met,
     );
   }
@@ -195,6 +201,7 @@ class WorkoutProject {
       'category': category,
       'durationMinutes': durationMinutes,
       'distanceKm': distanceKm,
+      'speedKmH': speedKmH,
       'met': met,
     };
   }
@@ -208,7 +215,10 @@ class WorkoutProject {
   double get volumeLoad => weight * sets * repsPerSet;
 
   double calculateWork() {
-    if (category == '有氧' || category == '柔韧' || category == '专项') {
+    if (category == '有氧' || category == '专项') {
+      return estimatedCalories() * 4184;
+    }
+    if (category == '柔韧') {
       return 0;
     }
     return IronProfile.instance.estimateMechanicalWork(
@@ -221,12 +231,27 @@ class WorkoutProject {
 
   double estimatedCalories({double bodyWeight = 70}) {
     final profile = IronProfile.instance;
+    final cardioMinutes = durationMinutes > 0
+        ? durationMinutes
+        : (distanceKm > 0 && speedKmH > 0
+            ? distanceKm / speedKmH * 60
+            : 0);
     if ((isCardio || category == '柔韧' || category == '功能') &&
-        durationMinutes > 0) {
-      final intensity = met > 0 ? met : (category == '柔韧' ? 2.5 : 6.5);
+        cardioMinutes > 0) {
+      var intensity = met > 0 ? met : (category == '柔韧' ? 2.5 : 6.5);
+      // ACSM 跑步/快走速度公式：VO2 = 0.2 * m/min + 3.5，MET = VO2 / 3.5。
+      // 有速度数据时用速度校正强度，避免只靠时长与固定 MET。
+      if (speedKmH > 0 &&
+          (name.contains('跑') ||
+              name.contains('走') ||
+              name.toLowerCase().contains('run'))) {
+        final metersPerMinute = speedKmH * 1000 / 60;
+        final speedMet = (0.2 * metersPerMinute + 3.5) / 3.5;
+        if (speedMet > intensity) intensity = speedMet;
+      }
       return profile.estimateCardioCalories(
         met: intensity,
-        minutes: durationMinutes,
+        minutes: cardioMinutes.toDouble(),
         bodyWeightOverride: bodyWeight == 70 ? null : bodyWeight,
       );
     }
@@ -283,6 +308,7 @@ class WorkoutProject {
         category,
         durationMinutes.toStringAsFixed(2),
         distanceKm.toStringAsFixed(3),
+        speedKmH.toStringAsFixed(2),
         met.toStringAsFixed(2),
       ].join('|');
 }
@@ -516,6 +542,9 @@ class WorkoutProvider extends ChangeNotifier {
       .map((r) => DateFormat('yyyy-MM-dd').format(r.date))
       .toSet()
       .length;
+
+  double get totalWork =>
+      _records.fold<double>(0, (sum, record) => sum + record.totalWork);
 
   List<WorkoutRecord> get sortedRecords => List<WorkoutRecord>.from(_records)
     ..sort((a, b) => b.date.compareTo(a.date));
@@ -1097,6 +1126,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   final List<TextEditingController> supplementControllers = [];
   final List<TextEditingController> durationControllers = [];
   final List<TextEditingController> distanceControllers = [];
+  final List<TextEditingController> speedControllers = [];
   final List<ValueNotifier<String>> partNotifiers = [];
 
   bool _isLoading = false;
@@ -1176,6 +1206,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           durationMinutes:
               double.tryParse(durationControllers[i].text.trim()) ?? 0,
           distanceKm: double.tryParse(distanceControllers[i].text.trim()) ?? 0,
+          speedKmH: double.tryParse(speedControllers[i].text.trim()) ?? 0,
           met: definition?.met ?? 0,
         ));
       }
@@ -1733,6 +1764,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       supplementController: supplementControllers[index],
       durationController: durationControllers[index],
       distanceController: distanceControllers[index],
+      speedController: speedControllers[index],
       canRemove: projects.length > 1,
       onRemove: () => _removeProjectAt(index),
     );
@@ -1749,6 +1781,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       supplementControllers.add(TextEditingController());
       durationControllers.add(TextEditingController());
       distanceControllers.add(TextEditingController());
+      speedControllers.add(TextEditingController());
       partNotifiers.add(ValueNotifier<String>('胸'));
     });
   }
@@ -1765,6 +1798,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       supplementControllers.removeAt(index).dispose();
       durationControllers.removeAt(index).dispose();
       distanceControllers.removeAt(index).dispose();
+      speedControllers.removeAt(index).dispose();
       partNotifiers.removeAt(index).dispose();
     });
   }
@@ -1792,6 +1826,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       ));
       distanceControllers.add(TextEditingController(
         text: project.distanceKm == 0 ? '' : project.distanceKm.toString(),
+      ));
+      speedControllers.add(TextEditingController(
+        text: project.speedKmH == 0 ? '' : project.speedKmH.toString(),
       ));
       partNotifiers.add(ValueNotifier<String>(project.part));
     }
@@ -1822,6 +1859,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     for (final c in distanceControllers) {
       c.dispose();
     }
+    for (final c in speedControllers) {
+      c.dispose();
+    }
     for (final n in partNotifiers) {
       n.dispose();
     }
@@ -1833,6 +1873,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     supplementControllers.clear();
     durationControllers.clear();
     distanceControllers.clear();
+    speedControllers.clear();
     partNotifiers.clear();
   }
 
@@ -2009,8 +2050,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       final diff = now.difference(r.date).inDays;
       return diff >= 0 && diff < 7;
     }).length;
-    final totalWork =
-        provider.records.fold<double>(0, (sum, r) => sum + r.totalWork);
     final recent = provider.sortedRecords.take(3).toList();
 
     return Scaffold(
@@ -2142,8 +2181,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     Expanded(
                       child: StatTile(
                         label: '累计做功',
-                        value: formatCompact(totalWork),
-                        unit: 'J',
+                        value: formatCompact(provider.totalWork / 1000),
+                        unit: 'kJ',
                         icon: Icons.bolt_rounded,
                         accent: spec.secondary,
                       ),
@@ -2490,6 +2529,7 @@ class _ProjectCard extends StatefulWidget {
   final TextEditingController supplementController;
   final TextEditingController durationController;
   final TextEditingController distanceController;
+  final TextEditingController speedController;
   final bool canRemove;
   final VoidCallback onRemove;
 
@@ -2505,6 +2545,7 @@ class _ProjectCard extends StatefulWidget {
     required this.supplementController,
     required this.durationController,
     required this.distanceController,
+    required this.speedController,
     required this.canRemove,
     required this.onRemove,
   });
@@ -2543,6 +2584,7 @@ class _ProjectCardState extends State<_ProjectCard> {
     widget.repsController.addListener(_refresh);
     widget.durationController.addListener(_refresh);
     widget.distanceController.addListener(_refresh);
+    widget.speedController.addListener(_refresh);
   }
 
   void _onPartChanged() {
@@ -2575,6 +2617,7 @@ class _ProjectCardState extends State<_ProjectCard> {
     widget.repsController.removeListener(_refresh);
     widget.durationController.removeListener(_refresh);
     widget.distanceController.removeListener(_refresh);
+    widget.speedController.removeListener(_refresh);
     super.dispose();
   }
 
@@ -2602,6 +2645,90 @@ class _ProjectCardState extends State<_ProjectCard> {
       weight: weight,
       sets: sets,
       reps: reps,
+    );
+  }
+
+  bool _scanningDashboard = false;
+
+  double _readMetric(Map<String, dynamic> data, String key) {
+    final value = data[key];
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  Future<void> _scanCardioDashboard() async {
+    if (_scanningDashboard) return;
+    final settings = context.read<SettingsProvider>();
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _scanningDashboard = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final reply = await AiCoachService.readCardioDashboard(
+        imageBase64: base64Encode(bytes),
+        mimeType: 'image/jpeg',
+        endpoint: settings.aiEndpoint,
+        model: settings.aiModel,
+        apiKey: settings.aiApiKey,
+      );
+      if (!mounted) return;
+      if (!reply.success) {
+        _showSnack(reply.error ?? 'AI 识别失败');
+        return;
+      }
+      final raw = reply.content;
+      final start = raw.indexOf('{');
+      final end = raw.lastIndexOf('}');
+      Map<String, dynamic>? data;
+      if (start >= 0 && end > start) {
+        try {
+          final decoded = jsonDecode(raw.substring(start, end + 1));
+          if (decoded is Map<String, dynamic>) data = decoded;
+        } catch (_) {}
+      }
+      if (data == null) {
+        _showSnack('AI 未返回可解析的仪表盘数据');
+        return;
+      }
+      final duration = _readMetric(data, 'durationMinutes');
+      final distance = _readMetric(data, 'distanceKm');
+      final speed = _readMetric(data, 'speedKmH');
+      if (duration <= 0 && distance <= 0 && speed <= 0) {
+        _showSnack('没有识别到时长、距离或速度');
+        return;
+      }
+      setState(() {
+        if (duration > 0) {
+          widget.durationController.text = duration.toStringAsFixed(
+            duration % 1 == 0 ? 0 : 1,
+          );
+        }
+        if (distance > 0) {
+          widget.distanceController.text = distance.toStringAsFixed(
+            distance % 1 == 0 ? 0 : 2,
+          );
+        }
+        if (speed > 0) {
+          widget.speedController.text = speed.toStringAsFixed(
+            speed % 1 == 0 ? 0 : 1,
+          );
+        }
+      });
+      _showSnack('已从仪表盘读取训练数据');
+    } catch (error) {
+      if (mounted) _showSnack('识别失败：$error');
+    } finally {
+      if (mounted) setState(() => _scanningDashboard = false);
+    }
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -2777,10 +2904,15 @@ class _ProjectCardState extends State<_ProjectCard> {
     final spec = context.watch<ThemeProvider>().currentSpec;
     final work = _calculateWork();
     final duration = double.tryParse(widget.durationController.text) ?? 0;
+    final distance = double.tryParse(widget.distanceController.text) ?? 0;
+    final speed = double.tryParse(widget.speedController.text) ?? 0;
+    final effectiveMinutes = duration > 0
+        ? duration
+        : (distance > 0 && speed > 0 ? distance / speed * 60 : 0);
     final met = _definition?.met ?? 0;
     final kcal = IronProfile.instance.estimateCardioCalories(
       met: met > 0 ? met : 6.5,
-      minutes: duration,
+      minutes: effectiveMinutes.toDouble(),
     );
     return GlassPanel(
       margin: const EdgeInsets.only(bottom: 14),
@@ -2942,6 +3074,41 @@ class _ProjectCardState extends State<_ProjectCard> {
                       suffix: 'km',
                     ),
                   ),
+                if (_isCardio)
+                  const SizedBox(width: 8),
+                if (_isCardio)
+                  Expanded(
+                    child: _numberField(
+                      spec,
+                      widget.speedController,
+                      '速度',
+                      '0',
+                      suffix: 'km/h',
+                    ),
+                  ),
+                if (_isCardio) ...[
+                  const SizedBox(width: 4),
+                  SizedBox(
+                    width: 36,
+                    child: IconButton(
+                      tooltip: '拍照识别仪表盘',
+                      onPressed:
+                          _scanningDashboard ? null : _scanCardioDashboard,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 36,
+                        height: 40,
+                      ),
+                      icon: _scanningDashboard
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.camera_alt_outlined, size: 19),
+                    ),
+                  ),
+                ],
                 if (_category == '柔韧')
                   Expanded(
                     child: _numberField(

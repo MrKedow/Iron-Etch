@@ -4,9 +4,9 @@
 
 ## 当前版本
 
-- Android：**Android_v3.2.2**（`versionCode 7`）
+- Android：**Android_v3.3.2**（`versionCode 8`）
 - Flutter：**3.47.9** / Dart **3.13.7**
-- 发布页：<https://github.com/MrKedow/Iron-Etch/releases/tag/Android_v3.2.2>
+- 发布页：<https://github.com/MrKedow/Iron-Etch/releases/tag/Android_v3.3.2>
 - 默认分支：`Windows`
 - 其他分支：`Android`、`HTML`
 
@@ -55,8 +55,9 @@
 
 ### 动作库与知识库
 
-- 175 个动作，覆盖力量、有氧、柔韧、功能与专项
-- 动作示意图、目标肌群和动作要领
+- 2200+ 个动作，覆盖力量、有氧、柔韧、功能与专项
+- 动作示意图、目标肌群和动作要领，支持点击查看大图
+- 数据来自 exercises-dataset-zh、free-exercise-db / exercises.json，并以 open-exercisedb 交叉校验
 - 健身知识文章与 AI 语料更新
 
 ### 主题与多尺寸适配
@@ -107,6 +108,18 @@ assets/
   coach_rules.json          AI 教练知识库
   bili_list.json            B 站视频合集
 ```
+
+## 致谢与数据来源
+
+动作库的数据与演示图来自以下公开数据集，特此致谢：
+
+- **exercises-dataset / exercises-dataset-zh** — 动作数据、中文名称与演示图，MIT License，Copyright (c) 2026 Hasan Emir Yıldırım。
+  - 演示图版权：**© Gym visual — https://gymvisual.com/**，按 180×180 分辨率与署名要求使用。
+- **free-exercise-db / exercises.json** — 动作教学图与动作数据，Public Domain（Unlicense）。
+- **open-exercisedb** — 动作数据交叉校验，MIT License，Copyright (c) 2026 Glowupp-app。
+- **ExRx.net / ACE / NASM / ACSM** — 动作分类、肌群命名与训练处方参考。
+
+生成与校验脚本见 `tool/generate_exercise_library.py`、`tool/validate_exercise_library.py`。
 
 ## 许可证
 

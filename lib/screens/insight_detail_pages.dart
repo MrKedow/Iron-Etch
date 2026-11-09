@@ -11,7 +11,7 @@ import '../services/coach_insights.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
 
-enum InsightRange { week, month, year, custom }
+enum InsightRange { week, month, year, all, custom }
 
 extension InsightRangeLabel on InsightRange {
   String get label {
@@ -22,6 +22,8 @@ extension InsightRangeLabel on InsightRange {
         return '一月';
       case InsightRange.year:
         return '年度';
+      case InsightRange.all:
+        return '全部';
       case InsightRange.custom:
         return '自定义';
     }
@@ -51,6 +53,11 @@ DateTimeRange _resolveRange(InsightRange range, DateTimeRange? custom) {
     case InsightRange.year:
       return DateTimeRange(
         start: now.subtract(const Duration(days: 364)),
+        end: now,
+      );
+    case InsightRange.all:
+      return DateTimeRange(
+        start: DateTime(2010, 1, 1),
         end: now,
       );
     case InsightRange.custom:
@@ -1077,15 +1084,22 @@ class _VolumeBarChart extends StatelessWidget {
                       const SizedBox(height: 6),
                       SizedBox(
                         height: 14,
-                        child: Text(
-                          i % labelEvery == 0 ? buckets[i].label : '',
-                          maxLines: 1,
-                          overflow: TextOverflow.clip,
-                          style: TextStyle(
-                            color: spec.textSecondary,
-                            fontSize: compact ? 7.5 : 8.5,
-                          ),
-                        ),
+                        child: i % labelEvery == 0
+                            ? OverflowBox(
+                                maxWidth: 64,
+                                alignment: Alignment.topCenter,
+                                child: Text(
+                                  buckets[i].label,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: spec.textSecondary,
+                                    fontSize: compact ? 7.5 : 8.5,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
                       ),
                     ],
                   ),
@@ -1106,7 +1120,7 @@ class PersonalRecordsPage extends StatefulWidget {
 }
 
 class _PersonalRecordsPageState extends State<PersonalRecordsPage> {
-  InsightRange _range = InsightRange.week;
+  InsightRange _range = InsightRange.all;
   DateTimeRange? _customRange;
 
   Future<void> _selectRange(InsightRange range) async {

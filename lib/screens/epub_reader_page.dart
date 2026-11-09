@@ -42,6 +42,8 @@ class _EpubReaderPageState extends State<EpubReaderPage>
   Set<int> _bookmarks = {};
   List<_Note> _notes = const [];
   bool _ready = false;
+  bool _controlsVisible = true;
+  Timer? _controlsTimer;
   bool _pageLoading = true;
   String? _error;
   String _lastSelection = '';
@@ -63,8 +65,26 @@ class _EpubReaderPageState extends State<EpubReaderPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _controlsTimer?.cancel();
     _saveProgress();
     super.dispose();
+  }
+
+  void _scheduleAutoHide() {
+    _controlsTimer?.cancel();
+    _controlsTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted || !_controlsVisible) return;
+      setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _toggleControls() {
+    setState(() => _controlsVisible = !_controlsVisible);
+    if (_controlsVisible) {
+      _scheduleAutoHide();
+    } else {
+      _controlsTimer?.cancel();
+    }
   }
 
   @override
@@ -137,6 +157,7 @@ class _EpubReaderPageState extends State<EpubReaderPage>
       (_web.platform as AndroidWebViewController).setAllowFileAccess(true);
     }
     setState(() => _ready = true);
+    _scheduleAutoHide();
     await _loadChapter();
   }
 
@@ -199,6 +220,19 @@ class _EpubReaderPageState extends State<EpubReaderPage>
         return '#15181D';
       default:
         return null;
+    }
+  }
+
+  Color _pageBackground(AppThemeSpec spec) {
+    switch (_bgMode) {
+      case 1:
+        return const Color(0xFFF6EFE3);
+      case 2:
+        return const Color(0xFFE8F0E3);
+      case 3:
+        return const Color(0xFF15181D);
+      default:
+        return spec.background;
     }
   }
 
@@ -868,25 +902,6 @@ class _EpubReaderPageState extends State<EpubReaderPage>
     );
   }
 
-  Widget _tapZone({required VoidCallback? onTap, required IconData icon}) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 30,
-        child: Center(
-          child: Icon(
-            icon,
-            size: 20,
-            color: onTap == null
-                ? const Color(0x22000000)
-                : const Color(0x44000000),
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _showBgSettings() async {
     final spec = context.read<ThemeProvider>().currentSpec;
     final result = await showModalBottomSheet<int>(
@@ -998,6 +1013,13 @@ class _EpubReaderPageState extends State<EpubReaderPage>
   @override
   Widget build(BuildContext context) {
     final spec = context.watch<ThemeProvider>().currentSpec;
+    final pageBackground = _pageBackground(spec);
+    if (_ready && _bgMode == 0 && _dark != spec.isDark) {
+      _dark = spec.isDark;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _ready) _loadChapter();
+      });
+    }
     if (!_ready) {
       return Scaffold(
         backgroundColor: spec.background,
@@ -1007,9 +1029,10 @@ class _EpubReaderPageState extends State<EpubReaderPage>
       );
     }
     return Scaffold(
-      backgroundColor: spec.background,
-      appBar: AppBar(
-        backgroundColor: spec.background,
+      backgroundColor: pageBackground,
+      appBar: _controlsVisible
+          ? AppBar(
+        backgroundColor: pageBackground,
         surfaceTintColor: Colors.transparent,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1088,7 +1111,8 @@ class _EpubReaderPageState extends State<EpubReaderPage>
             ],
           ),
         ],
-      ),
+      )
+          : null,
       body: Column(
         children: [
           SizedBox(
@@ -1100,24 +1124,15 @@ class _EpubReaderPageState extends State<EpubReaderPage>
             ),
           ),
           Expanded(
-            child: Row(
+            child: Stack(
               children: [
-                _tapZone(
-                  onTap: _chapterIndex > 0
-                      ? () => _goToChapter(_chapterIndex - 1)
-                      : null,
-                  icon: Icons.chevron_left_rounded,
+                Positioned.fill(
+                  child: WebViewWidget(controller: _web),
                 ),
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: WebViewWidget(controller: _web),
-                      ),
                       if (_pageLoading)
                         Positioned.fill(
                           child: ColoredBox(
-                            color: spec.background,
+                            color: pageBackground,
                             child: Center(
                               child: CircularProgressIndicator(
                                 color: spec.primary,
@@ -1129,7 +1144,7 @@ class _EpubReaderPageState extends State<EpubReaderPage>
                       if (_error != null)
                         Positioned.fill(
                           child: ColoredBox(
-                            color: spec.background,
+                            color: pageBackground,
                             child: Center(
                               child: Padding(
                                 padding: const EdgeInsets.all(28),
@@ -1166,24 +1181,48 @@ class _EpubReaderPageState extends State<EpubReaderPage>
                             ),
                           ),
                         ),
-                    ],
+                if (_chapterIndex > 0)
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 56,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () => _goToChapter(_chapterIndex - 1),
+                      child: const SizedBox.expand(),
+                    ),
                   ),
-                ),
-                _tapZone(
-                  onTap: _chapterIndex < _book.chapters.length - 1
-                      ? () => _goToChapter(_chapterIndex + 1)
-                      : null,
-                  icon: Icons.chevron_right_rounded,
+                if (_chapterIndex < _book.chapters.length - 1)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 56,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () => _goToChapter(_chapterIndex + 1),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                Align(
+                  alignment: Alignment.center,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: _toggleControls,
+                    child: const SizedBox(width: 140, height: 140),
+                  ),
                 ),
               ],
             ),
           ),
-          SafeArea(
+          if (_controlsVisible)
+            SafeArea(
             top: false,
             child: Container(
               padding: const EdgeInsets.fromLTRB(10, 5, 10, 7),
               decoration: BoxDecoration(
-                color: spec.background,
+                color: pageBackground,
                 border: Border(
                   top: BorderSide(
                     color: spec.textPrimary.withValues(alpha: .06),
