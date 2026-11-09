@@ -20,70 +20,78 @@ class AppBackdrop extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: spec.gradient,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        if (customImage != null && File(customImage).existsSync())
-          Builder(
-            builder: (context) {
-              final size = MediaQuery.sizeOf(context);
-              final dpr = MediaQuery.devicePixelRatioOf(context);
-              return Image.file(
-                File(customImage),
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                cacheWidth: (size.width * dpr).round(),
-                cacheHeight: (size.height * dpr).round(),
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-              );
-            },
-          ),
-        if (customImage != null)
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  spec.background.withValues(alpha: .72),
-                  spec.background.withValues(alpha: .88),
-                  spec.background.withValues(alpha: .96),
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+        RepaintBoundary(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: spec.gradient,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
               ),
-            ),
-          ),
-        IgnorePointer(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: const Alignment(-.9, -1.1),
-                radius: 1.1,
-                colors: [
-                  spec.primary.withValues(alpha: .16),
-                  Colors.transparent,
-                ],
+              if (customImage != null && File(customImage).existsSync())
+                Builder(
+                  builder: (context) {
+                    final size = MediaQuery.sizeOf(context);
+                    final dpr = MediaQuery.devicePixelRatioOf(context);
+                    final targetWidth =
+                        (size.width * dpr).clamp(720, 1440).round();
+                    return Image.file(
+                      File(customImage),
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      cacheWidth: targetWidth,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    );
+                  },
+                ),
+              if (customImage != null)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        spec.background.withValues(alpha: .72),
+                        spec.background.withValues(alpha: .88),
+                        spec.background.withValues(alpha: .96),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+              IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(-.9, -1.1),
+                      radius: 1.1,
+                      colors: [
+                        spec.primary.withValues(alpha: .16),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
-        IgnorePointer(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: const Alignment(1.2, .9),
-                radius: .9,
-                colors: [
-                  spec.secondary.withValues(alpha: .12),
-                  Colors.transparent,
-                ],
+              IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(1.2, .9),
+                      radius: .9,
+                      colors: [
+                        spec.secondary.withValues(alpha: .12),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
         child,
@@ -154,8 +162,8 @@ class GlassPanel extends StatelessWidget {
       child: child,
     );
 
-    if (onTap == null) return panel;
-    return _Pressable(onTap: onTap!, child: panel);
+    if (onTap == null) return RepaintBoundary(child: panel);
+    return RepaintBoundary(child: _Pressable(onTap: onTap!, child: panel));
   }
 }
 

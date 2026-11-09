@@ -222,6 +222,8 @@ class SettingsProvider extends ChangeNotifier {
   bool _haptics = true;
   bool _remindersEnabled = false;
   String _reminderTime = '20:00';
+  bool _dashboardCameraEnabled = true;
+  bool _dashboardAiScanEnabled = true;
 
   bool _aiEnabled = true;
   String _aiEndpoint = defaultAiEndpoint;
@@ -256,6 +258,8 @@ class SettingsProvider extends ChangeNotifier {
   bool get haptics => _haptics;
   bool get remindersEnabled => _remindersEnabled;
   String get reminderTime => _reminderTime;
+  bool get dashboardCameraEnabled => _dashboardCameraEnabled;
+  bool get dashboardAiScanEnabled => _dashboardAiScanEnabled;
 
   bool get aiEnabled => _aiEnabled;
   String get aiEndpoint => _aiEndpoint;
@@ -305,6 +309,9 @@ class SettingsProvider extends ChangeNotifier {
     _haptics = prefs.getBool('training_haptics') ?? true;
     _remindersEnabled = prefs.getBool('reminder_enabled') ?? false;
     _reminderTime = prefs.getString('reminder_time') ?? '20:00';
+    _dashboardCameraEnabled = prefs.getBool('dashboard_camera_enabled') ?? true;
+    _dashboardAiScanEnabled =
+        prefs.getBool('dashboard_ai_scan_enabled') ?? true;
 
     _aiEnabled = prefs.getBool('ai_enabled') ?? true;
     var savedEndpoint = prefs.getString('ai_endpoint');
@@ -484,6 +491,18 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> setRemindersEnabled(bool value) async {
     _remindersEnabled = value;
     await _persist('reminder_enabled', value);
+    notifyListeners();
+  }
+
+  Future<void> setDashboardCameraEnabled(bool value) async {
+    _dashboardCameraEnabled = value;
+    await _persist('dashboard_camera_enabled', value);
+    notifyListeners();
+  }
+
+  Future<void> setDashboardAiScanEnabled(bool value) async {
+    _dashboardAiScanEnabled = value;
+    await _persist('dashboard_ai_scan_enabled', value);
     notifyListeners();
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'dart:io';
 
 import '../data/exercise_library.dart';
 import '../main.dart';
@@ -189,6 +190,12 @@ class _HistoryPageState extends State<HistoryPage> {
         .map((p) => p.name)
         .where((name) => name.trim().isNotEmpty)
         .toList();
+    final isCardioOnly = recordProjects.isNotEmpty &&
+        recordProjects.every((project) => project.isTimeBased);
+    final cardioKcal = recordProjects.fold<double>(
+      0,
+      (sum, project) => sum + project.estimatedCalories(),
+    );
 
     return GlassPanel(
       margin: const EdgeInsets.only(bottom: 12),
@@ -333,17 +340,23 @@ class _HistoryPageState extends State<HistoryPage> {
                     Row(
                       children: [
                         Icon(
-                          record.totalWork > 0
-                              ? Icons.bolt_rounded
-                              : Icons.timer_outlined,
+                          isCardioOnly
+                              ? Icons.local_fire_department_rounded
+                              : record.totalWork > 0
+                                  ? Icons.bolt_rounded
+                                  : Icons.timer_outlined,
                           size: 13,
                           color: spec.primary,
                         ),
                         const SizedBox(width: 2),
                         Text(
-                          record.totalWork > 0
-                              ? '${formatCompact(record.totalWork)} J'
-                              : '${record.totalDurationMinutes.toStringAsFixed(0)} 分钟',
+                          isCardioOnly
+                              ? '${cardioKcal.round()} kcal'
+                              : record.totalWork > 0
+                                  ? '${formatCompact(record.totalWork)} J'
+                                  : '${record.totalDurationMinutes.toStringAsFixed(0)} 分钟',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: spec.primary,
                             fontSize: 11.5,
@@ -355,11 +368,22 @@ class _HistoryPageState extends State<HistoryPage> {
                           record.totalDistanceKm > 0
                               ? '${record.totalDistanceKm.toStringAsFixed(1)} km'
                               : '${recordProjects.length} 个动作',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: spec.textSecondary,
                             fontSize: 11,
                           ),
                         ),
+                        if (record.photoPath != null &&
+                            File(record.photoPath!).existsSync()) ...[
+                          const Spacer(),
+                          Icon(
+                            Icons.photo_camera_rounded,
+                            size: 13,
+                            color: spec.textSecondary,
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -401,47 +425,66 @@ class _HistoryPageState extends State<HistoryPage> {
               ),
             ],
           ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox(width: double.infinity),
-            secondChild: Padding(
-              padding: const EdgeInsets.only(top: 12, right: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Divider(color: spec.textPrimary.withValues(alpha: .07)),
-                  const SizedBox(height: 4),
-                  for (final project in recordProjects)
-                    _ProjectDetail(
-                      project: project,
-                      spec: spec,
-                      battery: record.statusBattery,
-                    ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _editRecord(record),
-                          icon: const Icon(Icons.edit_outlined, size: 16),
-                          label: const Text('编辑这次训练'),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(40),
-                            foregroundColor: spec.primary,
-                            side: BorderSide(
-                              color: spec.primary.withValues(alpha: .3),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: expanded
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 12, right: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Divider(color: spec.textPrimary.withValues(alpha: .07)),
+                        const SizedBox(height: 4),
+                        if (record.photoPath != null &&
+                            File(record.photoPath!).existsSync()) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: RepaintBoundary(
+                              child: Image.file(
+                                File(record.photoPath!),
+                                width: double.infinity,
+                                height: 160,
+                                fit: BoxFit.cover,
+                                cacheWidth: 900,
+                                gaplessPlayback: true,
+                                errorBuilder: (_, __, ___) =>
+                                    const SizedBox.shrink(),
+                              ),
                             ),
                           ),
+                          const SizedBox(height: 10),
+                        ],
+                        for (final project in recordProjects)
+                          _ProjectDetail(
+                            project: project,
+                            spec: spec,
+                            battery: record.statusBattery,
+                          ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () => _editRecord(record),
+                                icon: const Icon(Icons.edit_outlined, size: 16),
+                                label: const Text('编辑这次训练'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(40),
+                                  foregroundColor: spec.primary,
+                                  side: BorderSide(
+                                    color: spec.primary.withValues(alpha: .3),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            crossFadeState:
-                expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 240),
-            sizeCurve: Curves.easeOutCubic,
+                      ],
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
           ),
         ],
       ),
@@ -699,6 +742,8 @@ class _ProjectDetail extends StatelessWidget {
               Expanded(
                 child: Text(
                   project.name.isEmpty ? '未命名动作' : project.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: spec.textPrimary,
                     fontSize: 13,
@@ -723,6 +768,8 @@ class _ProjectDetail extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             metric,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: spec.textSecondary,
               fontSize: 11.5,
@@ -937,6 +984,7 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
         projects: projects,
         statusBattery: _statusBattery,
         timestamp: DateTime.now(),
+        photoPath: widget.record.photoPath,
       ),
     );
   }
@@ -1062,8 +1110,8 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
             builder: (context, constraints) {
               final width = constraints.maxWidth;
               final bodyWidth = width - 3.4;
-              final fraction =
-                  (_batteryDragFraction ?? (_statusBattery / 100)).clamp(0.0, 1.0);
+              final fraction = (_batteryDragFraction ?? (_statusBattery / 100))
+                  .clamp(0.0, 1.0);
               final x = 1.9 + (bodyWidth - 2.8) * fraction;
               final maxLeft = (width - 8).clamp(0.0, width).toDouble();
               final pointerLeft = (x - 4).clamp(0.0, maxLeft).toDouble();
@@ -1077,8 +1125,7 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
                     setState(() => _batteryDragFraction = null),
                 onHorizontalDragCancel: () =>
                     setState(() => _batteryDragFraction = null),
-                onTapUp: (_) =>
-                    setState(() => _batteryDragFraction = null),
+                onTapUp: (_) => setState(() => _batteryDragFraction = null),
                 child: SizedBox(
                   height: 54,
                   child: Stack(

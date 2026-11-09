@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:excel/excel.dart' hide Border;
@@ -79,6 +80,7 @@ class WorkoutRecord {
   List<WorkoutProject> projects;
   int statusBattery;
   final DateTime timestamp;
+  String? photoPath;
 
   WorkoutRecord({
     required this.id,
@@ -87,6 +89,7 @@ class WorkoutRecord {
     required this.projects,
     this.statusBattery = 80,
     required this.timestamp,
+    this.photoPath,
   });
 
   double get totalWork {
@@ -233,26 +236,16 @@ class WorkoutProject {
     final profile = IronProfile.instance;
     final cardioMinutes = durationMinutes > 0
         ? durationMinutes
-        : (distanceKm > 0 && speedKmH > 0
-            ? distanceKm / speedKmH * 60
-            : 0);
+        : (distanceKm > 0 && speedKmH > 0 ? distanceKm / speedKmH * 60 : 0);
     if ((isCardio || category == '柔韧' || category == '功能') &&
         cardioMinutes > 0) {
-      var intensity = met > 0 ? met : (category == '柔韧' ? 2.5 : 6.5);
-      // ACSM 跑步/快走速度公式：VO2 = 0.2 * m/min + 3.5，MET = VO2 / 3.5。
-      // 有速度数据时用速度校正强度，避免只靠时长与固定 MET。
-      if (speedKmH > 0 &&
-          (name.contains('跑') ||
-              name.contains('走') ||
-              name.toLowerCase().contains('run'))) {
-        final metersPerMinute = speedKmH * 1000 / 60;
-        final speedMet = (0.2 * metersPerMinute + 3.5) / 3.5;
-        if (speedMet > intensity) intensity = speedMet;
-      }
-      return profile.estimateCardioCalories(
-        met: intensity,
-        minutes: cardioMinutes.toDouble(),
-        bodyWeightOverride: bodyWeight == 70 ? null : bodyWeight,
+      return profile.estimateCardioCaloriesFromMetrics(
+        name: name,
+        category: category,
+        met: met,
+        minutes: durationMinutes,
+        distanceKm: distanceKm,
+        speedKmH: speedKmH,
       );
     }
     if (category == '力量' || category == '功能') {
@@ -343,6 +336,7 @@ List<WorkoutRecord> normalizeWorkoutRecords(Iterable<WorkoutRecord> records) {
       projects: projects,
       statusBattery: record.statusBattery,
       timestamp: record.timestamp,
+      photoPath: record.photoPath,
     ));
   }
   return result;
@@ -400,6 +394,7 @@ class JsonStorageService {
       'projects': r.projects.map((p) => p.toJson()).toList(),
       'statusBattery': r.statusBattery,
       'timestamp': r.timestamp.toIso8601String(),
+      if (r.photoPath != null) 'photoPath': r.photoPath,
     };
   }
 
@@ -416,6 +411,7 @@ class JsonStorageService {
           .toList(),
       statusBattery: battery.clamp(0, 100).toInt(),
       timestamp: DateTime.parse(json['timestamp']),
+      photoPath: json['photoPath']?.toString(),
     );
   }
 }
@@ -465,6 +461,7 @@ class WorkoutProvider extends ChangeNotifier {
         projects: mergedProjects,
         statusBattery: newRecord.statusBattery,
         timestamp: DateTime.now(),
+        photoPath: newRecord.photoPath ?? existing.photoPath,
       );
       _records[existingIndex] = updatedRecord;
     } else {
@@ -475,6 +472,7 @@ class WorkoutProvider extends ChangeNotifier {
         projects: dedupeWorkoutProjects(newRecord.projects),
         statusBattery: newRecord.statusBattery,
         timestamp: newRecord.timestamp,
+        photoPath: newRecord.photoPath,
       ));
     }
     recalculateSessionNumbers();
@@ -490,6 +488,7 @@ class WorkoutProvider extends ChangeNotifier {
         projects: dedupeWorkoutProjects(updatedRecord.projects),
         statusBattery: updatedRecord.statusBattery,
         timestamp: updatedRecord.timestamp,
+        photoPath: updatedRecord.photoPath,
       );
       recalculateSessionNumbers();
     }
@@ -571,6 +570,7 @@ class WorkoutProvider extends ChangeNotifier {
         if (record.timestamp.isAfter(existing.timestamp)) {
           existing.statusBattery = record.statusBattery;
         }
+        existing.photoPath ??= record.photoPath;
       } else {
         merged[key] = WorkoutRecord(
           id: record.id,
@@ -579,6 +579,7 @@ class WorkoutProvider extends ChangeNotifier {
           projects: List.from(record.projects),
           statusBattery: record.statusBattery,
           timestamp: record.timestamp,
+          photoPath: record.photoPath,
         );
       }
     }
@@ -626,6 +627,7 @@ class WorkoutProvider extends ChangeNotifier {
                         })
                     .toList(),
                 'timestamp': record.timestamp.toIso8601String(),
+                if (record.photoPath != null) 'photoPath': record.photoPath,
               })
           .toList();
       final jsonString = json.encode(recordsJson);
@@ -659,6 +661,7 @@ class WorkoutProvider extends ChangeNotifier {
                   .toList(),
               statusBattery: battery.clamp(0, 100).toInt(),
               timestamp: DateTime.parse(item['timestamp']),
+              photoPath: item['photoPath']?.toString(),
             );
           }).toList();
         } catch (e) {
@@ -908,6 +911,40 @@ class NutstoreService extends ChangeNotifier {
     }
   }
 
+  Future<bool> uploadAdditionalFile(
+    String localFilePath,
+    String remoteFileName,
+  ) async {
+    try {
+      final file = File(localFilePath);
+      if (!await file.exists()) return false;
+      final safeName = Uri.encodeComponent(remoteFileName);
+      final remotePath =
+          '$_baseUrl${Uri.encodeComponent(_cloudFolder)}/$safeName';
+      final lower = remoteFileName.toLowerCase();
+      final contentType = lower.endsWith('.png')
+          ? 'image/png'
+          : lower.endsWith('.webp')
+              ? 'image/webp'
+              : 'image/jpeg';
+      final bytes = await file.readAsBytes();
+      final client = http.Client();
+      final response = await client.put(
+        Uri.parse(remotePath),
+        headers: {
+          'Authorization': _getAuthHeader(),
+          'Content-Type': contentType,
+        },
+        body: bytes,
+      );
+      client.close();
+      return response.statusCode == 201 || response.statusCode == 204;
+    } catch (e) {
+      debugPrint('上传打卡照片失败: $e');
+      return false;
+    }
+  }
+
   Future<bool> downloadFile(String savePath) async {
     try {
       final remotePath =
@@ -1128,6 +1165,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   final List<TextEditingController> distanceControllers = [];
   final List<TextEditingController> speedControllers = [];
   final List<ValueNotifier<String>> partNotifiers = [];
+  final List<ValueNotifier<String?>> photoNotifiers = [];
 
   bool _isLoading = false;
 
@@ -1218,6 +1256,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     final provider = context.read<WorkoutProvider>();
     final settings = context.read<SettingsProvider>();
+    String? photoPath;
+    for (final notifier in photoNotifiers) {
+      final path = notifier.value;
+      if (path != null && File(path).existsSync()) {
+        photoPath = path;
+        break;
+      }
+    }
     final record = WorkoutRecord(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       date: selectedDate,
@@ -1225,6 +1271,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       projects: validProjects,
       statusBattery: settings.statusBattery,
       timestamp: DateTime.now(),
+      photoPath: photoPath,
     );
     provider.addRecord(record);
 
@@ -1369,6 +1416,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 statusBattery:
                     useIncoming ? record.statusBattery : existing.statusBattery,
                 timestamp: DateTime.now(),
+                photoPath: useIncoming
+                    ? record.photoPath ?? existing.photoPath
+                    : existing.photoPath ?? record.photoPath,
               );
             }
           }
@@ -1393,6 +1443,20 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       return;
     }
     final ok = await nutstore.uploadFile(path);
+    if (ok) {
+      for (final record in provider.records) {
+        final photoPath = record.photoPath;
+        if (photoPath == null || photoPath.trim().isEmpty) continue;
+        if (!File(photoPath).existsSync()) continue;
+        final ext = photoPath.contains('.')
+            ? photoPath.substring(photoPath.lastIndexOf('.'))
+            : '.jpg';
+        await nutstore.uploadAdditionalFile(
+          photoPath,
+          'workout_${record.id}$ext',
+        );
+      }
+    }
     if (!mounted) return;
     _showToast(ok ? '云端数据已更新' : '上传失败，请稍后重试', isError: !ok);
   }
@@ -1765,6 +1829,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       durationController: durationControllers[index],
       distanceController: distanceControllers[index],
       speedController: speedControllers[index],
+      photoNotifier: photoNotifiers[index],
       canRemove: projects.length > 1,
       onRemove: () => _removeProjectAt(index),
     );
@@ -1783,6 +1848,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       distanceControllers.add(TextEditingController());
       speedControllers.add(TextEditingController());
       partNotifiers.add(ValueNotifier<String>('胸'));
+      photoNotifiers.add(ValueNotifier<String?>(null));
     });
   }
 
@@ -1800,6 +1866,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       distanceControllers.removeAt(index).dispose();
       speedControllers.removeAt(index).dispose();
       partNotifiers.removeAt(index).dispose();
+      photoNotifiers.removeAt(index).dispose();
     });
   }
 
@@ -1831,6 +1898,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         text: project.speedKmH == 0 ? '' : project.speedKmH.toString(),
       ));
       partNotifiers.add(ValueNotifier<String>(project.part));
+      photoNotifiers.add(ValueNotifier<String?>(null));
     }
   }
 
@@ -1865,6 +1933,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     for (final n in partNotifiers) {
       n.dispose();
     }
+    for (final n in photoNotifiers) {
+      n.dispose();
+    }
     nameControllers.clear();
     weightControllers.clear();
     setsControllers.clear();
@@ -1875,6 +1946,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     distanceControllers.clear();
     speedControllers.clear();
     partNotifiers.clear();
+    photoNotifiers.clear();
   }
 
   Widget _quickDateChip(String label, int daysAgo, AppThemeSpec spec) {
@@ -2530,6 +2602,7 @@ class _ProjectCard extends StatefulWidget {
   final TextEditingController durationController;
   final TextEditingController distanceController;
   final TextEditingController speedController;
+  final ValueNotifier<String?> photoNotifier;
   final bool canRemove;
   final VoidCallback onRemove;
 
@@ -2546,6 +2619,7 @@ class _ProjectCard extends StatefulWidget {
     required this.durationController,
     required this.distanceController,
     required this.speedController,
+    required this.photoNotifier,
     required this.canRemove,
     required this.onRemove,
   });
@@ -2656,16 +2730,118 @@ class _ProjectCardState extends State<_ProjectCard> {
     return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
-  Future<void> _scanCardioDashboard() async {
+  Future<ImageSource?> _choosePhotoSource() {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_rounded),
+              title: const Text('拍照'),
+              subtitle: const Text('使用相机拍摄训练打卡照片'),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('从相册选择'),
+              subtitle: const Text('导入已有的训练打卡照片'),
+              onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _persistCheckinPhoto(XFile picked) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final photoDir = Directory('${dir.path}/workout_photos');
+    if (!await photoDir.exists()) {
+      await photoDir.create(recursive: true);
+    }
+    final rawName = picked.path.split(RegExp(r'[/\\]')).last;
+    final dot = rawName.lastIndexOf('.');
+    final ext = dot >= 0 ? rawName.substring(dot) : '.jpg';
+    final target = File(
+      '${photoDir.path}/${DateTime.now().microsecondsSinceEpoch}$ext',
+    );
+    await target.writeAsBytes(await picked.readAsBytes());
+    return target.path;
+  }
+
+  Future<bool> _confirmRecognizedMetrics({
+    required double duration,
+    required double distance,
+    required double speed,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('识别到训练数据'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('照片中识别到以下信息，是否使用它们计算本次消耗？'),
+            const SizedBox(height: 12),
+            if (duration > 0) Text('时长：${_formatMetric(duration)} 分钟'),
+            if (distance > 0) Text('距离：${_formatMetric(distance, 2)} km'),
+            if (speed > 0) Text('速度：${_formatMetric(speed)} km/h'),
+            const SizedBox(height: 10),
+            const Text(
+              '照片无论是否使用这些数据，都会作为本次训练的打卡照片保存。',
+              style: TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('不使用'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('使用这些数据'),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  String _formatMetric(double value, [int decimals = 1]) {
+    return value % 1 == 0
+        ? value.toStringAsFixed(0)
+        : value.toStringAsFixed(decimals);
+  }
+
+  Future<void> _pickCheckinPhoto() async {
     if (_scanningDashboard) return;
-    final settings = context.read<SettingsProvider>();
+    final source = await _choosePhotoSource();
+    if (source == null || !mounted) return;
     final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
+      source: source,
       imageQuality: 88,
+      maxWidth: 1800,
     );
     if (picked == null || !mounted) return;
+
     setState(() => _scanningDashboard = true);
     try {
+      final savedPath = await _persistCheckinPhoto(picked);
+      if (!mounted) return;
+      widget.photoNotifier.value = savedPath;
+
+      final settings = context.read<SettingsProvider>();
+      if (!settings.dashboardAiScanEnabled) {
+        _showSnack('打卡照片已添加，将随训练记录保存');
+        return;
+      }
+
       final bytes = await picked.readAsBytes();
       final reply = await AiCoachService.readCardioDashboard(
         imageBase64: base64Encode(bytes),
@@ -2676,7 +2852,7 @@ class _ProjectCardState extends State<_ProjectCard> {
       );
       if (!mounted) return;
       if (!reply.success) {
-        _showSnack(reply.error ?? 'AI 识别失败');
+        _showSnack(reply.error ?? 'AI 识别失败，照片已保存为打卡照片');
         return;
       }
       final raw = reply.content;
@@ -2690,36 +2866,41 @@ class _ProjectCardState extends State<_ProjectCard> {
         } catch (_) {}
       }
       if (data == null) {
-        _showSnack('AI 未返回可解析的仪表盘数据');
+        _showSnack('未识别到可解析的训练数据，照片已保存');
         return;
       }
       final duration = _readMetric(data, 'durationMinutes');
       final distance = _readMetric(data, 'distanceKm');
       final speed = _readMetric(data, 'speedKmH');
       if (duration <= 0 && distance <= 0 && speed <= 0) {
-        _showSnack('没有识别到时长、距离或速度');
+        _showSnack('照片中未识别到时长、距离或速度，已保存为打卡照片');
         return;
       }
-      setState(() {
-        if (duration > 0) {
-          widget.durationController.text = duration.toStringAsFixed(
-            duration % 1 == 0 ? 0 : 1,
-          );
-        }
-        if (distance > 0) {
-          widget.distanceController.text = distance.toStringAsFixed(
-            distance % 1 == 0 ? 0 : 2,
-          );
-        }
-        if (speed > 0) {
-          widget.speedController.text = speed.toStringAsFixed(
-            speed % 1 == 0 ? 0 : 1,
-          );
-        }
-      });
-      _showSnack('已从仪表盘读取训练数据');
+      if (!mounted) return;
+      final useMetrics = await _confirmRecognizedMetrics(
+        duration: duration,
+        distance: distance,
+        speed: speed,
+      );
+      if (!mounted) return;
+      if (useMetrics) {
+        setState(() {
+          if (duration > 0) {
+            widget.durationController.text = _formatMetric(duration);
+          }
+          if (distance > 0) {
+            widget.distanceController.text = _formatMetric(distance, 2);
+          }
+          if (speed > 0) {
+            widget.speedController.text = _formatMetric(speed);
+          }
+        });
+        _showSnack('已使用识别到的数据计算消耗');
+      } else {
+        _showSnack('已忽略识别结果，照片仍作为打卡照片保存');
+      }
     } catch (error) {
-      if (mounted) _showSnack('识别失败：$error');
+      if (mounted) _showSnack('处理照片失败：$error');
     } finally {
       if (mounted) setState(() => _scanningDashboard = false);
     }
@@ -2902,17 +3083,19 @@ class _ProjectCardState extends State<_ProjectCard> {
   @override
   Widget build(BuildContext context) {
     final spec = context.watch<ThemeProvider>().currentSpec;
+    final settings = context.watch<SettingsProvider>();
     final work = _calculateWork();
     final duration = double.tryParse(widget.durationController.text) ?? 0;
     final distance = double.tryParse(widget.distanceController.text) ?? 0;
     final speed = double.tryParse(widget.speedController.text) ?? 0;
-    final effectiveMinutes = duration > 0
-        ? duration
-        : (distance > 0 && speed > 0 ? distance / speed * 60 : 0);
     final met = _definition?.met ?? 0;
-    final kcal = IronProfile.instance.estimateCardioCalories(
-      met: met > 0 ? met : 6.5,
-      minutes: effectiveMinutes.toDouble(),
+    final kcal = IronProfile.instance.estimateCardioCaloriesFromMetrics(
+      name: widget.nameController.text.trim(),
+      category: _category,
+      met: met,
+      minutes: duration,
+      distanceKm: distance,
+      speedKmH: speed,
     );
     return GlassPanel(
       margin: const EdgeInsets.only(bottom: 14),
@@ -3052,7 +3235,7 @@ class _ProjectCardState extends State<_ProjectCard> {
           const SizedBox(height: 14),
           if (_isTimeBased)
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
                   child: _numberField(
@@ -3074,8 +3257,7 @@ class _ProjectCardState extends State<_ProjectCard> {
                       suffix: 'km',
                     ),
                   ),
-                if (_isCardio)
-                  const SizedBox(width: 8),
+                if (_isCardio) const SizedBox(width: 8),
                 if (_isCardio)
                   Expanded(
                     child: _numberField(
@@ -3086,26 +3268,45 @@ class _ProjectCardState extends State<_ProjectCard> {
                       suffix: 'km/h',
                     ),
                   ),
-                if (_isCardio) ...[
-                  const SizedBox(width: 4),
-                  SizedBox(
-                    width: 36,
-                    child: IconButton(
-                      tooltip: '拍照识别仪表盘',
-                      onPressed:
-                          _scanningDashboard ? null : _scanCardioDashboard,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 36,
-                        height: 40,
+                if (_isCardio && settings.dashboardCameraEnabled) ...[
+                  const SizedBox(width: 2),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: ValueListenableBuilder<String?>(
+                      valueListenable: widget.photoNotifier,
+                      builder: (context, photoPath, _) => Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          _DashboardCameraButton(
+                            spec: spec,
+                            scanning: _scanningDashboard,
+                            onPressed:
+                                _scanningDashboard ? null : _pickCheckinPhoto,
+                          ),
+                          if (photoPath != null)
+                            Positioned(
+                              right: -2,
+                              top: -2,
+                              child: Container(
+                                width: 15,
+                                height: 15,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF22C55E),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: spec.card,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.check_rounded,
+                                  size: 10,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                      icon: _scanningDashboard
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.camera_alt_outlined, size: 19),
                     ),
                   ),
                 ],
@@ -3216,6 +3417,104 @@ class _ProjectCardState extends State<_ProjectCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DashboardCameraButton extends StatefulWidget {
+  const _DashboardCameraButton({
+    required this.spec,
+    required this.scanning,
+    required this.onPressed,
+  });
+
+  final AppThemeSpec spec;
+  final bool scanning;
+  final VoidCallback? onPressed;
+
+  @override
+  State<_DashboardCameraButton> createState() => _DashboardCameraButtonState();
+}
+
+class _DashboardCameraButtonState extends State<_DashboardCameraButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: '拍照识别仪表盘',
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final t = _controller.value;
+          final pulse = 1 + 0.05 * math.sin(t * math.pi * 4);
+          final wobble = math.sin(t * math.pi * 2) * 0.06;
+          final colors = [
+            const Color(0xFFFF5E62),
+            const Color(0xFFFFC371),
+            const Color(0xFF4ECDC4),
+            const Color(0xFF6C5CE7),
+            const Color(0xFFFF5E62),
+          ];
+          return Transform.scale(
+            scale: pulse,
+            child: Transform.rotate(
+              angle: wobble,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: SweepGradient(
+                    transform: GradientRotation(t * math.pi * 2),
+                    colors: colors,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.spec.primary.withValues(alpha: .38),
+                      blurRadius: 10 + 4 * math.sin(t * math.pi * 2),
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: widget.onPressed,
+                    child: Center(child: child),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        child: widget.scanning
+            ? const SizedBox(
+                width: 17,
+                height: 17,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(
+                Icons.photo_camera_rounded,
+                size: 20,
+                color: Colors.white,
+              ),
       ),
     );
   }

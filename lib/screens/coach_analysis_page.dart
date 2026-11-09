@@ -732,6 +732,7 @@ class _HeroPanel extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
+                      flex: 2,
                       child: _heroMetric(
                         spec,
                         '${insights.thisWeekSessions}',
@@ -745,6 +746,7 @@ class _HeroPanel extends StatelessWidget {
                       color: spec.onHero.withValues(alpha: .16),
                     ),
                     Expanded(
+                      flex: 3,
                       child: _heroMetric(
                         spec,
                         (insights.totalWork / 1000).toStringAsFixed(1),
@@ -758,6 +760,7 @@ class _HeroPanel extends StatelessWidget {
                       color: spec.onHero.withValues(alpha: .16),
                     ),
                     Expanded(
+                      flex: 2,
                       child: _heroMetric(
                         spec,
                         '${insights.trainingDays}',
@@ -793,31 +796,58 @@ class _HeroPanel extends StatelessWidget {
   Widget _heroMetric(
       AppThemeSpec spec, String value, String label, String sub) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          value,
-          style: TextStyle(
-            color: spec.onHero,
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            height: 1,
+        SizedBox(
+          width: double.infinity,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center,
+            child: Text(
+              value,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                color: spec.onHero,
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: spec.onHeroMuted,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w600,
+        SizedBox(
+          width: double.infinity,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                color: spec.onHeroMuted,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ),
-        Text(
-          sub,
-          style: TextStyle(
-            color: spec.onHero.withValues(alpha: .55),
-            fontSize: 9,
+        SizedBox(
+          width: double.infinity,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.center,
+            child: Text(
+              sub,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                color: spec.onHero.withValues(alpha: .55),
+                fontSize: 9,
+              ),
+            ),
           ),
         ),
       ],

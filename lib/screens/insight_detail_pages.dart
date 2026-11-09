@@ -1663,21 +1663,39 @@ class _SummaryMetric extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Text(
-            value,
-            style: TextStyle(
-              color: spec.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              height: 1,
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.center,
+              child: Text(
+                value,
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  color: spec.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: spec.textSecondary,
-              fontSize: 9.5,
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.center,
+              child: Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  color: spec.textSecondary,
+                  fontSize: 9.5,
+                ),
+              ),
             ),
           ),
         ],

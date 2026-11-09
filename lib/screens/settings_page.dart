@@ -1332,6 +1332,41 @@ class _SettingsPageState extends State<SettingsPage> {
                           .setHaptics(!settings.haptics),
                     ),
                     _SettingsTile(
+                      icon: Icons.photo_camera_rounded,
+                      title: '仪表盘拍照入口',
+                      subtitle: settings.dashboardCameraEnabled
+                          ? '卡片右侧显示彩色拍照按钮'
+                          : '已隐藏 · 时长/距离/速度自动铺满',
+                      trailing: Switch.adaptive(
+                        value: settings.dashboardCameraEnabled,
+                        onChanged: (value) => context
+                            .read<SettingsProvider>()
+                            .setDashboardCameraEnabled(value),
+                      ),
+                      onTap: () => context
+                          .read<SettingsProvider>()
+                          .setDashboardCameraEnabled(
+                              !settings.dashboardCameraEnabled),
+                    ),
+                    if (settings.dashboardCameraEnabled)
+                      _SettingsTile(
+                        icon: Icons.document_scanner_outlined,
+                        title: '识别打卡照片数据',
+                        subtitle: settings.dashboardAiScanEnabled
+                            ? '识别照片中的距离/速度并询问是否用于计算'
+                            : '关闭识别 · 照片仅作为打卡记录',
+                        trailing: Switch.adaptive(
+                          value: settings.dashboardAiScanEnabled,
+                          onChanged: (value) => context
+                              .read<SettingsProvider>()
+                              .setDashboardAiScanEnabled(value),
+                        ),
+                        onTap: () => context
+                            .read<SettingsProvider>()
+                            .setDashboardAiScanEnabled(
+                                !settings.dashboardAiScanEnabled),
+                      ),
+                    _SettingsTile(
                       icon: Icons.notifications_active_outlined,
                       title: '训练提醒',
                       subtitle: settings.remindersEnabled

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -33,7 +32,6 @@ class StatusBanner extends StatefulWidget {
 class _StatusBannerState extends State<StatusBanner>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-  Timer? _ticker;
 
   @override
   void initState() {
@@ -42,14 +40,10 @@ class _StatusBannerState extends State<StatusBanner>
       vsync: this,
       duration: const Duration(seconds: 7),
     )..repeat();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
   }
 
   @override
   void dispose() {
-    _ticker?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -61,10 +55,6 @@ class _StatusBannerState extends State<StatusBanner>
     final tone = statusTones[settings.statusTone % statusTones.length];
     final hasImage = settings.statusImagePath != null &&
         File(settings.statusImagePath!).existsSync();
-
-    final now = DateTime.now();
-    final elapsed = now.difference(widget.startedAt);
-    final duration = elapsed.isNegative ? Duration.zero : elapsed;
 
     return GestureDetector(
       onTap: () => showStatusEditor(context),
@@ -103,10 +93,14 @@ class _StatusBannerState extends State<StatusBanner>
           fit: StackFit.expand,
           children: [
             if (hasImage)
-              Image.file(
-                File(settings.statusImagePath!),
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              RepaintBoundary(
+                child: Image.file(
+                  File(settings.statusImagePath!),
+                  fit: BoxFit.cover,
+                  cacheWidth: 1200,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
               ),
             if (hasImage)
               DecoratedBox(
@@ -332,6 +326,10 @@ class _StatusBannerState extends State<StatusBanner>
                     child: AnimatedBuilder(
                       animation: _controller,
                       builder: (context, child) {
+                        final elapsed =
+                            DateTime.now().difference(widget.startedAt);
+                        final duration =
+                            elapsed.isNegative ? Duration.zero : elapsed;
                         final wave =
                             .5 + .5 * math.sin(_controller.value * math.pi * 2);
                         final glow = [
@@ -1013,8 +1011,7 @@ Future<void> showStatusEditor(BuildContext context) async {
                                 height: 20,
                                 outlineColor: spec.isDark
                                     ? null
-                                    : spec.textPrimary
-                                        .withValues(alpha: .42),
+                                    : spec.textPrimary.withValues(alpha: .42),
                                 textColor:
                                     spec.isDark ? null : spec.textPrimary,
                               ),

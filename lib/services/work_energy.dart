@@ -222,4 +222,39 @@ class IronProfile {
     final weight = bodyWeightOverride ?? bodyWeightKg;
     return math.max(0, met) * 3.5 * weight / 200 * minutes;
   }
+
+  /// 统一的有氧消耗估算：时长优先，缺失时用距离/速度补算；
+  /// 速度存在时用 ACSM 公式校正 MET，让速度真正参与消耗计算。
+  double estimateCardioCaloriesFromMetrics({
+    required String name,
+    required String category,
+    required double met,
+    required double minutes,
+    required double distanceKm,
+    required double speedKmH,
+  }) {
+    final effectiveMinutes = minutes > 0
+        ? minutes
+        : (distanceKm > 0 && speedKmH > 0 ? distanceKm / speedKmH * 60 : 0.0);
+    if (effectiveMinutes <= 0) return 0;
+
+    var intensity = met > 0 ? met : (category == '柔韧' ? 2.5 : 6.5);
+    if (speedKmH > 0) {
+      final metersPerMinute = speedKmH * 1000 / 60;
+      final speedMet = (0.2 * metersPerMinute + 3.5) / 3.5;
+      final lower = name.toLowerCase();
+      final isRunWalk = name.contains('跑') ||
+          name.contains('走') ||
+          name.contains('步行') ||
+          lower.contains('run') ||
+          lower.contains('walk');
+      final speedWeighted =
+          isRunWalk ? speedMet : intensity * .25 + speedMet * .75;
+      if (speedWeighted > intensity) intensity = speedWeighted;
+    }
+    return estimateCardioCalories(
+      met: intensity.clamp(1.0, 23.0).toDouble(),
+      minutes: effectiveMinutes,
+    );
+  }
 }
