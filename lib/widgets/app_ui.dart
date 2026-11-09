@@ -202,6 +202,8 @@ class SectionHeader extends StatelessWidget {
   final String? subtitle;
   final Widget? trailing;
   final EdgeInsetsGeometry padding;
+  final Color? titleColor;
+  final Color? subtitleColor;
 
   const SectionHeader({
     super.key,
@@ -209,6 +211,8 @@ class SectionHeader extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.padding = const EdgeInsets.fromLTRB(2, 26, 2, 12),
+    this.titleColor,
+    this.subtitleColor,
   });
 
   @override
@@ -228,7 +232,7 @@ class SectionHeader extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
-                    color: spec.textPrimary,
+                    color: titleColor ?? spec.textPrimary,
                     letterSpacing: .2,
                   ),
                 ),
@@ -238,7 +242,7 @@ class SectionHeader extends StatelessWidget {
                     subtitle!,
                     style: TextStyle(
                       fontSize: 12,
-                      color: spec.textSecondary,
+                      color: subtitleColor ?? spec.textSecondary,
                       height: 1.4,
                     ),
                   ),

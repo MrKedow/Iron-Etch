@@ -27,17 +27,27 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
   String _busyMessage = '正在准备书库…';
   String? _warning;
   bool _gridView = true;
-  int _shelfMaterial = 1;
+  int _shelfMaterial = 0;
   bool _introVisible = true;
 
   static const List<String> _shelfMaterials = [
-    '玻璃',
     '木质',
     '钢质',
     '瓷质',
-    '镂空',
-    '藤质',
   ];
+
+  Color get _shelfTextPrimary =>
+      _shelfMaterial == 2 ? const Color(0xFF2B2318) : Colors.white;
+
+  Color get _shelfTextSecondary => _shelfMaterial == 2
+      ? const Color(0xFF6A5C4A)
+      : Colors.white.withValues(alpha: .78);
+
+  Color get _shelfAccent => switch (_shelfMaterial) {
+        1 => const Color(0xFFD7E3F4),
+        2 => const Color(0xFF8A5A2B),
+        _ => const Color(0xFFFFD9A0),
+      };
 
   @override
   void initState() {
@@ -48,11 +58,23 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
 
   Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    final savedMaterial = prefs.getInt('library_shelf_material_v2');
+    int material;
+    if (savedMaterial != null) {
+      material = savedMaterial;
+    } else {
+      final legacy = prefs.getInt('library_shelf_material') ?? 1;
+      material = switch (legacy) {
+        2 => 1,
+        3 => 2,
+        _ => 0,
+      };
+      await prefs.setInt('library_shelf_material_v2', material);
+    }
     if (!mounted) return;
     setState(() {
       _gridView = prefs.getBool('library_grid_view') ?? true;
-      _shelfMaterial =
-          (prefs.getInt('library_shelf_material') ?? 1).clamp(0, 5);
+      _shelfMaterial = material.clamp(0, _shelfMaterials.length - 1);
       _introVisible = !(prefs.getBool('library_intro_hidden') ?? false);
     });
   }
@@ -150,7 +172,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
     if (selected == null) return;
     setState(() => _shelfMaterial = selected);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('library_shelf_material', selected);
+    await prefs.setInt('library_shelf_material_v2', selected);
   }
 
   Future<void> _prepareLibrary() async {
@@ -464,9 +486,12 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                   SectionHeader(
                     title: '书架',
                     subtitle: '轻点封面开始阅读，长按管理书籍',
+                    titleColor: _shelfTextPrimary,
+                    subtitleColor: _shelfTextSecondary,
                     trailing: Pill(
                       label: '${_library.books.length} 本',
                       icon: Icons.auto_stories_rounded,
+                      color: _shelfAccent,
                     ),
                     padding: const EdgeInsets.fromLTRB(2, 24, 2, 12),
                   ),
@@ -547,7 +572,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                   Text(
                     '支持 EPUB 2 / EPUB 3。划线、目录、全书查找和阅读进度会自动保存在本机。',
                     style: TextStyle(
-                      color: spec.textSecondary.withValues(alpha: .75),
+                      color: _shelfTextSecondary.withValues(alpha: .75),
                       fontSize: 10.5,
                       height: 1.5,
                     ),
@@ -795,7 +820,8 @@ class _BookCard extends StatelessWidget {
                                 if (needsDownload && downloadInfo != null)
                                   Positioned.fill(
                                     child: Container(
-                                      color: Colors.black.withValues(alpha: .36),
+                                      color:
+                                          Colors.black.withValues(alpha: .36),
                                       alignment: Alignment.center,
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
@@ -827,12 +853,11 @@ class _BookCard extends StatelessWidget {
                                           ),
                                           const SizedBox(height: 5),
                                           Text(
-                                            formatDownloadSpeed(
-                                                downloadInfo
-                                                    .speedBytesPerSecond),
+                                            formatDownloadSpeed(downloadInfo
+                                                .speedBytesPerSecond),
                                             style: TextStyle(
-                                              color: Colors.white.withValues(
-                                                  alpha: .86),
+                                              color: Colors.white
+                                                  .withValues(alpha: .86),
                                               fontSize: 8.5,
                                               fontWeight: FontWeight.w800,
                                             ),
@@ -1014,7 +1039,7 @@ class _BookCard extends StatelessWidget {
   }
 }
 
-enum _ShelfMaterial { glass, wood, steel, porcelain, lattice, rattan }
+enum _ShelfMaterial { wood, steel, porcelain }
 
 class _ShelfSpec {
   final _ShelfMaterial type;
@@ -1025,18 +1050,12 @@ class _ShelfSpec {
 }
 
 const List<_ShelfSpec> _shelfSpecs = [
-  _ShelfSpec(_ShelfMaterial.glass, [Color(0xFF33556A), Color(0xFF1B2C38)],
-      Color(0xFF5B7D92), Color(0xFF33556A)),
   _ShelfSpec(_ShelfMaterial.wood, [Color(0xFF8A5A2B), Color(0xFF4E2E12)],
       Color(0xFF9A6A38), Color(0xFF5C3A1A)),
   _ShelfSpec(_ShelfMaterial.steel, [Color(0xFF4A515C), Color(0xFF22262C)],
       Color(0xFF6A737F), Color(0xFF3A4048)),
   _ShelfSpec(_ShelfMaterial.porcelain, [Color(0xFFF2ECE2), Color(0xFFD8CEBC)],
       Color(0xFFFBF6EC), Color(0xFFC9BEA9)),
-  _ShelfSpec(_ShelfMaterial.lattice, [Color(0xFF23272E), Color(0xFF12151A)],
-      Color(0xFF3A3230), Color(0xFF221D1B)),
-  _ShelfSpec(_ShelfMaterial.rattan, [Color(0xFF4E6B3A), Color(0xFF2C3E1F)],
-      Color(0xFF6B8A52), Color(0xFF39502A)),
 ];
 
 class _ShelfBackground extends StatelessWidget {
@@ -1072,14 +1091,8 @@ class _ShelfPainter extends CustomPainter {
         _paintWood(canvas, size);
       case _ShelfMaterial.steel:
         _paintSteel(canvas, size);
-      case _ShelfMaterial.glass:
-        _paintGlass(canvas, size);
       case _ShelfMaterial.porcelain:
         _paintPorcelain(canvas, size);
-      case _ShelfMaterial.lattice:
-        _paintLattice(canvas, size);
-      case _ShelfMaterial.rattan:
-        _paintRattan(canvas, size);
     }
 
     _paintBoards(canvas, size);
@@ -1139,7 +1152,8 @@ class _ShelfPainter extends CustomPainter {
     for (double x = size.width / 3; x < size.width; x += size.width / 3) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), seam);
     }
-    final rust = Paint()..color = const Color(0xFF8B98A8).withValues(alpha: .08);
+    final rust = Paint()
+      ..color = const Color(0xFF8B98A8).withValues(alpha: .08);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height * .18), rust);
     final highlight = Paint()
       ..shader = LinearGradient(
@@ -1152,7 +1166,8 @@ class _ShelfPainter extends CustomPainter {
         ],
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, highlight);
-    final rivet = Paint()..color = const Color(0xFFDCE3EA).withValues(alpha: .22);
+    final rivet = Paint()
+      ..color = const Color(0xFFDCE3EA).withValues(alpha: .22);
     for (double x = size.width * .12; x < size.width; x += size.width * .22) {
       for (double y = 40; y < size.height; y += 66) {
         canvas.drawCircle(Offset(x, y), 2.6, rivet);
@@ -1168,25 +1183,6 @@ class _ShelfPainter extends CustomPainter {
     }
   }
 
-  void _paintGlass(Canvas canvas, Size size) {
-    final tint = Paint()
-      ..color = const Color(0xFF9CC6E0).withValues(alpha: .08);
-    canvas.drawRect(Offset.zero & size, tint);
-    final streak = Paint()
-      ..color = Colors.white.withValues(alpha: .10)
-      ..strokeWidth = 9
-      ..strokeCap = StrokeCap.round;
-    for (double x = -size.height; x < size.width; x += size.width / 4) {
-      canvas.drawLine(
-          Offset(x, 0), Offset(x + size.height, size.height), streak);
-    }
-    final edge = Paint()
-      ..color = Colors.white.withValues(alpha: .16)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawRect(Offset.zero & size, edge);
-  }
-
   void _paintPorcelain(Canvas canvas, Size size) {
     final highlight = Paint()
       ..shader = RadialGradient(
@@ -1198,82 +1194,6 @@ class _ShelfPainter extends CustomPainter {
         ],
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, highlight);
-  }
-
-  void _paintLattice(Canvas canvas, Size size) {
-    final frame = Paint()
-      ..color = const Color(0xFF7A5C3A).withValues(alpha: .92)
-      ..strokeWidth = 3.2;
-    final shadow = Paint()
-      ..color = Colors.black.withValues(alpha: .24)
-      ..strokeWidth = 2;
-    final hole = Paint()
-      ..color = const Color(0xFF12100D).withValues(alpha: .30)
-      ..style = PaintingStyle.fill;
-    const step = 34.0;
-    for (double y = 0; y < size.height; y += step) {
-      final line = Path()
-        ..moveTo(0, y)
-        ..quadraticBezierTo(size.width * .5, y + 2.5, size.width, y);
-      canvas.drawPath(line, frame);
-      canvas.drawPath(
-        line.shift(const Offset(0, 1.5)),
-        shadow,
-      );
-    }
-    for (double x = step / 2; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), frame);
-      canvas.drawLine(Offset(x + 1.5, 0), Offset(x + 1.5, size.height), shadow);
-    }
-    for (double y = step / 2; y < size.height; y += step) {
-      for (double x = step / 2; x < size.width; x += step) {
-        canvas.drawCircle(Offset(x, y), 6.5, hole);
-        canvas.drawCircle(
-          Offset(x, y),
-          6.5,
-          Paint()
-            ..color = const Color(0xFFB39A7A).withValues(alpha: .35)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = .8,
-        );
-      }
-    }
-  }
-
-  void _paintRattan(Canvas canvas, Size size) {
-    const step = 20.0;
-    final vertical = Paint()
-      ..color = const Color(0xFF2C3E1F).withValues(alpha: .92)
-      ..strokeWidth = 5;
-    final horizontal = Paint()
-      ..color = const Color(0xFF6E8A52).withValues(alpha: .92)
-      ..strokeWidth = 5;
-    final highlight = Paint()
-      ..color = const Color(0xFF9BB876).withValues(alpha: .38)
-      ..strokeWidth = 1.2;
-    for (double x = step / 2; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), vertical);
-      canvas.drawLine(Offset(x + 2, 0), Offset(x + 2, size.height), highlight);
-    }
-    for (double y = 0; y < size.height; y += step) {
-      final row = (y ~/ step) % 2;
-      for (double x = row == 0 ? 0 : step / 2; x < size.width; x += step) {
-        final rect = Rect.fromLTWH(
-          x,
-          y + 4,
-          step * .85,
-          step - 8,
-        );
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(rect, const Radius.circular(3)),
-          horizontal,
-        );
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(rect.deflate(1.2), const Radius.circular(2)),
-          highlight,
-        );
-      }
-    }
   }
 
   @override
@@ -1388,8 +1308,7 @@ class _BookListTile extends StatelessWidget {
                                 width: 22,
                                 height: 22,
                                 child: CircularProgressIndicator(
-                                  value:
-                                      downloadInfo.progress.clamp(0.0, 1.0),
+                                  value: downloadInfo.progress.clamp(0.0, 1.0),
                                   strokeWidth: 2.4,
                                   color: Colors.white,
                                   backgroundColor:
