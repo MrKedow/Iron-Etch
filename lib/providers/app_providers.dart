@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/app_haptics.dart';
 import '../services/work_energy.dart';
 import '../theme/app_theme.dart';
 
@@ -83,15 +84,32 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('selected_theme_id', _themeId);
     await prefs.remove('selected_theme');
+    AppHaptics.select();
     notifyListeners();
   }
 
   Future<void> setMode(AppThemeMode mode) async {
     if (_mode == mode) return;
     _mode = mode;
+    AppHaptics.select();
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('theme_mode', mode.name);
+  }
+
+  Future<void> reload() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedThemeId = prefs.getString('selected_theme_id');
+    _themeId = AppThemes.byId(savedThemeId ?? _themeId).id;
+    final savedMode = prefs.getString('theme_mode');
+    if (savedMode != null) {
+      _mode = AppThemeMode.values.firstWhere(
+        (mode) => mode.name == savedMode,
+        orElse: () => _mode,
+      );
+    }
+    _customBackgroundPath = prefs.getString('theme_custom_background');
+    notifyListeners();
   }
 
   @override
@@ -307,6 +325,7 @@ class SettingsProvider extends ChangeNotifier {
     _weightUnit = prefs.getString('training_weight_unit') ?? 'kg';
     _restSeconds = prefs.getInt('training_rest_seconds') ?? 90;
     _haptics = prefs.getBool('training_haptics') ?? true;
+    AppHaptics.enabled = _haptics;
     _remindersEnabled = prefs.getBool('reminder_enabled') ?? false;
     _reminderTime = prefs.getString('reminder_time') ?? '20:00';
     _dashboardCameraEnabled = prefs.getBool('dashboard_camera_enabled') ?? true;
@@ -387,7 +406,10 @@ class SettingsProvider extends ChangeNotifier {
     } else if (value is bool) {
       await prefs.setBool(key, value);
     }
+    AppHaptics.select();
   }
+
+  Future<void> reload() => _load();
 
   Future<void> setNickname(String value) async {
     _nickname = value.trim().isEmpty ? '铁友' : value.trim();
@@ -484,7 +506,9 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> setHaptics(bool value) async {
     _haptics = value;
+    AppHaptics.enabled = value;
     await _persist('training_haptics', value);
+    if (value) AppHaptics.light();
     notifyListeners();
   }
 

@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../main.dart';
 import '../providers/app_providers.dart';
 import '../services/ai_coach_service.dart';
+import '../services/config_sync.dart';
 import '../services/media_permission.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
@@ -1000,6 +1001,12 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTap: () => Navigator.pop(sheetContext, 'download'),
                 ),
                 ListTile(
+                  leading: Icon(Icons.tune_rounded, color: spec.textSecondary),
+                  title: const Text('同步内容'),
+                  subtitle: const Text('自定义允许上传与恢复的配置范围'),
+                  onTap: () => Navigator.pop(sheetContext, 'scopes'),
+                ),
+                ListTile(
                   leading: Icon(Icons.link_off_rounded,
                       color: const Color(0xFFF97316)),
                   title: const Text('断开连接'),
@@ -1016,6 +1023,8 @@ class _SettingsPageState extends State<SettingsPage> {
       await _uploadConfig(nutstore);
     } else if (action == 'download') {
       await _downloadConfig(nutstore);
+    } else if (action == 'scopes') {
+      await _showSyncScopes();
     } else if (action == 'disconnect') {
       await nutstore.clearCredentials();
       _snack('已断开坚果云连接');
@@ -1080,56 +1089,197 @@ class _SettingsPageState extends State<SettingsPage> {
     _snack(result == true ? '坚果云连接成功' : '坚果云连接失败');
   }
 
-  Future<Map<String, dynamic>> _dumpPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final map = <String, dynamic>{};
-    for (final key in prefs.getKeys()) {
-      final value = prefs.get(key);
-      if (value == null) continue;
-      if (value is List<String>) {
-        map[key] = {'t': 'list', 'v': value};
-      } else if (value is bool) {
-        map[key] = {'t': 'bool', 'v': value};
-      } else if (value is int) {
-        map[key] = {'t': 'int', 'v': value};
-      } else if (value is double) {
-        map[key] = {'t': 'double', 'v': value};
-      } else {
-        map[key] = {'t': 'string', 'v': value.toString()};
-      }
-    }
-    return map;
+  Future<void> _showSyncScopes() async {
+    var scopes = await ConfigSyncService.loadScopes();
+    if (!mounted) return;
+    final result = await showModalBottomSheet<Set<ConfigSyncScope>>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final spec = sheetContext.watch<ThemeProvider>().currentSpec;
+        return StatefulBuilder(
+          builder: (context, setSheetState) => SafeArea(
+            child: Container(
+              margin: const EdgeInsets.only(top: 60),
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * .82,
+              ),
+              decoration: BoxDecoration(
+                color: spec.background,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(26)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: spec.textSecondary.withValues(alpha: .3),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '同步内容',
+                          style: TextStyle(
+                            color: spec.textPrimary,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => setSheetState(
+                            () => scopes = ConfigSyncService.allScopes.toSet()),
+                        child: const Text('全选'),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            setSheetState(() => scopes = <ConfigSyncScope>{}),
+                        child: const Text('清空'),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '控制上传到云端以及从云端恢复时包含的内容。坚果云账号与应用密码始终不会同步。',
+                    style: TextStyle(
+                      color: spec.textSecondary,
+                      fontSize: 11.5,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final scope in ConfigSyncService.allScopes)
+                          SwitchListTile.adaptive(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              scope.label,
+                              style: TextStyle(
+                                color: spec.textPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            subtitle: Text(
+                              scope.description,
+                              style: TextStyle(
+                                color: spec.textSecondary,
+                                fontSize: 11,
+                                height: 1.35,
+                              ),
+                            ),
+                            value: scopes.contains(scope),
+                            onChanged: (value) => setSheetState(() {
+                              if (value) {
+                                scopes.add(scope);
+                              } else {
+                                scopes.remove(scope);
+                              }
+                            }),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () =>
+                          Navigator.pop(sheetContext, Set.of(scopes)),
+                      child: const Text('保存选择'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (result == null) return;
+    await ConfigSyncService.saveScopes(result);
+    if (mounted) _snack('同步内容已更新（已选 ${result.length} 项）');
   }
 
-  Future<void> _applyPrefs(Map<String, dynamic> map) async {
+  String _fileExtension(String path) {
+    final dot = path.lastIndexOf('.');
+    return dot >= 0 ? path.substring(dot).toLowerCase() : '.jpg';
+  }
+
+  Future<Map<String, dynamic>> _uploadConfigFiles(
+    NutstoreService nutstore,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    for (final entry in map.entries) {
-      final value = entry.value;
-      if (value is! Map) continue;
-      final type = value['t']?.toString();
-      final v = value['v'];
-      switch (type) {
-        case 'list':
-          if (v is List) {
-            await prefs.setStringList(
-                entry.key, v.map((e) => e.toString()).toList());
-          }
-        case 'bool':
-          if (v is bool) await prefs.setBool(entry.key, v);
-        case 'int':
-          if (v is int) await prefs.setInt(entry.key, v);
-        case 'double':
-          if (v is num) await prefs.setDouble(entry.key, v.toDouble());
-        case 'string':
-          await prefs.setString(entry.key, v?.toString() ?? '');
+    final files = <String, dynamic>{};
+    for (final key in ConfigSyncService.fileKeys) {
+      final path = prefs.getString(key);
+      if (path == null || path.trim().isEmpty) continue;
+      final file = File(path);
+      if (!await file.exists()) continue;
+      final remote =
+          '${ConfigSyncService.fileRemotePrefixes[key]}${_fileExtension(path)}';
+      if (await nutstore.uploadAdditionalFile(path, remote)) {
+        files[key] = {'remote': remote};
+      }
+    }
+    return files;
+  }
+
+  Future<void> _restoreConfigFiles(
+    NutstoreService nutstore,
+    Map<String, dynamic> files,
+  ) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final restoreDir = Directory('${directory.path}/cloud_restored');
+    if (!await restoreDir.exists()) {
+      await restoreDir.create(recursive: true);
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    for (final entry in files.entries) {
+      final key = entry.key;
+      if (!ConfigSyncService.fileKeys.contains(key)) continue;
+      final meta = entry.value;
+      if (meta is! Map) continue;
+      final remote = meta['remote']?.toString();
+      if (remote == null || remote.isEmpty) continue;
+      final savePath =
+          '${restoreDir.path}/${key}_$stamp${_fileExtension(remote)}';
+      final ok = await nutstore.downloadNamedFile(remote, savePath);
+      if (ok) {
+        await prefs.setString(key, savePath);
+      } else {
+        await prefs.remove(key);
       }
     }
   }
 
   Future<void> _uploadConfig(NutstoreService nutstore) async {
-    final map = await _dumpPrefs();
-    final ok = await nutstore.uploadConfig(jsonEncode(map));
-    _snack(ok ? '配置已同步到云端' : '上传失败，请检查网络');
+    final scopes = await ConfigSyncService.loadScopes();
+    if (scopes.isEmpty) {
+      _snack('请先在「同步内容」中选择要上传的项目');
+      return;
+    }
+    final payload = await ConfigSyncService.buildPayload(scopes);
+    if (scopes.contains(ConfigSyncScope.images)) {
+      payload['files'] = await _uploadConfigFiles(nutstore);
+    }
+    final ok = await nutstore.uploadConfig(jsonEncode(payload));
+    _snack(ok ? '配置已同步到云端（${scopes.length} 项范围）' : '上传失败，请检查网络');
   }
 
   Future<void> _downloadConfig(NutstoreService nutstore) async {
@@ -1139,13 +1289,30 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     try {
-      final data = jsonDecode(raw);
-      if (data is Map<String, dynamic>) {
-        await _applyPrefs(data);
-        _snack('配置已恢复，重启应用后生效');
-      } else {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
         _snack('配置格式错误');
+        return;
       }
+      final data = Map<String, dynamic>.from(decoded);
+      final scopes = await ConfigSyncService.loadScopes();
+      if (scopes.isEmpty) {
+        _snack('请先在「同步内容」中选择要恢复的项目');
+        return;
+      }
+      final applied = await ConfigSyncService.applyPayload(data, scopes);
+      if (scopes.contains(ConfigSyncScope.images) && data['files'] is Map) {
+        await _restoreConfigFiles(
+          nutstore,
+          Map<String, dynamic>.from(data['files'] as Map),
+        );
+      }
+      if (!mounted) return;
+      await context.read<SettingsProvider>().reload();
+      if (!mounted) return;
+      await context.read<ThemeProvider>().reload();
+      if (!mounted) return;
+      _snack('已恢复 $applied 项配置，部分页面重新进入后生效');
     } catch (_) {
       _snack('配置解析失败');
     }

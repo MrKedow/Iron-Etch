@@ -6,9 +6,10 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:excel/excel.dart' hide Border;
 import 'package:fitness_tracker/data/exercise_library.dart';
 import 'package:fitness_tracker/screens/book_library_page.dart';
@@ -29,6 +30,7 @@ import 'package:fitness_tracker/widgets/status_banner.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:fitness_tracker/services/ai_coach_service.dart';
+import 'package:fitness_tracker/services/app_haptics.dart';
 import 'package:fitness_tracker/services/media_permission.dart';
 
 void main() async {
@@ -344,6 +346,19 @@ List<WorkoutRecord> normalizeWorkoutRecords(Iterable<WorkoutRecord> records) {
 }
 
 // ==================== JSON 存储服务 ====================
+List<Map<String, dynamic>> _decodeWorkoutMapsFromContent(String content) {
+  final decoded = jsonDecode(content);
+  if (decoded is! Map) return const [];
+  final list = (decoded['records'] as List?) ?? const [];
+  return [
+    for (final item in list)
+      if (item is Map) Map<String, dynamic>.from(item),
+  ];
+}
+
+List<Map<String, dynamic>> _decodeWorkoutMapsFromBytes(List<int> bytes) =>
+    _decodeWorkoutMapsFromContent(utf8.decode(bytes));
+
 class JsonStorageService {
   static const String fileName = 'workout_data.json';
 
@@ -372,7 +387,18 @@ class JsonStorageService {
       return await _parseRecordsFile(file);
     } catch (e) {
       debugPrint('加载 JSON 失败: $e');
-      return [];
+      try {
+        final dir = await getApplicationDocumentsDirectory();
+        final file = File('${dir.path}/$fileName');
+        if (!await file.exists()) return [];
+        final content = await file.readAsString();
+        return _decodeWorkoutMapsFromContent(content)
+            .map(_recordFromJson)
+            .toList();
+      } catch (fallbackError) {
+        debugPrint('读取 JSON 回退失败: $fallbackError');
+        return [];
+      }
     }
   }
 
@@ -381,10 +407,9 @@ class JsonStorageService {
   }
 
   Future<List<WorkoutRecord>> _parseRecordsFile(File file) async {
-    final content = await file.readAsString();
-    final map = jsonDecode(content);
-    final list = (map['records'] as List?) ?? [];
-    return list.map((item) => _recordFromJson(item)).toList();
+    final bytes = await file.readAsBytes();
+    final maps = await Isolate.run(() => _decodeWorkoutMapsFromBytes(bytes));
+    return maps.map(_recordFromJson).toList();
   }
 
   Map<String, dynamic> _recordToJson(WorkoutRecord r) {
@@ -512,18 +537,16 @@ class WorkoutProvider extends ChangeNotifier {
   }
 
   /// 根据训练日期自动计算“第几次训练”，并保持记录按时间排序。
-  void recalculateSessionNumbers() {
+  void recalculateSessionNumbers({bool persist = true}) {
     _records.sort((a, b) => a.date.compareTo(b.date));
-    final uniqueDates = <String>[];
+    final format = DateFormat('yyyy-MM-dd');
+    final sessionByDate = <String, int>{};
     for (final record in _records) {
-      final key = DateFormat('yyyy-MM-dd').format(record.date);
-      if (!uniqueDates.contains(key)) uniqueDates.add(key);
+      final key = format.format(record.date);
+      sessionByDate.putIfAbsent(key, () => sessionByDate.length + 1);
+      record.sessionNumber = sessionByDate[key];
     }
-    for (final record in _records) {
-      final key = DateFormat('yyyy-MM-dd').format(record.date);
-      record.sessionNumber = uniqueDates.indexOf(key) + 1;
-    }
-    _saveRecords();
+    if (persist) _saveRecords();
     notifyListeners();
   }
 
@@ -641,14 +664,14 @@ class WorkoutProvider extends ChangeNotifier {
 
   Future<void> loadSavedRecords() async {
     if (_jsonService != null) {
-      final records = await _jsonService!.loadRecords();
-      _records = normalizeWorkoutRecords(records);
+      _records = await _jsonService!.loadRecords();
     } else {
       final prefs = await SharedPreferences.getInstance();
       final recordsJson = prefs.getString('workout_records');
       if (recordsJson != null) {
         try {
-          final List<dynamic> data = json.decode(recordsJson);
+          final List<dynamic> data =
+              await Isolate.run(() => jsonDecode(recordsJson) as List);
           _records = data.map((item) {
             final battery = (item['statusBattery'] as num?)?.toInt() ?? 80;
             return WorkoutRecord(
@@ -671,7 +694,7 @@ class WorkoutProvider extends ChangeNotifier {
       }
     }
     _records = normalizeWorkoutRecords(_records);
-    recalculateSessionNumbers();
+    recalculateSessionNumbers(persist: false);
   }
 }
 
@@ -1008,6 +1031,33 @@ class NutstoreService extends ChangeNotifier {
     }
   }
 
+  Future<bool> downloadNamedFile(
+    String remoteFileName,
+    String savePath,
+  ) async {
+    try {
+      final remotePath =
+          '$_baseUrl${Uri.encodeComponent(_cloudFolder)}/${Uri.encodeComponent(remoteFileName)}';
+      final url = Uri.parse(remotePath);
+      final client = http.Client();
+      final response = await client.get(
+        url,
+        headers: {'Authorization': _getAuthHeader()},
+      );
+      client.close();
+      if (response.statusCode == 200) {
+        final file = File(savePath);
+        await file.parent.create(recursive: true);
+        await file.writeAsBytes(response.bodyBytes);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('下载同步文件失败: $e');
+      return false;
+    }
+  }
+
   Future<bool> uploadConfig(String json) async {
     try {
       final remotePath =
@@ -1191,7 +1241,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Future<void> _refresh() async {
     final provider = context.read<WorkoutProvider>();
     await provider.loadSavedRecords();
-    if (mounted) setState(() {});
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
@@ -1251,6 +1300,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       }
     }
     if (validProjects.isEmpty) {
+      AppHaptics.heavy();
       _showToast('请至少填写一个动作名称', isError: true);
       return;
     }
@@ -1275,6 +1325,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       photoPath: photoPath,
     );
     provider.addRecord(record);
+    AppHaptics.medium();
 
     setState(() {
       projects
@@ -2845,7 +2896,7 @@ class _ProjectCardState extends State<_ProjectCard> {
       widget.photoNotifier.value = savedPath;
 
       final settings = context.read<SettingsProvider>();
-      if (!settings.dashboardAiScanEnabled) {
+      if (!settings.dashboardAiScanEnabled || !_isCardio) {
         _showSnack('打卡照片已添加，将随训练记录保存');
         return;
       }
@@ -3059,6 +3110,7 @@ class _ProjectCardState extends State<_ProjectCard> {
     final active = part == _part;
     return GestureDetector(
       onTap: () {
+        AppHaptics.select();
         widget.partNotifier.value = part;
         setState(() => _part = part);
       },
@@ -3082,6 +3134,50 @@ class _ProjectCardState extends State<_ProjectCard> {
             color: active ? spec.primary : spec.textSecondary,
             fontSize: 12,
             fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _checkinCamera(AppThemeSpec spec) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Transform.translate(
+        offset: const Offset(7, 0),
+        child: ValueListenableBuilder<String?>(
+          valueListenable: widget.photoNotifier,
+          builder: (context, photoPath, _) => Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _DashboardCameraButton(
+                spec: spec,
+                scanning: _scanningDashboard,
+                onPressed: _scanningDashboard ? null : _pickCheckinPhoto,
+              ),
+              if (photoPath != null)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    width: 15,
+                    height: 15,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF22C55E),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: spec.card,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      size: 10,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -3276,51 +3372,6 @@ class _ProjectCardState extends State<_ProjectCard> {
                       suffix: 'km/h',
                     ),
                   ),
-                if (_isCardio && settings.dashboardCameraEnabled) ...[
-                  const SizedBox(width: 2),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
-                    child: Transform.translate(
-                      offset: const Offset(7, 0),
-                      child: ValueListenableBuilder<String?>(
-                        valueListenable: widget.photoNotifier,
-                        builder: (context, photoPath, _) => Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            _DashboardCameraButton(
-                              spec: spec,
-                              scanning: _scanningDashboard,
-                              onPressed:
-                                  _scanningDashboard ? null : _pickCheckinPhoto,
-                            ),
-                            if (photoPath != null)
-                              Positioned(
-                                right: -2,
-                                top: -2,
-                                child: Container(
-                                  width: 15,
-                                  height: 15,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF22C55E),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: spec.card,
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.check_rounded,
-                                    size: 10,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
                 if (_category == '柔韧')
                   Expanded(
                     child: _numberField(
@@ -3330,11 +3381,15 @@ class _ProjectCardState extends State<_ProjectCard> {
                       '0',
                     ),
                   ),
+                if (settings.dashboardCameraEnabled) ...[
+                  const SizedBox(width: 2),
+                  _checkinCamera(spec),
+                ],
               ],
             )
           else
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
                   child: _numberField(
@@ -3363,6 +3418,10 @@ class _ProjectCardState extends State<_ProjectCard> {
                     '0',
                   ),
                 ),
+                if (settings.dashboardCameraEnabled) ...[
+                  const SizedBox(width: 2),
+                  _checkinCamera(spec),
+                ],
               ],
             ),
           const SizedBox(height: 12),
@@ -3504,7 +3563,12 @@ class _DashboardCameraButtonState extends State<_DashboardCameraButton>
                   shape: const CircleBorder(),
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
-                    onTap: widget.onPressed,
+                    onTap: widget.onPressed == null
+                        ? null
+                        : () {
+                            AppHaptics.light();
+                            widget.onPressed!();
+                          },
                     child: Center(child: child),
                   ),
                 ),
