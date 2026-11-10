@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -118,7 +119,12 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
   void initState() {
     super.initState();
     _loadPrefs();
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.delayed(const Duration(milliseconds: 250), () {
+        if (!mounted) return;
+        _load();
+      });
+    });
   }
 
   @override
@@ -151,7 +157,13 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     }
     try {
       final raw = await rootBundle.loadString(_assetPath);
-      final data = jsonDecode(raw) as Map<String, dynamic>;
+      Map<String, dynamic> data;
+      try {
+        data = await Isolate.run(() => jsonDecode(raw) as Map<String, dynamic>);
+      } catch (error) {
+        debugPrint('视频合集后台解析失败，回退主线程: $error');
+        data = jsonDecode(raw) as Map<String, dynamic>;
+      }
       final categories = <_VideoCategory>[];
       for (final rawCategory
           in (data['categories'] as List<dynamic>? ?? const [])) {
@@ -208,7 +220,8 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
       if (!_initialFullRefreshDone) {
         unawaited(_refreshVideos(_allCreators, fullRefresh: true));
       }
-    } catch (_) {
+    } catch (error) {
+      debugPrint('视频合集加载失败: $error');
       if (!mounted) return;
       setState(() {
         _error = '视频合集加载失败，请稍后重试。';
@@ -439,8 +452,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
   }
 
   Future<void> _deleteCollection(_VideoCategory category) async {
-    final isCustom =
-        category.id.startsWith('custom_') ||
+    final isCustom = category.id.startsWith('custom_') ||
         category.items.any((item) => item.id.startsWith('custom_')) ||
         _customItems.containsKey(category.id);
     setState(() {
@@ -464,7 +476,8 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
     }
   }
 
-  Future<void> _deleteCreator(_VideoCategory category, _VideoCreator creator) async {
+  Future<void> _deleteCreator(
+      _VideoCategory category, _VideoCreator creator) async {
     final isCustom = creator.id.startsWith('custom_');
     final key = '${category.id}|${creator.id}';
     setState(() {
@@ -589,8 +602,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                           title: Text(creator.name),
                           trailing: IconButton(
                             tooltip: '删除 UP 主',
-                            onPressed: () =>
-                                _deleteCreator(category, creator),
+                            onPressed: () => _deleteCreator(category, creator),
                             icon: const Icon(Icons.close_rounded, size: 18),
                           ),
                         );
@@ -1132,44 +1144,46 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-        SectionHeader(
-          title: category.name,
-          subtitle: collapsed
-              ? '${entries.length} 位 UP 主 · 已折叠'
-              : '${entries.length} 位 UP 主',
-          padding: const EdgeInsets.fromLTRB(2, 20, 2, 10),
-          trailing: IconButton(
-            tooltip: collapsed ? '展开合集' : '折叠合集',
-            visualDensity: VisualDensity.compact,
-            onPressed: () {
-              setState(() {
-                if (collapsed) {
-                  _collapsedCategories.remove(category.id);
-                } else {
-                  _collapsedCategories.add(category.id);
-                }
-              });
-            },
-            icon: Icon(
-              collapsed ? Icons.expand_more_rounded : Icons.expand_less_rounded,
-              color: spec.textSecondary,
-              size: 20,
-            ),
-          ),
-        ),
-        if (!collapsed)
-          for (final entry in entries)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 9),
-              child: _creatorCard(
-                spec,
-                entry.creator,
-                entry.videos,
-                searching: searching,
+          SectionHeader(
+            title: category.name,
+            subtitle: collapsed
+                ? '${entries.length} 位 UP 主 · 已折叠'
+                : '${entries.length} 位 UP 主',
+            padding: const EdgeInsets.fromLTRB(2, 20, 2, 10),
+            trailing: IconButton(
+              tooltip: collapsed ? '展开合集' : '折叠合集',
+              visualDensity: VisualDensity.compact,
+              onPressed: () {
+                setState(() {
+                  if (collapsed) {
+                    _collapsedCategories.remove(category.id);
+                  } else {
+                    _collapsedCategories.add(category.id);
+                  }
+                });
+              },
+              icon: Icon(
+                collapsed
+                    ? Icons.expand_more_rounded
+                    : Icons.expand_less_rounded,
+                color: spec.textSecondary,
+                size: 20,
               ),
             ),
-      ],
-    ),
+          ),
+          if (!collapsed)
+            for (final entry in entries)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: _creatorCard(
+                  spec,
+                  entry.creator,
+                  entry.videos,
+                  searching: searching,
+                ),
+              ),
+        ],
+      ),
     );
   }
 

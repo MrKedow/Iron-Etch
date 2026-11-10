@@ -47,8 +47,13 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
       vsync: this,
       duration: const Duration(seconds: 5),
     )..repeat();
-    _loadKnowledge();
-    _loadLiveKnowledge();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.delayed(const Duration(milliseconds: 350), () {
+        if (!mounted) return;
+        _loadKnowledge();
+        _loadLiveKnowledge();
+      });
+    });
   }
 
   Future<void> _loadKnowledge() async {
@@ -637,28 +642,30 @@ class _HeroPanel extends StatelessWidget {
           Positioned(
             right: -46,
             top: -60,
-            child: AnimatedBuilder(
-              animation: orb,
-              builder: (context, child) {
-                return Transform.rotate(
-                  angle: orb.value * pi * 2,
-                  child: Container(
-                    width: 210,
-                    height: 210,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: SweepGradient(
-                        colors: [
-                          spec.primary.withValues(alpha: .55),
-                          spec.secondary.withValues(alpha: .28),
-                          Colors.transparent,
-                          spec.primary.withValues(alpha: .55),
-                        ],
+            child: RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: orb,
+                builder: (context, child) {
+                  return Transform.rotate(
+                    angle: orb.value * pi * 2,
+                    child: Container(
+                      width: 210,
+                      height: 210,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: SweepGradient(
+                          colors: [
+                            spec.primary.withValues(alpha: .55),
+                            spec.secondary.withValues(alpha: .28),
+                            Colors.transparent,
+                            spec.primary.withValues(alpha: .55),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
           Padding(

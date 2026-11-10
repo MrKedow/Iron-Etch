@@ -31,16 +31,19 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _precacheAssets() {
+    final provider = context.read<WorkoutProvider>();
+    provider.loadSavedRecords().catchError((_) {});
+    provider.loadLastExportPath();
     final themeProvider = context.read<ThemeProvider>();
     final path = themeProvider.customBackgroundPath;
     if (path == null || !File(path).existsSync()) return;
     final size = MediaQuery.sizeOf(context);
     final dpr = MediaQuery.devicePixelRatioOf(context);
+    final targetWidth = (size.width * dpr).clamp(720, 1440).round();
     precacheImage(
       ResizeImage(
         FileImage(File(path)),
-        width: (size.width * dpr).round(),
-        height: (size.height * dpr).round(),
+        width: targetWidth,
       ),
       context,
     );

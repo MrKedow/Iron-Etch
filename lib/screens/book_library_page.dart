@@ -53,7 +53,12 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
   void initState() {
     super.initState();
     _loadPrefs();
-    _prepareLibrary();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.delayed(const Duration(milliseconds: 200), () {
+        if (!mounted) return;
+        _prepareLibrary();
+      });
+    });
   }
 
   Future<void> _loadPrefs() async {

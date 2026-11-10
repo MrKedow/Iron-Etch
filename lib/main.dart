@@ -406,6 +406,18 @@ class JsonStorageService {
     return _parseRecordsFile(File(path));
   }
 
+  Future<String?> storageSignature() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/$fileName');
+      if (!await file.exists()) return 'missing';
+      final stat = await file.stat();
+      return '${stat.size}:${stat.modified.millisecondsSinceEpoch}';
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<WorkoutRecord>> _parseRecordsFile(File file) async {
     final bytes = await file.readAsBytes();
     final maps = await Isolate.run(() => _decodeWorkoutMapsFromBytes(bytes));
@@ -447,6 +459,7 @@ class WorkoutProvider extends ChangeNotifier {
   List<WorkoutRecord> _records = [];
   String? _lastExportPath;
   final JsonStorageService? _jsonService;
+  String? _storageSignature;
 
   WorkoutProvider({JsonStorageService? jsonService})
       : _jsonService = jsonService;
@@ -467,7 +480,9 @@ class WorkoutProvider extends ChangeNotifier {
 
   Future<void> loadLastExportPath() async {
     final prefs = await SharedPreferences.getInstance();
-    _lastExportPath = prefs.getString('last_export_path');
+    final value = prefs.getString('last_export_path');
+    if (value == _lastExportPath) return;
+    _lastExportPath = value;
     notifyListeners();
   }
 
@@ -662,9 +677,28 @@ class WorkoutProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> loadSavedRecords() async {
+  Future<void>? _pendingLoad;
+
+  Future<void> loadSavedRecords({bool skipIfUnchanged = false}) {
+    final pending = _pendingLoad;
+    if (pending != null) return pending;
+    final future = _loadSavedRecords(skipIfUnchanged: skipIfUnchanged);
+    _pendingLoad = future;
+    return future.whenComplete(() {
+      if (identical(_pendingLoad, future)) _pendingLoad = null;
+    });
+  }
+
+  Future<void> _loadSavedRecords({required bool skipIfUnchanged}) async {
     if (_jsonService != null) {
+      final signature = await _jsonService!.storageSignature();
+      if (skipIfUnchanged &&
+          signature != null &&
+          signature == _storageSignature) {
+        return;
+      }
       _records = await _jsonService!.loadRecords();
+      _storageSignature = signature;
     } else {
       final prefs = await SharedPreferences.getInstance();
       final recordsJson = prefs.getString('workout_records');
@@ -1226,21 +1260,26 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     dateController.text = DateFormat('yyyy-MM-dd').format(selectedDate);
     _initializeControllers();
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadData();
+    });
   }
 
   void _loadData() async {
     final provider = Provider.of<WorkoutProvider>(context, listen: false);
-    final nutstore = Provider.of<NutstoreService>(context, listen: false);
-    await provider.loadSavedRecords();
+    await provider.loadSavedRecords(skipIfUnchanged: true);
     await provider.loadLastExportPath();
-    await nutstore.loadSavedConfig();
-    if (mounted) setState(() {});
+    Future<void>.delayed(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      final nutstore = Provider.of<NutstoreService>(context, listen: false);
+      nutstore.loadSavedConfig();
+    });
   }
 
   Future<void> _refresh() async {
     final provider = context.read<WorkoutProvider>();
-    await provider.loadSavedRecords();
+    await provider.loadSavedRecords(skipIfUnchanged: true);
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
