@@ -237,13 +237,15 @@ class SettingsProvider extends ChangeNotifier {
   int _weeklyGoal = 4;
   String _weightUnit = 'kg';
   int _restSeconds = 90;
-  bool _haptics = true;
+  bool _haptics = false;
+  bool _hapticsVibration = false;
+  bool _hapticsMotion = false;
   bool _remindersEnabled = false;
   String _reminderTime = '20:00';
-  bool _dashboardCameraEnabled = true;
-  bool _dashboardAiScanEnabled = true;
+  bool _dashboardCameraEnabled = false;
+  bool _dashboardAiScanEnabled = false;
 
-  bool _aiEnabled = true;
+  bool _aiEnabled = false;
   String _aiEndpoint = defaultAiEndpoint;
   String _aiModel = defaultAiModel;
   String _aiApiKey = '';
@@ -274,6 +276,8 @@ class SettingsProvider extends ChangeNotifier {
   String get weightUnit => _weightUnit;
   int get restSeconds => _restSeconds;
   bool get haptics => _haptics;
+  bool get hapticsVibration => _hapticsVibration;
+  bool get hapticsMotion => _hapticsMotion;
   bool get remindersEnabled => _remindersEnabled;
   String get reminderTime => _reminderTime;
   bool get dashboardCameraEnabled => _dashboardCameraEnabled;
@@ -301,8 +305,10 @@ class SettingsProvider extends ChangeNotifier {
     return quotes[index.abs() % quotes.length];
   }
 
+  late final Future<void> ready;
+
   SettingsProvider() {
-    _load();
+    ready = _load();
   }
 
   Future<void> _load() async {
@@ -324,15 +330,18 @@ class SettingsProvider extends ChangeNotifier {
     _weeklyGoal = prefs.getInt('training_weekly_goal') ?? 4;
     _weightUnit = prefs.getString('training_weight_unit') ?? 'kg';
     _restSeconds = prefs.getInt('training_rest_seconds') ?? 90;
-    _haptics = prefs.getBool('training_haptics') ?? true;
-    AppHaptics.enabled = _haptics;
+    _haptics = prefs.getBool('training_haptics') ?? false;
+    _hapticsVibration = prefs.getBool('training_haptics_vibration') ?? _haptics;
+    _hapticsMotion = prefs.getBool('training_haptics_motion') ?? _haptics;
+    _syncHaptics();
     _remindersEnabled = prefs.getBool('reminder_enabled') ?? false;
     _reminderTime = prefs.getString('reminder_time') ?? '20:00';
-    _dashboardCameraEnabled = prefs.getBool('dashboard_camera_enabled') ?? true;
+    _dashboardCameraEnabled =
+        prefs.getBool('dashboard_camera_enabled') ?? false;
     _dashboardAiScanEnabled =
-        prefs.getBool('dashboard_ai_scan_enabled') ?? true;
+        prefs.getBool('dashboard_ai_scan_enabled') ?? false;
 
-    _aiEnabled = prefs.getBool('ai_enabled') ?? true;
+    _aiEnabled = prefs.getBool('ai_enabled') ?? false;
     var savedEndpoint = prefs.getString('ai_endpoint');
     var savedModel = prefs.getString('ai_model');
     final defaultsVersion = prefs.getInt('ai_defaults_version') ?? 0;
@@ -393,6 +402,12 @@ class SettingsProvider extends ChangeNotifier {
     );
   }
 
+  void _syncHaptics() {
+    AppHaptics.enabled = _haptics;
+    AppHaptics.vibrationEnabled = _hapticsVibration;
+    AppHaptics.motionEnabled = _hapticsMotion;
+  }
+
   Future<void> _persist(String key, Object? value) async {
     final prefs = await SharedPreferences.getInstance();
     if (value == null) {
@@ -406,7 +421,6 @@ class SettingsProvider extends ChangeNotifier {
     } else if (value is bool) {
       await prefs.setBool(key, value);
     }
-    AppHaptics.select();
   }
 
   Future<void> reload() => _load();
@@ -506,10 +520,37 @@ class SettingsProvider extends ChangeNotifier {
 
   Future<void> setHaptics(bool value) async {
     _haptics = value;
-    AppHaptics.enabled = value;
-    if (value) AppHaptics.light();
+    if (value && !_hapticsVibration && !_hapticsMotion) {
+      _hapticsVibration = true;
+      _hapticsMotion = true;
+    }
+    _syncHaptics();
     notifyListeners();
     await _persist('training_haptics', value);
+    if (value) {
+      if (_hapticsVibration) {
+        await _persist('training_haptics_vibration', true);
+      }
+      if (_hapticsMotion) {
+        await _persist('training_haptics_motion', true);
+      }
+      AppHaptics.light();
+    }
+  }
+
+  Future<void> setHapticsVibration(bool value) async {
+    _hapticsVibration = value;
+    _syncHaptics();
+    if (value) AppHaptics.light();
+    notifyListeners();
+    await _persist('training_haptics_vibration', value);
+  }
+
+  Future<void> setHapticsMotion(bool value) async {
+    _hapticsMotion = value;
+    _syncHaptics();
+    notifyListeners();
+    await _persist('training_haptics_motion', value);
   }
 
   Future<void> setRemindersEnabled(bool value) async {

@@ -57,17 +57,7 @@ class ConfigSyncService {
 
   static const List<ConfigSyncScope> allScopes = ConfigSyncScope.values;
 
-  static const Set<ConfigSyncScope> defaultScopes = {
-    ConfigSyncScope.profile,
-    ConfigSyncScope.training,
-    ConfigSyncScope.status,
-    ConfigSyncScope.theme,
-    ConfigSyncScope.ai,
-    ConfigSyncScope.reading,
-    ConfigSyncScope.reminder,
-    ConfigSyncScope.images,
-    ConfigSyncScope.other,
-  };
+  static const Set<ConfigSyncScope> defaultScopes = {};
 
   static Future<Set<ConfigSyncScope>> loadScopes() async {
     final prefs = await SharedPreferences.getInstance();

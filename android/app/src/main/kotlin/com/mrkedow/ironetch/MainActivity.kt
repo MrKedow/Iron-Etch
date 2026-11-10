@@ -21,6 +21,7 @@ import java.util.zip.ZipInputStream
 class MainActivity : FlutterActivity() {
     private val channelName = "com.mrkedow.ironetch/epub"
     private val hapticsChannelName = "com.mrkedow.ironetch/haptics"
+    private val remindersChannelName = "com.mrkedow.ironetch/reminders"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -35,6 +36,26 @@ class MainActivity : FlutterActivity() {
                 } catch (error: Exception) {
                     Log.e("IronHaptics", "failed kind=${call.method}", error)
                     result.error("haptic_failed", error.message, null)
+                }
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, remindersChannelName)
+            .setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "schedule" -> {
+                            val time = call.argument<String>("time") ?: "20:00"
+                            result.success(ReminderScheduler.schedule(this, time))
+                        }
+
+                        "cancel" -> {
+                            ReminderScheduler.cancel(this)
+                            result.success(true)
+                        }
+
+                        else -> result.notImplemented()
+                    }
+                } catch (error: Exception) {
+                    result.error("reminder_failed", error.message, null)
                 }
             }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)

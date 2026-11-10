@@ -3,9 +3,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../main.dart';
+import '../app_version.dart';
 import '../providers/app_providers.dart';
+import 'onboarding_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -18,6 +21,7 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   Timer? _navigationTimer;
+  bool _entered = false;
 
   @override
   void initState() {
@@ -49,12 +53,22 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  void _enterApp() {
+  Future<void> _enterApp() async {
+    if (!mounted || _entered) return;
+    _entered = true;
+    var onboardingDone = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      onboardingDone = prefs.getBool(OnboardingPrefs.completedKey) ?? false;
+    } catch (_) {}
     if (!mounted) return;
+    final Widget destination = onboardingDone
+        ? const MainScreen()
+        : const OnboardingPage(firstRunNextPage: MainScreen());
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 260),
-        pageBuilder: (_, animation, __) => const MainScreen(),
+        pageBuilder: (_, animation, __) => destination,
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -310,7 +324,7 @@ class _SplashScreenState extends State<SplashScreen>
                                     ),
                                   ),
                                   const Text(
-                                    'v3.3.2',
+                                    'v$appVersion',
                                     style: TextStyle(
                                       color: Colors.white38,
                                       fontSize: 11,

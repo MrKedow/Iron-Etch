@@ -26,12 +26,14 @@ import 'package:fitness_tracker/services/work_energy.dart';
 import 'package:fitness_tracker/theme/app_theme.dart';
 import 'package:fitness_tracker/widgets/app_ui.dart';
 import 'package:fitness_tracker/widgets/book_download_toast.dart';
+import 'package:fitness_tracker/widgets/press_feedback.dart';
 import 'package:fitness_tracker/widgets/status_banner.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:fitness_tracker/services/ai_coach_service.dart';
 import 'package:fitness_tracker/services/app_haptics.dart';
 import 'package:fitness_tracker/services/media_permission.dart';
+import 'package:fitness_tracker/services/reminder_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1213,11 +1215,13 @@ class FitnessApp extends StatelessWidget {
             GlobalCupertinoLocalizations.delegate,
           ],
           builder: (context, child) => AppBackdrop(
-            child: Stack(
-              children: [
-                if (child != null) Positioned.fill(child: child),
-                const BookDownloadToastHost(),
-              ],
+            child: GlobalTapFeedback(
+              child: Stack(
+                children: [
+                  if (child != null) Positioned.fill(child: child),
+                  const BookDownloadToastHost(),
+                ],
+              ),
             ),
           ),
           home: const SplashScreen(),
@@ -1268,11 +1272,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   void _loadData() async {
     final provider = Provider.of<WorkoutProvider>(context, listen: false);
+    final settings = Provider.of<SettingsProvider>(context, listen: false);
+    final nutstore = Provider.of<NutstoreService>(context, listen: false);
     await provider.loadSavedRecords(skipIfUnchanged: true);
     await provider.loadLastExportPath();
+    await settings.ready;
+    await ReminderService.sync(
+      enabled: settings.remindersEnabled,
+      time: settings.reminderTime,
+    );
     Future<void>.delayed(const Duration(milliseconds: 900), () {
       if (!mounted) return;
-      final nutstore = Provider.of<NutstoreService>(context, listen: false);
       nutstore.loadSavedConfig();
     });
   }
@@ -2044,29 +2054,32 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final date = DateTime.now().subtract(Duration(days: daysAgo));
     final active = _isSameDay(date, selectedDate);
     return Expanded(
-      child: GestureDetector(
-        onTap: () => _jumpToDate(date),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: active
-                ? spec.primary.withValues(alpha: .18)
-                : spec.textPrimary.withValues(alpha: .04),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
+      child: AppPressFeedback(
+        borderRadius: 12,
+        child: GestureDetector(
+          onTap: () => _jumpToDate(date),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
               color: active
-                  ? spec.primary.withValues(alpha: .45)
-                  : spec.textPrimary.withValues(alpha: .06),
+                  ? spec.primary.withValues(alpha: .18)
+                  : spec.textPrimary.withValues(alpha: .04),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: active
+                    ? spec.primary.withValues(alpha: .45)
+                    : spec.textPrimary.withValues(alpha: .06),
+              ),
             ),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: active ? spec.primary : spec.textSecondary,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
+            child: Center(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: active ? spec.primary : spec.textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
@@ -2143,47 +2156,50 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ],
           ),
           const SizedBox(height: 14),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () => _selectDate(context),
-              child: Container(
-                height: 54,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: spec.textPrimary.withValues(alpha: .04),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: spec.primary.withValues(alpha: .28),
+          AppPressFeedback(
+            borderRadius: 16,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => _selectDate(context),
+                child: Container(
+                  height: 54,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: spec.textPrimary.withValues(alpha: .04),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: spec.primary.withValues(alpha: .28),
+                    ),
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.calendar_month_rounded,
-                        color: spec.primary, size: 21),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        DateFormat('yyyy-MM-dd').format(selectedDate),
-                        style: TextStyle(
-                          color: spec.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_month_rounded,
+                          color: spec.primary, size: 21),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          DateFormat('yyyy-MM-dd').format(selectedDate),
+                          style: TextStyle(
+                            color: spec.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
-                    ),
-                    Text(
-                      '更换日期',
-                      style: TextStyle(
-                        color: spec.textSecondary,
-                        fontSize: 12,
+                      Text(
+                        '更换日期',
+                        style: TextStyle(
+                          color: spec.textSecondary,
+                          fontSize: 12,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.keyboard_arrow_down_rounded,
-                        color: spec.textSecondary),
-                  ],
+                      const SizedBox(width: 4),
+                      Icon(Icons.keyboard_arrow_down_rounded,
+                          color: spec.textSecondary),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -2398,37 +2414,40 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   ],
                 ),
                 const SizedBox(height: 18),
-                GestureDetector(
-                  onTap: () => _saveWorkout(context),
-                  child: Container(
-                    height: 58,
-                    decoration: BoxDecoration(
-                      gradient: spec.heroGradient,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: spec.primary.withValues(alpha: .34),
-                          blurRadius: 24,
-                          offset: const Offset(0, 12),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.check_circle_rounded,
-                            color: spec.onHero, size: 22),
-                        const SizedBox(width: 9),
-                        Text(
-                          '保存训练记录',
-                          style: TextStyle(
-                            color: spec.onHero,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: .4,
+                AppPressFeedback(
+                  borderRadius: 18,
+                  child: GestureDetector(
+                    onTap: () => _saveWorkout(context),
+                    child: Container(
+                      height: 58,
+                      decoration: BoxDecoration(
+                        gradient: spec.heroGradient,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: spec.primary.withValues(alpha: .34),
+                            blurRadius: 24,
+                            offset: const Offset(0, 12),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle_rounded,
+                              color: spec.onHero, size: 22),
+                          const SizedBox(width: 9),
+                          Text(
+                            '保存训练记录',
+                            style: TextStyle(
+                              color: spec.onHero,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: .4,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -3147,32 +3166,35 @@ class _ProjectCardState extends State<_ProjectCard> {
 
   Widget _partChip(String part, AppThemeSpec spec) {
     final active = part == _part;
-    return GestureDetector(
-      onTap: () {
-        AppHaptics.select();
-        widget.partNotifier.value = part;
-        setState(() => _part = part);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-        decoration: BoxDecoration(
-          color: active
-              ? spec.primary.withValues(alpha: .18)
-              : spec.textPrimary.withValues(alpha: .035),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
+    return AppPressFeedback(
+      borderRadius: 999,
+      child: GestureDetector(
+        onTap: () {
+          AppHaptics.select();
+          widget.partNotifier.value = part;
+          setState(() => _part = part);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+          decoration: BoxDecoration(
             color: active
-                ? spec.primary.withValues(alpha: .45)
-                : spec.textPrimary.withValues(alpha: .07),
+                ? spec.primary.withValues(alpha: .18)
+                : spec.textPrimary.withValues(alpha: .035),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: active
+                  ? spec.primary.withValues(alpha: .45)
+                  : spec.textPrimary.withValues(alpha: .07),
+            ),
           ),
-        ),
-        child: Text(
-          part,
-          style: TextStyle(
-            color: active ? spec.primary : spec.textSecondary,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
+          child: Text(
+            part,
+            style: TextStyle(
+              color: active ? spec.primary : spec.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),
@@ -3597,18 +3619,21 @@ class _DashboardCameraButtonState extends State<_DashboardCameraButton>
                     ),
                   ],
                 ),
-                child: Material(
-                  color: Colors.transparent,
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: widget.onPressed == null
-                        ? null
-                        : () {
-                            AppHaptics.light();
-                            widget.onPressed!();
-                          },
-                    child: Center(child: child),
+                child: AppPressFeedback(
+                  borderRadius: 999,
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: widget.onPressed == null
+                          ? null
+                          : () {
+                              AppHaptics.light();
+                              widget.onPressed!();
+                            },
+                      child: Center(child: child),
+                    ),
                   ),
                 ),
               ),

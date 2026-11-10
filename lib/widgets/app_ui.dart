@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
+import 'press_feedback.dart';
 
 class AppBackdrop extends StatelessWidget {
   final Widget child;
@@ -163,35 +164,13 @@ class GlassPanel extends StatelessWidget {
     );
 
     if (onTap == null) return RepaintBoundary(child: panel);
-    return RepaintBoundary(child: _Pressable(onTap: onTap!, child: panel));
-  }
-}
-
-class _Pressable extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onTap;
-
-  const _Pressable({required this.child, required this.onTap});
-
-  @override
-  State<_Pressable> createState() => _PressableState();
-}
-
-class _PressableState extends State<_Pressable> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: AnimatedScale(
-        scale: _pressed ? .975 : 1,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
-        child: widget.child,
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AppPressFeedback(
+          borderRadius: radius,
+          child: panel,
+        ),
       ),
     );
   }
@@ -567,10 +546,10 @@ class StatusBattery extends StatelessWidget {
   });
 
   static Color fillColorFor(int value) {
-    if (value > 80) return const Color(0xFF00FF00);
-    if (value >= 60) return const Color(0xFF9ACD32);
-    if (value >= 30) return const Color(0xFF98FB98);
-    return const Color(0xFFBCE672);
+    if (value > 80) return const Color(0xFF22C55E);
+    if (value >= 60) return const Color(0xFF3B82F6);
+    if (value >= 30) return const Color(0xFFF59E0B);
+    return const Color(0xFFEF4444);
   }
 
   @override

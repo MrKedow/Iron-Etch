@@ -10,14 +10,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart';
+import '../app_version.dart';
 import '../providers/app_providers.dart';
 import '../services/ai_coach_service.dart';
 import '../services/config_sync.dart';
 import '../services/media_permission.dart';
+import '../services/reminder_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
+import '../widgets/press_feedback.dart';
 import '../widgets/status_banner.dart';
 import 'iron_card_page.dart';
+import 'onboarding_page.dart';
 import 'theme_gallery_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -383,6 +387,28 @@ class _SettingsPageState extends State<SettingsPage> {
     final text =
         '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
     await context.read<SettingsProvider>().setReminderTime(text);
+    if (settings.remindersEnabled) {
+      await ReminderService.schedule(text);
+    }
+  }
+
+  Future<void> _toggleReminders(
+    SettingsProvider settings,
+    bool value,
+  ) async {
+    if (!value) {
+      await settings.setRemindersEnabled(false);
+      await ReminderService.cancel();
+      return;
+    }
+    final granted = await ReminderService.requestPermission();
+    if (!mounted) return;
+    if (!granted) {
+      _snack('需要通知权限才能发送训练提醒，请在系统设置中允许通知');
+      return;
+    }
+    await settings.setRemindersEnabled(true);
+    await ReminderService.schedule(settings.reminderTime);
   }
 
   Future<void> _editAiConfig(SettingsProvider settings) async {
@@ -730,7 +756,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 4),
             Text(
-              '版本 3.3.2（Android）',
+              '版本 $appVersion（Android）',
               style: TextStyle(color: spec.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 14),
@@ -1492,7 +1518,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     _SettingsTile(
                       icon: Icons.vibration_rounded,
                       title: '触感反馈',
-                      subtitle: '保存与切换时提供轻触反馈',
+                      subtitle: settings.haptics
+                          ? '点击按钮、卡片与模块时的反馈'
+                          : '默认关闭 · 开启后可分别选择振动与动效',
                       trailing: Switch.adaptive(
                         value: settings.haptics,
                         onChanged: (value) =>
@@ -1502,6 +1530,36 @@ class _SettingsPageState extends State<SettingsPage> {
                           .read<SettingsProvider>()
                           .setHaptics(!settings.haptics),
                     ),
+                    if (settings.haptics) ...[
+                      _SettingsTile(
+                        icon: Icons.vibration_outlined,
+                        title: '振动',
+                        subtitle: '点击时提供轻触振动反馈',
+                        trailing: Switch.adaptive(
+                          value: settings.hapticsVibration,
+                          onChanged: (value) => context
+                              .read<SettingsProvider>()
+                              .setHapticsVibration(value),
+                        ),
+                        onTap: () => context
+                            .read<SettingsProvider>()
+                            .setHapticsVibration(!settings.hapticsVibration),
+                      ),
+                      _SettingsTile(
+                        icon: Icons.animation_rounded,
+                        title: '动效',
+                        subtitle: '按下内陷、变暗、缩小，松开回弹',
+                        trailing: Switch.adaptive(
+                          value: settings.hapticsMotion,
+                          onChanged: (value) => context
+                              .read<SettingsProvider>()
+                              .setHapticsMotion(value),
+                        ),
+                        onTap: () => context
+                            .read<SettingsProvider>()
+                            .setHapticsMotion(!settings.hapticsMotion),
+                      ),
+                    ],
                     _SettingsTile(
                       icon: Icons.photo_camera_rounded,
                       title: '仪表盘拍照入口',
@@ -1545,13 +1603,12 @@ class _SettingsPageState extends State<SettingsPage> {
                           : '关闭',
                       trailing: Switch.adaptive(
                         value: settings.remindersEnabled,
-                        onChanged: (value) => context
-                            .read<SettingsProvider>()
-                            .setRemindersEnabled(value),
+                        onChanged: (value) => _toggleReminders(settings, value),
                       ),
-                      onTap: () => context
-                          .read<SettingsProvider>()
-                          .setRemindersEnabled(!settings.remindersEnabled),
+                      onTap: () => _toggleReminders(
+                        settings,
+                        !settings.remindersEnabled,
+                      ),
                     ),
                     if (settings.remindersEnabled)
                       _SettingsTile(
@@ -1724,8 +1781,19 @@ class _SettingsPageState extends State<SettingsPage> {
                     _SettingsTile(
                       icon: Icons.fitness_center_rounded,
                       title: '铁镌',
-                      subtitle: '版本 3.3.2 · 镌刻每一次撸铁',
+                      subtitle: '版本 $appVersion · 镌刻每一次撸铁',
                       onTap: _showAbout,
+                    ),
+                    _SettingsTile(
+                      icon: Icons.explore_rounded,
+                      title: '使用引导',
+                      subtitle: '重新查看功能说明与自定义开关',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const OnboardingPage(),
+                        ),
+                      ),
                     ),
                     _SettingsTile(
                       icon: Icons.code_rounded,
@@ -1803,58 +1871,62 @@ class _SettingsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final spec = context.watch<ThemeProvider>().currentSpec;
     final tone = danger ? const Color(0xFFEF4444) : spec.primary;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          child: Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: tone.withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(11),
+    return AppPressFeedback(
+      borderRadius: 14,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: tone.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(icon, size: 18, color: tone),
                 ),
-                child: Icon(icon, size: 18, color: tone),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color:
-                            danger ? const Color(0xFFEF4444) : spec.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        title,
                         style: TextStyle(
-                          color: spec.textSecondary,
-                          fontSize: 11.5,
+                          color: danger
+                              ? const Color(0xFFEF4444)
+                              : spec.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: spec.textSecondary,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              if (trailing != null)
-                trailing!
-              else if (onTap != null)
-                Icon(Icons.chevron_right_rounded,
-                    color: spec.textSecondary, size: 20),
-            ],
+                if (trailing != null)
+                  trailing!
+                else if (onTap != null)
+                  Icon(Icons.chevron_right_rounded,
+                      color: spec.textSecondary, size: 20),
+              ],
+            ),
           ),
         ),
       ),

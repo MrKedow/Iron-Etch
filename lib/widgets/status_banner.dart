@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 
 import '../providers/app_providers.dart';
 import 'app_ui.dart';
+import 'press_feedback.dart';
+import 'status_level.dart';
 
 const List<List<Color>> statusTones = [
   [Color(0xFFE4B363), Color(0xFFB45309)],
@@ -67,346 +69,382 @@ class _StatusBannerState extends State<StatusBanner>
     return RepaintBoundary(
       child: GestureDetector(
         onTap: () => showStatusEditor(context),
-        child: Container(
-          height: 214,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: hasImage
-                ? null
-                : LinearGradient(
-                    colors: [
-                      Color.lerp(tone.first, spec.card, .28)!,
-                      Color.lerp(tone.last, spec.background, .32)!,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-            boxShadow: [
-              BoxShadow(
-                color: tone.first.withValues(alpha: .18),
-                blurRadius: 34,
-                offset: const Offset(0, 18),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: .18),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-            border: Border.all(
-              color: Colors.white.withValues(alpha: .14),
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (hasImage)
-                RepaintBoundary(
-                  child: Image.file(
-                    File(settings.statusImagePath!),
-                    fit: BoxFit.cover,
-                    cacheWidth: 1200,
-                    gaplessPlayback: true,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                  ),
-                ),
-              if (hasImage)
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+        child: AppPressFeedback(
+          borderRadius: 28,
+          child: Container(
+            height: 214,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: hasImage
+                  ? null
+                  : LinearGradient(
                       colors: [
-                        Colors.black.withValues(alpha: .42),
-                        Colors.black.withValues(alpha: .72),
+                        Color.lerp(tone.first, spec.card, .28)!,
+                        Color.lerp(tone.last, spec.background, .32)!,
                       ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              boxShadow: [
+                BoxShadow(
+                  color: tone.first.withValues(alpha: .18),
+                  blurRadius: 34,
+                  offset: const Offset(0, 18),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .18),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+              border: Border.all(
+                color: Colors.white.withValues(alpha: .14),
+              ),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (hasImage)
+                  RepaintBoundary(
+                    child: Image.file(
+                      File(settings.statusImagePath!),
+                      fit: BoxFit.cover,
+                      cacheWidth: 1200,
+                      gaplessPlayback: true,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                     ),
                   ),
-                ),
-              AnimatedBuilder(
-                animation: _controller,
-                builder: (context, child) {
-                  if (settings.statusMotion == 2) {
-                    return CustomPaint(
-                      painter: _StardustPainter(
-                        _controller.value,
-                        tone.first,
-                      ),
-                    );
-                  }
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Positioned(
-                        left: -30 +
-                            math.sin(_controller.value * math.pi * 2) * 34,
-                        top: -46 +
-                            math.cos(_controller.value * math.pi * 2) * 18,
-                        child: _blob(tone.first.withValues(alpha: .42), 160),
-                      ),
-                      Positioned(
-                        right: -40 +
-                            math.cos(_controller.value * math.pi * 2) * 30,
-                        bottom: -58 +
-                            math.sin(_controller.value * math.pi * 2) * 18,
-                        child: _blob(tone.first.withValues(alpha: .30), 190),
-                      ),
-                      if (settings.statusMotion == 1)
-                        Positioned.fill(
-                          child: Transform.translate(
-                            offset: Offset(
-                              (_controller.value * 2 - 1) * 280,
-                              0,
-                            ),
-                            child: Container(
-                              width: 90,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0),
-                                    Colors.white.withValues(alpha: .11),
-                                    Colors.white.withValues(alpha: 0),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-              if (!spec.isDark)
-                IgnorePointer(
-                  child: DecoratedBox(
+                if (hasImage)
+                  DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                         colors: [
-                          Colors.black.withValues(alpha: .32),
-                          Colors.black.withValues(alpha: .2),
+                          Colors.black.withValues(alpha: .42),
+                          Colors.black.withValues(alpha: .72),
                         ],
                       ),
                     ),
                   ),
-                ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, child) {
+                    if (settings.statusMotion == 2) {
+                      return CustomPaint(
+                        painter: _StardustPainter(
+                          _controller.value,
+                          tone.first,
+                        ),
+                      );
+                    }
+                    return Stack(
+                      fit: StackFit.expand,
                       children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: .16),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: .3),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: tone.first.withValues(alpha: .4),
-                                blurRadius: 18,
+                        Positioned(
+                          left: -30 +
+                              math.sin(_controller.value * math.pi * 2) * 34,
+                          top: -46 +
+                              math.cos(_controller.value * math.pi * 2) * 18,
+                          child: _blob(tone.first.withValues(alpha: .42), 160),
+                        ),
+                        Positioned(
+                          right: -40 +
+                              math.cos(_controller.value * math.pi * 2) * 30,
+                          bottom: -58 +
+                              math.sin(_controller.value * math.pi * 2) * 18,
+                          child: _blob(tone.first.withValues(alpha: .30), 190),
+                        ),
+                        if (settings.statusMotion == 1)
+                          Positioned.fill(
+                            child: Transform.translate(
+                              offset: Offset(
+                                (_controller.value * 2 - 1) * 280,
+                                0,
                               ),
-                            ],
-                          ),
-                          child: settings.statusEmoji.isEmpty
-                              ? _statusAvatar(settings)
-                              : Text(
-                                  settings.statusEmoji,
-                                  style: const TextStyle(fontSize: 20),
+                              child: Container(
+                                width: 90,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.white.withValues(alpha: 0),
+                                      Colors.white.withValues(alpha: .11),
+                                      Colors.white.withValues(alpha: 0),
+                                    ],
+                                  ),
                                 ),
-                        ),
-                        const SizedBox(width: 11),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    settings.nickname,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 13.5,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Colors.white.withValues(alpha: .14),
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Text(
-                                      settings.trainingGoal,
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
                               ),
-                              const SizedBox(height: 2),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    '今日状态',
-                                    style: TextStyle(
-                                      color:
-                                          Colors.white.withValues(alpha: .62),
-                                      fontSize: 10.5,
-                                      height: 1.19,
-                                      letterSpacing: .5,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: StatusBattery(
-                                      level: settings.statusBattery,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        Transform.translate(
-                          offset: const Offset(4, -4),
-                          child: Container(
-                            padding: const EdgeInsets.all(7),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: .12),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.edit_outlined,
-                              color: Colors.white70,
-                              size: 16,
                             ),
                           ),
-                        ),
                       ],
-                    ),
-                    const Spacer(),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 450),
-                      child: Text(
-                        settings.statusText,
-                        key: ValueKey(settings.statusText),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          height: 1.3,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: .2,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black45,
-                              blurRadius: 14,
-                              offset: Offset(0, 3),
-                            ),
+                    );
+                  },
+                ),
+                if (!spec.isDark)
+                  IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.black.withValues(alpha: .32),
+                            Colors.black.withValues(alpha: .2),
                           ],
                         ),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: .22),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: .1),
-                        ),
-                      ),
-                      child: AnimatedBuilder(
-                        animation: _controller,
-                        builder: (context, child) {
-                          final elapsed =
-                              DateTime.now().difference(widget.startedAt);
-                          final duration =
-                              elapsed.isNegative ? Duration.zero : elapsed;
-                          final wave = .5 +
-                              .5 * math.sin(_controller.value * math.pi * 2);
-                          final glow = [
-                            Shadow(
-                              color:
-                                  tone.first.withValues(alpha: .16 + .3 * wave),
-                              blurRadius: 5 + 8 * wave,
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: .16),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: .3),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: tone.first.withValues(alpha: .4),
+                                  blurRadius: 18,
+                                ),
+                              ],
                             ),
-                            Shadow(
-                              color: Colors.white
-                                  .withValues(alpha: .08 + .16 * wave),
-                              blurRadius: 3 + 5 * wave,
-                            ),
-                          ];
-                          return Row(
-                            children: [
-                              Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '已坚持',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: .8,
-                                      shadows: glow,
-                                    ),
+                            child: settings.statusEmoji.isEmpty
+                                ? _statusAvatar(settings)
+                                : Text(
+                                    settings.statusEmoji,
+                                    style: const TextStyle(fontSize: 20),
                                   ),
-                                ],
+                          ),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      settings.nickname,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 13.5,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            Colors.white.withValues(alpha: .14),
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                      ),
+                                      child: Text(
+                                        settings.trainingGoal,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      '今日状态',
+                                      style: TextStyle(
+                                        color:
+                                            Colors.white.withValues(alpha: .62),
+                                        fontSize: 10.5,
+                                        height: 1.19,
+                                        letterSpacing: .5,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          StatusBattery(
+                                            level: settings.statusBattery,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Center(
+                                            child: Text(
+                                              BatteryStatusLevel.forValue(
+                                                settings.statusBattery,
+                                              ).label,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color:
+                                                    BatteryStatusLevel.forValue(
+                                                  settings.statusBattery,
+                                                ).color,
+                                                fontSize: 9.5,
+                                                height: 1.1,
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: .2,
+                                                shadows: const [
+                                                  Shadow(
+                                                    color: Colors.black45,
+                                                    blurRadius: 6,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          Transform.translate(
+                            offset: const Offset(4, -4),
+                            child: Container(
+                              padding: const EdgeInsets.all(7),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: .12),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              const SizedBox(width: 10),
-                              _timeUnit(
-                                duration.inDays.toString(),
-                                '天',
-                                glow,
+                              child: const Icon(
+                                Icons.edit_outlined,
+                                color: Colors.white70,
+                                size: 16,
                               ),
-                              _timeDivider(),
-                              _timeUnit(
-                                (duration.inHours % 24).toString(),
-                                '时',
-                                glow,
-                              ),
-                              _timeDivider(),
-                              _timeUnit(
-                                (duration.inMinutes % 60).toString(),
-                                '分',
-                                glow,
-                              ),
-                              _timeDivider(),
-                              _timeUnit(
-                                (duration.inSeconds % 60).toString(),
-                                '秒',
-                                glow,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 450),
+                        child: Text(
+                          settings.statusText,
+                          key: ValueKey(settings.statusText),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            height: 1.3,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .2,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black45,
+                                blurRadius: 14,
+                                offset: Offset(0, 3),
                               ),
                             ],
-                          );
-                        },
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: .22),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .1),
+                          ),
+                        ),
+                        child: AnimatedBuilder(
+                          animation: _controller,
+                          builder: (context, child) {
+                            final elapsed =
+                                DateTime.now().difference(widget.startedAt);
+                            final duration =
+                                elapsed.isNegative ? Duration.zero : elapsed;
+                            final wave = .5 +
+                                .5 * math.sin(_controller.value * math.pi * 2);
+                            final glow = [
+                              Shadow(
+                                color: tone.first
+                                    .withValues(alpha: .16 + .3 * wave),
+                                blurRadius: 5 + 8 * wave,
+                              ),
+                              Shadow(
+                                color: Colors.white
+                                    .withValues(alpha: .08 + .16 * wave),
+                                blurRadius: 3 + 5 * wave,
+                              ),
+                            ];
+                            return Row(
+                              children: [
+                                Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '已坚持',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: .8,
+                                        shadows: glow,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(width: 10),
+                                _timeUnit(
+                                  duration.inDays.toString(),
+                                  '天',
+                                  glow,
+                                ),
+                                _timeDivider(),
+                                _timeUnit(
+                                  (duration.inHours % 24).toString(),
+                                  '时',
+                                  glow,
+                                ),
+                                _timeDivider(),
+                                _timeUnit(
+                                  (duration.inMinutes % 60).toString(),
+                                  '分',
+                                  glow,
+                                ),
+                                _timeDivider(),
+                                _timeUnit(
+                                  (duration.inSeconds % 60).toString(),
+                                  '秒',
+                                  glow,
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -997,13 +1035,24 @@ Future<void> showStatusEditor(BuildContext context) async {
                       }),
                     ),
                     const SizedBox(height: 18),
-                    Text(
-                      '今日状态',
-                      style: TextStyle(
-                        color: spec.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13.5,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          '今日状态',
+                          style: TextStyle(
+                            color: spec.textPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ValueListenableBuilder<int>(
+                          valueListenable: batteryNotifier,
+                          builder: (context, battery, _) => StatusLevelBadge(
+                            level: BatteryStatusLevel.forValue(battery),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -1018,31 +1067,10 @@ Future<void> showStatusEditor(BuildContext context) async {
                       ),
                       child: ValueListenableBuilder<int>(
                         valueListenable: batteryNotifier,
-                        builder: (context, battery, _) => Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: double.infinity,
-                              child: StatusBattery(
-                                level: battery,
-                                height: 20,
-                                outlineColor: spec.isDark
-                                    ? null
-                                    : spec.textPrimary.withValues(alpha: .42),
-                                textColor:
-                                    spec.isDark ? null : spec.textPrimary,
-                              ),
-                            ),
-                            Slider(
-                              value: battery.toDouble(),
-                              min: 0,
-                              max: 100,
-                              divisions: 100,
-                              label: '$battery%',
-                              onChanged: (value) =>
-                                  batteryNotifier.value = value.round(),
-                            ),
-                          ],
+                        builder: (context, battery, _) => BatteryLevelEditor(
+                          value: battery,
+                          onChanged: (value) => batteryNotifier.value = value,
+                          batteryHeight: 20,
                         ),
                       ),
                     ),

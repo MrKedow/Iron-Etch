@@ -8,6 +8,7 @@ import '../main.dart';
 import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
+import '../widgets/status_level.dart';
 
 class HistoryPage extends StatefulWidget {
   final VoidCallback? onExport;
@@ -894,7 +895,6 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
 
   late DateTime _date;
   late int _statusBattery;
-  double? _batteryDragFraction;
   late final List<_EditDraft> _drafts;
 
   @override
@@ -1050,17 +1050,6 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
     );
   }
 
-  void _updateBattery(double dx, double width) {
-    final bodyWidth = width - 3.4;
-    final fraction =
-        ((dx - 1.9) / (bodyWidth - 2.8)).clamp(0.0, 1.0).toDouble();
-    final value = (fraction * 100).round();
-    setState(() {
-      _batteryDragFraction = fraction;
-      _statusBattery = value;
-    });
-  }
-
   Widget _batteryEditor(AppThemeSpec spec) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1093,7 +1082,9 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
                 ),
               ),
               const SizedBox(width: 8),
-              Pill(label: '电池', color: spec.secondary),
+              StatusLevelBadge(
+                level: BatteryStatusLevel.forValue(_statusBattery),
+              ),
               const Spacer(),
               Text(
                 '$_statusBattery%',
@@ -1106,61 +1097,10 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
             ],
           ),
           const SizedBox(height: 8),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
-              final bodyWidth = width - 3.4;
-              final fraction = (_batteryDragFraction ?? (_statusBattery / 100))
-                  .clamp(0.0, 1.0);
-              final x = 1.9 + (bodyWidth - 2.8) * fraction;
-              final maxLeft = (width - 8).clamp(0.0, width).toDouble();
-              final pointerLeft = (x - 4).clamp(0.0, maxLeft).toDouble();
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTapDown: (details) =>
-                    _updateBattery(details.localPosition.dx, width),
-                onHorizontalDragUpdate: (details) =>
-                    _updateBattery(details.localPosition.dx, width),
-                onHorizontalDragEnd: (_) =>
-                    setState(() => _batteryDragFraction = null),
-                onHorizontalDragCancel: () =>
-                    setState(() => _batteryDragFraction = null),
-                onTapUp: (_) => setState(() => _batteryDragFraction = null),
-                child: SizedBox(
-                  height: 54,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Positioned(
-                        left: pointerLeft,
-                        top: 0,
-                        child: CustomPaint(
-                          size: const Size(8, 54),
-                          painter: _BatteryPointerPainter(
-                            color: spec.primary,
-                          ),
-                        ),
-                      ),
-                      Positioned.fill(
-                        top: 14,
-                        bottom: 14,
-                        left: 0,
-                        right: 0,
-                        child: StatusBattery(
-                          level: _statusBattery,
-                          height: 26,
-                          bodyColor: spec.card,
-                          outlineColor: spec.isDark
-                              ? null
-                              : spec.textPrimary.withValues(alpha: .42),
-                          textColor: spec.isDark ? null : spec.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+          BatteryLevelEditor(
+            value: _statusBattery,
+            onChanged: (value) => setState(() => _statusBattery = value),
+            pointerColor: spec.primary,
           ),
           const SizedBox(height: 2),
           Text(
@@ -1506,25 +1446,4 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
       ],
     );
   }
-}
-
-class _BatteryPointerPainter extends CustomPainter {
-  final Color color;
-
-  _BatteryPointerPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(size.width / 2, 0)
-      ..lineTo(size.width, size.height / 2)
-      ..lineTo(size.width / 2, size.height)
-      ..lineTo(0, size.height / 2)
-      ..close();
-    canvas.drawPath(path, Paint()..color = color.withValues(alpha: .92));
-  }
-
-  @override
-  bool shouldRepaint(covariant _BatteryPointerPainter oldDelegate) =>
-      oldDelegate.color != color;
 }
