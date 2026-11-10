@@ -1,8 +1,11 @@
 package com.mrkedow.ironetch
 
+import android.app.AlarmManager
 import android.app.DownloadManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import android.os.Build
 import android.os.Environment
 import android.os.VibrationAttributes
@@ -50,6 +53,34 @@ class MainActivity : FlutterActivity() {
                         "cancel" -> {
                             ReminderScheduler.cancel(this)
                             result.success(true)
+                        }
+
+                        "canScheduleExact" -> {
+                            val alarm = getSystemService(
+                                Context.ALARM_SERVICE,
+                            ) as AlarmManager
+                            result.success(
+                                Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                                    alarm.canScheduleExactAlarms(),
+                            )
+                        }
+
+                        "requestExact" -> {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                try {
+                                    startActivity(
+                                        Intent(
+                                            Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                            Uri.parse("package:$packageName"),
+                                        ),
+                                    )
+                                    result.success(true)
+                                } catch (_: Exception) {
+                                    result.success(false)
+                                }
+                            } else {
+                                result.success(true)
+                            }
                         }
 
                         else -> result.notImplemented()

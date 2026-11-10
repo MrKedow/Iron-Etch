@@ -242,6 +242,7 @@ class SettingsProvider extends ChangeNotifier {
   bool _hapticsMotion = false;
   bool _remindersEnabled = false;
   String _reminderTime = '20:00';
+  String _reminderMessage = 'Hey！撸铁时间到';
   bool _dashboardCameraEnabled = false;
   bool _dashboardAiScanEnabled = false;
 
@@ -280,6 +281,7 @@ class SettingsProvider extends ChangeNotifier {
   bool get hapticsMotion => _hapticsMotion;
   bool get remindersEnabled => _remindersEnabled;
   String get reminderTime => _reminderTime;
+  String get reminderMessage => _reminderMessage;
   bool get dashboardCameraEnabled => _dashboardCameraEnabled;
   bool get dashboardAiScanEnabled => _dashboardAiScanEnabled;
 
@@ -336,6 +338,7 @@ class SettingsProvider extends ChangeNotifier {
     _syncHaptics();
     _remindersEnabled = prefs.getBool('reminder_enabled') ?? false;
     _reminderTime = prefs.getString('reminder_time') ?? '20:00';
+    _reminderMessage = prefs.getString('reminder_message') ?? 'Hey！撸铁时间到';
     _dashboardCameraEnabled =
         prefs.getBool('dashboard_camera_enabled') ?? false;
     _dashboardAiScanEnabled =
@@ -574,6 +577,12 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> setReminderTime(String value) async {
     _reminderTime = value;
     await _persist('reminder_time', value);
+    notifyListeners();
+  }
+
+  Future<void> setReminderMessage(String value) async {
+    _reminderMessage = value;
+    await _persist('reminder_message', value);
     notifyListeners();
   }
 

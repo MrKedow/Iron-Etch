@@ -31,8 +31,52 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends State<SettingsPage>
+    with WidgetsBindingObserver {
   bool _testingAi = false;
+  bool _reminderExpanded = false;
+  bool _pendingReminderEnable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _onAppResumed();
+    }
+  }
+
+  Future<void> _onAppResumed() async {
+    if (!mounted) return;
+    final settings = context.read<SettingsProvider>();
+    if (_pendingReminderEnable) {
+      _pendingReminderEnable = false;
+      final granted = await ReminderService.canScheduleExactAlarms();
+      if (!mounted) return;
+      if (granted) {
+        await settings.setRemindersEnabled(true);
+        await ReminderService.schedule(settings.reminderTime);
+        if (!mounted) return;
+        _snack('训练提醒已开启，将准时发送');
+      } else {
+        _snack('未开启“闹钟和提醒”权限，训练提醒未启用');
+      }
+      return;
+    }
+    if (settings.remindersEnabled) {
+      await ReminderService.schedule(settings.reminderTime);
+    }
+  }
 
   Future<void> _editNickname(SettingsProvider settings) async {
     final controller = TextEditingController(text: settings.nickname);
@@ -397,6 +441,7 @@ class _SettingsPageState extends State<SettingsPage> {
     bool value,
   ) async {
     if (!value) {
+      _pendingReminderEnable = false;
       await settings.setRemindersEnabled(false);
       await ReminderService.cancel();
       return;
@@ -405,6 +450,20 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) return;
     if (!granted) {
       _snack('需要通知权限才能发送训练提醒，请在系统设置中允许通知');
+      return;
+    }
+    final exact = await ReminderService.canScheduleExactAlarms();
+    if (!mounted) return;
+    if (!exact) {
+      _pendingReminderEnable = true;
+      final opened = await ReminderService.requestExactAlarmPermission();
+      if (!mounted) return;
+      if (!opened) {
+        _pendingReminderEnable = false;
+        _snack('无法打开“闹钟和提醒”设置，请手动在系统设置中允许');
+      } else {
+        _snack('请开启“闹钟和提醒”权限，返回后会自动开启训练提醒');
+      }
       return;
     }
     await settings.setRemindersEnabled(true);
@@ -1599,17 +1658,37 @@ class _SettingsPageState extends State<SettingsPage> {
                       icon: Icons.notifications_active_outlined,
                       title: '训练提醒',
                       subtitle: settings.remindersEnabled
-                          ? '每天 ${settings.reminderTime} 提醒'
-                          : '关闭',
-                      trailing: Switch.adaptive(
-                        value: settings.remindersEnabled,
-                        onChanged: (value) => _toggleReminders(settings, value),
+                          ? '每天 ${settings.reminderTime} 提醒 · 点击自定义文案'
+                          : '关闭 · 点击自定义文案',
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _reminderExpanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                            size: 18,
+                            color: spec.textSecondary,
+                          ),
+                          const SizedBox(width: 2),
+                          Switch.adaptive(
+                            value: settings.remindersEnabled,
+                            onChanged: (value) =>
+                                _toggleReminders(settings, value),
+                          ),
+                        ],
                       ),
-                      onTap: () => _toggleReminders(
-                        settings,
-                        !settings.remindersEnabled,
+                      onTap: () => setState(
+                        () => _reminderExpanded = !_reminderExpanded,
                       ),
                     ),
+                    if (_reminderExpanded)
+                      _ReminderMessageField(
+                        initialValue: settings.reminderMessage,
+                        onChanged: (value) => context
+                            .read<SettingsProvider>()
+                            .setReminderMessage(value),
+                      ),
                     if (settings.remindersEnabled)
                       _SettingsTile(
                         icon: Icons.schedule_rounded,
@@ -1928,6 +2007,97 @@ class _SettingsTile extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReminderMessageField extends StatefulWidget {
+  final String initialValue;
+  final ValueChanged<String> onChanged;
+
+  const _ReminderMessageField({
+    required this.initialValue,
+    required this.onChanged,
+  });
+
+  @override
+  State<_ReminderMessageField> createState() => _ReminderMessageFieldState();
+}
+
+class _ReminderMessageFieldState extends State<_ReminderMessageField> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialValue);
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void didUpdateWidget(covariant _ReminderMessageField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialValue != _controller.text && !_focusNode.hasFocus) {
+      _controller.text = widget.initialValue;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = context.watch<ThemeProvider>().currentSpec;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+        decoration: BoxDecoration(
+          color: spec.textPrimary.withValues(alpha: .035),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: spec.primary.withValues(alpha: .18),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 9),
+              child: Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 18,
+                color: spec.primary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                minLines: 1,
+                maxLines: 3,
+                textInputAction: TextInputAction.done,
+                style: TextStyle(
+                  color: spec.textPrimary,
+                  fontSize: 13.5,
+                  height: 1.4,
+                ),
+                decoration: InputDecoration(
+                  hintText: '输入提醒文案',
+                  hintStyle: TextStyle(
+                    color: spec.textSecondary.withValues(alpha: .65),
+                    fontSize: 13.5,
+                  ),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+                onChanged: widget.onChanged,
+              ),
+            ),
+          ],
         ),
       ),
     );

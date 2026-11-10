@@ -26,6 +26,22 @@ class ReminderService {
     } catch (_) {}
   }
 
+  static Future<bool> canScheduleExactAlarms() async {
+    try {
+      return await _channel.invokeMethod<bool>('canScheduleExact') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> requestExactAlarmPermission() async {
+    try {
+      return await _channel.invokeMethod<bool>('requestExact') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<void> sync({
     required bool enabled,
     required String time,
