@@ -3,7 +3,13 @@ package com.mrkedow.ironetch
 import android.app.DownloadManager
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.os.VibrationAttributes
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -14,9 +20,23 @@ import java.util.zip.ZipInputStream
 
 class MainActivity : FlutterActivity() {
     private val channelName = "com.mrkedow.ironetch/epub"
+    private val hapticsChannelName = "com.mrkedow.ironetch/haptics"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, hapticsChannelName)
+            .setMethodCallHandler { call, result ->
+                try {
+                    if (vibrateHaptic(call.method)) {
+                        result.success(true)
+                    } else {
+                        result.notImplemented()
+                    }
+                } catch (error: Exception) {
+                    Log.e("IronHaptics", "failed kind=${call.method}", error)
+                    result.error("haptic_failed", error.message, null)
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -102,6 +122,61 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun vibrateHaptic(kind: String): Boolean {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val manager =
+                getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            manager.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val effect = when (kind) {
+                "select" ->
+                    VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
+                "light" ->
+                    VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
+                "medium" -> VibrationEffect.createOneShot(35L, 190)
+                "heavy" -> VibrationEffect.createOneShot(55L, 255)
+                else -> return false
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                vibrator.vibrate(
+                    effect,
+                    VibrationAttributes.createForUsage(
+                        VibrationAttributes.USAGE_HARDWARE_FEEDBACK,
+                    ),
+                )
+            } else {
+                vibrator.vibrate(effect)
+            }
+            return true
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val effect = when (kind) {
+                "select" -> VibrationEffect.createOneShot(14L, 120)
+                "light" -> VibrationEffect.createOneShot(22L, 150)
+                "medium" -> VibrationEffect.createOneShot(35L, 190)
+                "heavy" -> VibrationEffect.createOneShot(55L, 255)
+                else -> return false
+            }
+            vibrator.vibrate(effect)
+            return true
+        }
+        @Suppress("DEPRECATION")
+        val duration = when (kind) {
+            "select" -> 14L
+            "light" -> 22L
+            "medium" -> 35L
+            "heavy" -> 55L
+            else -> return false
+        }
+        @Suppress("DEPRECATION")
+        vibrator.vibrate(duration)
+        return true
     }
 
     private fun externalDownloadFile(fileName: String): File {

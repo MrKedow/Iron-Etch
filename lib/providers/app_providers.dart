@@ -507,9 +507,9 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> setHaptics(bool value) async {
     _haptics = value;
     AppHaptics.enabled = value;
-    await _persist('training_haptics', value);
     if (value) AppHaptics.light();
     notifyListeners();
+    await _persist('training_haptics', value);
   }
 
   Future<void> setRemindersEnabled(bool value) async {
