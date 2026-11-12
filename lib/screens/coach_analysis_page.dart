@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import '../services/ai_coach_service.dart';
 import '../services/coach_insights.dart';
 import '../services/knowledge_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ai_config_dialog.dart';
 import '../widgets/ai_message_text.dart';
 import '../widgets/app_ui.dart';
 import 'insight_detail_pages.dart';
@@ -106,9 +108,13 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
   Future<void> _askAi({String? presetQuestion}) async {
     final settings = context.read<SettingsProvider>();
     final insights = _insights;
+    final customPrompt = settings.aiPrompt.trim();
+    final defaultQuestion = customPrompt.isNotEmpty
+        ? customPrompt
+        : '请根据我的训练数据，给出最近训练的详细分析、问题和下一步建议。';
     final question = presetQuestion ??
         (presetQuestion == null && _chat.isEmpty
-            ? '请根据我的训练数据，给出最近训练的详细分析、问题和下一步建议。'
+            ? defaultQuestion
             : _questionController.text.trim());
 
     if (!settings.aiEnabled) {
@@ -120,8 +126,7 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
       return;
     }
 
-    final effectiveQuestion =
-        question.isEmpty ? '请根据我的训练数据，给出最近训练的详细分析、问题和下一步建议。' : question;
+    final effectiveQuestion = question.isEmpty ? defaultQuestion : question;
 
     setState(() {
       _aiLoading = true;
@@ -135,13 +140,7 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
     });
     _scrollToAi(latestTurn: true);
 
-    final customPrompt = settings.aiPrompt.trim();
-    final systemPrompt = customPrompt.isNotEmpty
-        ? '$customPrompt\n\n'
-            '只输出最终中文回答，不要输出思考过程、英文草稿或自我说明。\n\n'
-            '以下是用户真实训练数据：\n'
-            '${insights.buildAiContext(settings)}'
-        : '''
+    final systemPrompt = '''
 你是「铁镌」App 的 AI 力量教练，由免费 AI 多通道驱动。
 你的风格：专业、直接、有温度，像一位懂训练数据的老教练。不要空泛鼓励，必须引用用户真实数据。
 训练建议必须遵循科学证据；不确定时说明不确定性；不要提供医疗诊断，若涉及伤痛请建议就医。
@@ -441,157 +440,7 @@ ${insights.buildAiContext(settings)}
   }
 
   void _showAiConfig(BuildContext context, SettingsProvider settings) {
-    final apiKeyController = TextEditingController(text: settings.aiApiKey);
-    final modelController = TextEditingController(text: settings.aiModel);
-    final endpointController = TextEditingController(text: settings.aiEndpoint);
-    var testing = false;
-    String? result;
-    String? selectedPreset;
-    final smallLabelStyle = TextStyle(
-      fontSize: 11.5,
-      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .62),
-      fontWeight: FontWeight.w600,
-    );
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: const Text('AI 通道设置'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '默认使用 BlockRun 免费通道，失败时自动回退到 Pollinations '
-                    '与 OpenCode Zen。也可以填入任意 OpenAI 兼容服务的 Key。',
-                    style: TextStyle(fontSize: 12, height: 1.5),
-                  ),
-                  const SizedBox(height: 14),
-                  Text('填写你的AI模型：', style: smallLabelStyle),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: apiKeyController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'API Key（可选）',
-                      hintText: 'sk-...（留空使用免费通道）',
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: modelController,
-                    decoration: const InputDecoration(
-                      labelText: '模型 ID',
-                      hintText: 'big-pickle',
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: endpointController,
-                    decoration: const InputDecoration(
-                      labelText: '接口地址',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('或直接选择内置模型：', style: smallLabelStyle),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedPreset,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: '内置模型',
-                    ),
-                    hint: const Text('选择一个可直接使用的模型'),
-                    items: builtInAiModels
-                        .map(
-                          (preset) => DropdownMenuItem<String>(
-                            value: preset.label,
-                            child: Text(
-                              preset.label,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (label) {
-                      if (label == null) return;
-                      final preset = builtInAiModels.firstWhere(
-                        (item) => item.label == label,
-                      );
-                      setDialogState(() {
-                        selectedPreset = label;
-                        if (preset.endpoint.isNotEmpty) {
-                          endpointController.text = preset.endpoint;
-                          modelController.text = preset.model;
-                        }
-                      });
-                    },
-                  ),
-                  if (result != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      result!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: result!.startsWith('连接成功')
-                            ? Colors.green
-                            : Colors.orange,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: testing
-                    ? null
-                    : () async {
-                        setDialogState(() {
-                          testing = true;
-                          result = '正在连接…';
-                        });
-                        final reply = await AiCoachService.testConnection(
-                          endpoint: endpointController.text,
-                          model: modelController.text,
-                          apiKey: apiKeyController.text,
-                        );
-                        if (!context.mounted) return;
-                        setDialogState(() {
-                          testing = false;
-                          result = reply.success
-                              ? '连接成功：${reply.content}'
-                              : (reply.error ?? '连接失败');
-                        });
-                      },
-                child: Text(testing ? '测试中…' : '测试连接'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('取消'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  await settings.setAiConfig(
-                    endpoint: endpointController.text,
-                    model: modelController.text,
-                    apiKey: apiKeyController.text,
-                  );
-                  if (context.mounted) Navigator.pop(context);
-                },
-                child: const Text('保存'),
-              ),
-            ],
-          );
-        },
-      ),
-    ).then((_) {
-      apiKeyController.dispose();
-      modelController.dispose();
-      endpointController.dispose();
-    });
+    showAiConfigDialog(context, settings);
   }
 }
 
@@ -729,6 +578,9 @@ class _HeroPanel extends StatelessWidget {
                   insights.lastRecord == null
                       ? '记录第一次训练，让 AI 教练认识你。'
                       : '最近一次训练 · ${DateFormat('M月d日').format(insights.lastRecord!.date)} · ${insights.lastRecord!.projects.length} 个项目',
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: spec.onHeroMuted,
                     fontSize: 12.5,
@@ -908,6 +760,9 @@ class _RecentAnalysisCard extends StatelessWidget {
                   children: [
                     Text(
                       '${DateFormat('M月d日').format(last.date)} · ${weekdayLabel(last.date)}',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: spec.textPrimary,
                         fontSize: 16,
@@ -917,6 +772,9 @@ class _RecentAnalysisCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       '第 ${last.sessionNumber ?? '—'} 次训练 · ${last.projects.length} 个项目 · ${last.projects.fold<int>(0, (s, p) => s + p.sets)} 组',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: spec.textSecondary,
                         fontSize: 11.5,
@@ -1508,6 +1366,9 @@ class _AiCoachCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       '${_aiChannelLabel(settings)} · ${settings.aiModel}',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: spec.textSecondary,
                         fontSize: 10,
@@ -1565,9 +1426,17 @@ class _AiCoachCard extends StatelessWidget {
               i == chat.length - 1
                   ? KeyedSubtree(
                       key: lastTurnKey,
-                      child: _ChatBubble(turn: chat[i], spec: spec),
+                      child: _ChatBubble(
+                        turn: chat[i],
+                        spec: spec,
+                        settings: settings,
+                      ),
                     )
-                  : _ChatBubble(turn: chat[i], spec: spec),
+                  : _ChatBubble(
+                      turn: chat[i],
+                      spec: spec,
+                      settings: settings,
+                    ),
           if (loading)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1652,12 +1521,18 @@ class _AiCoachCard extends StatelessWidget {
 class _ChatBubble extends StatelessWidget {
   final _ChatTurn turn;
   final AppThemeSpec spec;
+  final SettingsProvider settings;
 
-  const _ChatBubble({required this.turn, required this.spec});
+  const _ChatBubble({
+    required this.turn,
+    required this.spec,
+    required this.settings,
+  });
 
   @override
   Widget build(BuildContext context) {
     final isUser = turn.role == _ChatRole.user;
+    final avatarPath = settings.avatarPath;
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -1688,18 +1563,40 @@ class _ChatBubble extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  isUser ? Icons.person_rounded : Icons.smart_toy_rounded,
-                  size: 12,
-                  color: isUser ? spec.primary : spec.secondary,
-                ),
+                if (isUser && avatarPath != null && avatarPath.isNotEmpty)
+                  ClipOval(
+                    child: Image.file(
+                      File(avatarPath),
+                      width: 18,
+                      height: 18,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(
+                        Icons.person_rounded,
+                        size: 12,
+                        color: spec.primary,
+                      ),
+                    ),
+                  )
+                else
+                  Icon(
+                    isUser ? Icons.person_rounded : Icons.smart_toy_rounded,
+                    size: 12,
+                    color: isUser ? spec.primary : spec.secondary,
+                  ),
                 const SizedBox(width: 5),
-                Text(
-                  isUser ? '你' : (turn.isError ? '离线教练' : 'AI 教练'),
-                  style: TextStyle(
-                    color: isUser ? spec.primary : spec.textSecondary,
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
+                Flexible(
+                  child: Text(
+                    isUser
+                        ? settings.nickname
+                        : (turn.isError ? '离线教练' : 'AI 教练'),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isUser ? spec.primary : spec.textSecondary,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ],
@@ -1717,14 +1614,8 @@ class _ChatBubble extends StatelessWidget {
 }
 
 String _aiChannelLabel(SettingsProvider settings) {
-  final endpoint = settings.aiEndpoint.toLowerCase();
-  final base = endpoint.contains('blockrun')
-      ? 'BLOCKRUN · FREE'
-      : endpoint.contains('pollinations')
-          ? 'POLLINATIONS · FREE'
-          : endpoint.contains('opencode')
-              ? 'OPENCODE · ZEN'
-              : 'CUSTOM · AI';
+  final provider = settings.aiProvider;
+  final base = provider.isCustom ? 'CUSTOM · AI' : provider.label.toUpperCase();
   return settings.hasAiKey ? '$base · KEY' : base;
 }
 

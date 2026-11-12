@@ -65,7 +65,9 @@ class ExerciseLibrary {
       '动作分类与肌群命名参考 ExRx.net、ACE、NASM 与 ACSM。动作数据与演示图来自 '
       'exercises-dataset / exercises-dataset-zh（MIT；媒体 © Gym visual — '
       'https://gymvisual.com/，180×180）、free-exercise-db / exercises.json'
-      '（Public Domain），并使用 open-exercisedb（MIT）交叉校验。';
+      '（Public Domain），并使用 open-exercisedb（MIT）交叉校验。'
+      '部分专项动作照片来自 Wikimedia Commons（CC BY-SA / CC0），'
+      '详见 assets/exercises/CREDITS.md。';
 
   static const Map<String, MuscleGroup> groups = {
     '胸': MuscleGroup(

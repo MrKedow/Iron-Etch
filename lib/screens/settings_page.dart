@@ -17,6 +17,7 @@ import '../services/config_sync.dart';
 import '../services/media_permission.dart';
 import '../services/reminder_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ai_config_dialog.dart';
 import '../widgets/app_ui.dart';
 import '../widgets/press_feedback.dart';
 import '../widgets/status_banner.dart';
@@ -471,138 +472,7 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Future<void> _editAiConfig(SettingsProvider settings) async {
-    final endpointController = TextEditingController(text: settings.aiEndpoint);
-    final modelController = TextEditingController(text: settings.aiModel);
-    final keyController = TextEditingController(text: settings.aiApiKey);
-    var obscureKey = true;
-
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          final spec = context.watch<ThemeProvider>().currentSpec;
-          return AlertDialog(
-            title: const Text('AI 配置'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: spec.primary.withValues(alpha: .08),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '默认使用 BlockRun 的免费 GPT-OSS 通道；失败时自动回退到 '
-                      'Pollinations 与 OpenCode Zen。'
-                      '也可以填写任意 OpenAI 兼容服务的 API Key。',
-                      style: TextStyle(
-                        color: spec.textSecondary,
-                        fontSize: 11.5,
-                        height: 1.55,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      ActionChip(
-                        label: const Text('BlockRun 免费'),
-                        onPressed: () {
-                          endpointController.text =
-                              SettingsProvider.defaultAiEndpoint;
-                          modelController.text =
-                              SettingsProvider.defaultAiModel;
-                          setDialogState(() {});
-                        },
-                      ),
-                      ActionChip(
-                        label: const Text('Pollinations 免费'),
-                        onPressed: () {
-                          endpointController.text =
-                              SettingsProvider.legacyPollinationsEndpoint;
-                          modelController.text = 'gpt-oss-20b';
-                          setDialogState(() {});
-                        },
-                      ),
-                      ActionChip(
-                        label: const Text('OpenCode Zen'),
-                        onPressed: () {
-                          endpointController.text =
-                              SettingsProvider.legacyAiEndpoint;
-                          modelController.text = 'big-pickle';
-                          setDialogState(() {});
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: endpointController,
-                    decoration: const InputDecoration(
-                      labelText: '接口地址',
-                      hintText: SettingsProvider.defaultAiEndpoint,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: modelController,
-                    decoration: const InputDecoration(
-                      labelText: '模型名称',
-                      hintText: SettingsProvider.defaultAiModel,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: keyController,
-                    obscureText: obscureKey,
-                    decoration: InputDecoration(
-                      labelText: 'API Key（可选）',
-                      hintText: 'sk-...',
-                      suffixIcon: IconButton(
-                        onPressed: () =>
-                            setDialogState(() => obscureKey = !obscureKey),
-                        icon: Icon(
-                          obscureKey
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('取消'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('保存'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    if (saved == true && mounted) {
-      await context.read<SettingsProvider>().setAiConfig(
-            endpoint: endpointController.text,
-            model: modelController.text,
-            apiKey: keyController.text,
-          );
-    }
-    endpointController.dispose();
-    modelController.dispose();
-    keyController.dispose();
+    await showAiConfigDialog(context, settings);
   }
 
   Future<void> _editAiPrompt(SettingsProvider settings) async {
@@ -619,7 +489,7 @@ class _SettingsPageState extends State<SettingsPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '设置后会作为系统提示词应用到「让 AI 教练分析我的训练」。留空则使用内置默认提示词。',
+                  '设置后会作为首条提问真实发送给 AI，并替换训练舱顶部的默认问题。留空则使用内置默认提问。',
                   style: TextStyle(
                     color: spec.textSecondary,
                     fontSize: 11.5,
@@ -1641,7 +1511,7 @@ class _SettingsPageState extends State<SettingsPage>
                         icon: Icons.document_scanner_outlined,
                         title: '识别打卡照片数据',
                         subtitle: settings.dashboardAiScanEnabled
-                            ? '识别照片中的距离/速度并询问是否用于计算'
+                            ? '识别照片中的距离/速度'
                             : '关闭识别 · 照片仅作为打卡记录',
                         trailing: Switch.adaptive(
                           value: settings.dashboardAiScanEnabled,
@@ -1719,9 +1589,9 @@ class _SettingsPageState extends State<SettingsPage>
                           .setAiEnabled(!settings.aiEnabled),
                     ),
                     _SettingsTile(
-                      icon: Icons.link_rounded,
-                      title: '接口地址',
-                      subtitle: settings.aiEndpoint,
+                      icon: Icons.hub_rounded,
+                      title: '提供商',
+                      subtitle: settings.aiProvider.label,
                       onTap: () => _editAiConfig(settings),
                     ),
                     _SettingsTile(
@@ -1757,7 +1627,7 @@ class _SettingsPageState extends State<SettingsPage>
                       icon: Icons.edit_note_rounded,
                       title: 'AI 提示词',
                       subtitle: settings.aiPrompt.trim().isEmpty
-                          ? '使用内置默认提示词 · 点击自定义'
+                          ? '使用内置默认提问 · 点击自定义'
                           : settings.aiPrompt,
                       onTap: () => _editAiPrompt(settings),
                     ),

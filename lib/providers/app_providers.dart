@@ -5,47 +5,349 @@ import '../services/app_haptics.dart';
 import '../services/work_energy.dart';
 import '../theme/app_theme.dart';
 
-/// 内置 AI 模型预设：选择后自动填入接口地址与模型 ID。
 class AiModelPreset {
+  final String id;
   final String label;
-  final String endpoint;
-  final String model;
+  final bool supportsVision;
+  final bool free;
 
-  const AiModelPreset(this.label, this.endpoint, this.model);
+  const AiModelPreset(
+    this.id,
+    this.label, {
+    this.supportsVision = false,
+    this.free = false,
+  });
 }
 
-const List<AiModelPreset> builtInAiModels = [
-  AiModelPreset(
-    '铁镌推荐 · GPT-OSS 20B',
-    'https://blockrun.ai/api/v1/chat/completions',
-    'nvidia/gpt-oss-20b',
+class AiProviderPreset {
+  final String id;
+  final String label;
+  final String endpoint;
+  final String keyHint;
+  final String description;
+  final bool requiresKey;
+  final List<AiModelPreset> models;
+
+  const AiProviderPreset({
+    required this.id,
+    required this.label,
+    required this.endpoint,
+    required this.keyHint,
+    required this.description,
+    required this.models,
+    this.requiresKey = true,
+  });
+
+  bool get isCustom => id == 'custom';
+}
+
+const AiProviderPreset customAiProvider = AiProviderPreset(
+  id: 'custom',
+  label: '自定义 OpenAI 兼容服务',
+  endpoint: '',
+  keyHint: 'sk-...',
+  description: '手动填写接口地址和模型 ID，适用于任意 OpenAI 兼容服务。',
+  models: [
+    AiModelPreset('', '手动填写模型 ID'),
+  ],
+);
+
+const List<AiProviderPreset> builtInAiProviders = [
+  AiProviderPreset(
+    id: 'opencode',
+    label: 'OpenCode Zen',
+    endpoint: 'https://opencode.ai/inference/openai/v1/chat/completions',
+    keyHint: '可选，留空使用免费模型',
+    description: 'OpenCode V2 官方网关，含免费文本模型与视觉模型。',
+    requiresKey: false,
+    models: [
+      AiModelPreset('big-pickle', 'Big Pickle（免费）', free: true),
+      AiModelPreset(
+          'nemotron-3.5-super-vl-free', 'Nemotron 3.5 Super VL（免费 · 视觉）',
+          supportsVision: true, free: true),
+      AiModelPreset('deepseek-v4.1-flash-free', 'DeepSeek V4.1 Flash（免费）',
+          free: true),
+      AiModelPreset('glm-5.3-flash-free', 'GLM-5.3 Flash（免费）', free: true),
+      AiModelPreset('minimax-m3.1-flash-free', 'MiniMax M3.1 Flash（免费）',
+          free: true),
+      AiModelPreset('mimo-v2.6-flash-free', 'MiMo V2.6 Flash（免费）', free: true),
+      AiModelPreset('nemotron-3.5-lightning-free', 'Nemotron 3.5 Lightning（免费）',
+          free: true),
+      AiModelPreset('nemotron-3-ultra-free', 'Nemotron 3 Ultra（免费）',
+          free: true),
+      AiModelPreset('longcat-2.5-free', 'LongCat 2.5（免费）', free: true),
+      AiModelPreset('flint-40b-free', 'Flint 40B（免费）', free: true),
+      AiModelPreset('iceman-free', 'Iceman（免费）', free: true),
+      AiModelPreset('deepseek-v4.1-flash', 'DeepSeek V4.1 Flash'),
+      AiModelPreset('deepseek-v4-pro', 'DeepSeek V4 Pro'),
+      AiModelPreset('glm-5.3-flash', 'GLM 5.3 Flash'),
+      AiModelPreset('glm-5.3', 'GLM 5.3'),
+      AiModelPreset('minimax-m3', 'MiniMax M3'),
+      AiModelPreset('kimi-k2.7-code', 'Kimi K2.7 Code'),
+      AiModelPreset('kimi-k3', 'Kimi K3'),
+      AiModelPreset('qwen3.8-flash', 'Qwen3.8 Flash'),
+      AiModelPreset('qwen3.8-max', 'Qwen3.8 Max'),
+      AiModelPreset('gemini-3.8-flash', 'Gemini 3.8 Flash'),
+      AiModelPreset('claude-sonnet-5', 'Claude Sonnet 5'),
+      AiModelPreset('gpt-6.1-sol', 'GPT 6.1 Sol'),
+      AiModelPreset('grok-4.7', 'Grok 4.7'),
+      AiModelPreset('mistral-large-4', 'Mistral Large 4'),
+    ],
   ),
-  AiModelPreset(
-    'GPT-OSS 120B（更强推理）',
-    'https://blockrun.ai/api/v1/chat/completions',
-    'nvidia/gpt-oss-120b',
+  AiProviderPreset(
+    id: 'blockrun',
+    label: 'BlockRun',
+    endpoint: 'https://blockrun.ai/api/v1/chat/completions',
+    keyHint: '可选，留空使用免费通道',
+    description: '免费 GPT-OSS 通道，适合日常训练分析。',
+    requiresKey: false,
+    models: [
+      AiModelPreset('nvidia/gpt-oss-20b', 'GPT-OSS 20B（免费）', free: true),
+      AiModelPreset('nvidia/gpt-oss-120b', 'GPT-OSS 120B（免费）', free: true),
+    ],
   ),
-  AiModelPreset(
-    'Pollinations · GPT-OSS 20B',
-    'https://text.pollinations.ai/openai',
-    'gpt-oss-20b',
+  AiProviderPreset(
+    id: 'pollinations',
+    label: 'Pollinations',
+    endpoint: 'https://text.pollinations.ai/openai',
+    keyHint: '可选，留空使用免费通道',
+    description: '免登录公共通道，作为免费回退使用。',
+    requiresKey: false,
+    models: [
+      AiModelPreset('gpt-oss-20b', 'GPT-OSS 20B（免费）', free: true),
+      AiModelPreset('openai', 'OpenAI（免费）', free: true),
+    ],
   ),
-  AiModelPreset(
-    'Pollinations · GPT-OSS 20B（v1）',
-    'https://text.pollinations.ai/openai/v1/chat/completions',
-    'gpt-oss-20b',
+  AiProviderPreset(
+    id: 'openai',
+    label: 'OpenAI',
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    keyHint: 'sk-...',
+    description: '官方 OpenAI API，需要 API Key。',
+    models: [
+      AiModelPreset('gpt-5.4-mini', 'GPT-5.4 Mini', supportsVision: true),
+      AiModelPreset('gpt-5.4', 'GPT-5.4', supportsVision: true),
+      AiModelPreset('gpt-5.4-nano', 'GPT-5.4 Nano', supportsVision: true),
+      AiModelPreset('gpt-4.1-mini', 'GPT-4.1 Mini', supportsVision: true),
+      AiModelPreset('gpt-4.1', 'GPT-4.1', supportsVision: true),
+      AiModelPreset('gpt-4o-mini', 'GPT-4o Mini', supportsVision: true),
+      AiModelPreset('o4-mini', 'o4 Mini', supportsVision: true),
+    ],
   ),
-  AiModelPreset(
-    'OpenCode Zen · Big Pickle',
-    'https://opencode.ai/inference/openai/v1/chat/completions',
-    'big-pickle',
+  AiProviderPreset(
+    id: 'anthropic',
+    label: 'Anthropic Claude',
+    endpoint: 'https://api.anthropic.com/v1/chat/completions',
+    keyHint: 'sk-ant-...',
+    description: 'Claude 官方 OpenAI 兼容接口。',
+    models: [
+      AiModelPreset('claude-sonnet-4-5', 'Claude Sonnet 4.5',
+          supportsVision: true),
+      AiModelPreset('claude-haiku-4-5', 'Claude Haiku 4.5',
+          supportsVision: true),
+      AiModelPreset('claude-opus-4-5', 'Claude Opus 4.5', supportsVision: true),
+    ],
   ),
-  AiModelPreset(
-    '自定义（手动填写上方字段）',
-    '',
-    '',
+  AiProviderPreset(
+    id: 'google',
+    label: 'Google Gemini',
+    endpoint:
+        'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    keyHint: 'AIza...',
+    description: 'Gemini 官方 OpenAI 兼容接口，速度快、视觉能力强。',
+    models: [
+      AiModelPreset('gemini-3.5-flash', 'Gemini 3.5 Flash',
+          supportsVision: true),
+      AiModelPreset('gemini-3.5-flash-lite', 'Gemini 3.5 Flash Lite',
+          supportsVision: true),
+      AiModelPreset('gemini-3.1-pro', 'Gemini 3.1 Pro', supportsVision: true),
+      AiModelPreset('gemini-3-flash', 'Gemini 3 Flash', supportsVision: true),
+      AiModelPreset('gemini-2.5-flash', 'Gemini 2.5 Flash',
+          supportsVision: true),
+    ],
   ),
+  AiProviderPreset(
+    id: 'deepseek',
+    label: 'DeepSeek',
+    endpoint: 'https://api.deepseek.com/v1/chat/completions',
+    keyHint: 'sk-...',
+    description: 'DeepSeek 官方 API，中文训练分析表现稳定。',
+    models: [
+      AiModelPreset('deepseek-chat', 'DeepSeek Chat'),
+      AiModelPreset('deepseek-reasoner', 'DeepSeek Reasoner'),
+    ],
+  ),
+  AiProviderPreset(
+    id: 'zhipu',
+    label: '智谱 GLM',
+    endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    keyHint: 'API Key',
+    description: '智谱开放平台，含免费 GLM-4V-Flash 视觉模型。',
+    models: [
+      AiModelPreset('glm-4.5-flash', 'GLM-4.5-Flash（免费）', free: true),
+      AiModelPreset('glm-4v-flash', 'GLM-4V-Flash（免费 · 视觉）',
+          supportsVision: true, free: true),
+      AiModelPreset('glm-4.5', 'GLM-4.5'),
+      AiModelPreset('glm-4.5v', 'GLM-4.5V', supportsVision: true),
+    ],
+  ),
+  AiProviderPreset(
+    id: 'qwen',
+    label: '阿里云百炼 Qwen',
+    endpoint:
+        'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    keyHint: 'sk-...',
+    description: '通义千问 OpenAI 兼容接口，视觉模型丰富。',
+    models: [
+      AiModelPreset('qwen-flash', 'Qwen Flash'),
+      AiModelPreset('qwen-plus', 'Qwen Plus'),
+      AiModelPreset('qwen3-max', 'Qwen3 Max'),
+      AiModelPreset('qwen-vl-plus', 'Qwen VL Plus（视觉）', supportsVision: true),
+      AiModelPreset('qwen-vl-max', 'Qwen VL Max（视觉）', supportsVision: true),
+      AiModelPreset('qwen3-vl-plus', 'Qwen3 VL Plus（视觉）', supportsVision: true),
+    ],
+  ),
+  AiProviderPreset(
+    id: 'moonshot',
+    label: 'Moonshot Kimi',
+    endpoint: 'https://api.moonshot.cn/v1/chat/completions',
+    keyHint: 'sk-...',
+    description: 'Kimi 官方 API，长上下文、中文表达自然。',
+    models: [
+      AiModelPreset('kimi-k2.5', 'Kimi K2.5'),
+      AiModelPreset('kimi-k2-turbo-preview', 'Kimi K2 Turbo'),
+      AiModelPreset('moonshot-v1-8k-vision-preview', 'Moonshot Vision',
+          supportsVision: true),
+    ],
+  ),
+  AiProviderPreset(
+    id: 'minimax',
+    label: 'MiniMax',
+    endpoint: 'https://api.minimaxi.com/v1/chat/completions',
+    keyHint: 'API Key',
+    description: 'MiniMax 官方 OpenAI 兼容接口。',
+    models: [
+      AiModelPreset('MiniMax-M2.5', 'MiniMax M2.5'),
+      AiModelPreset('MiniMax-M2.1', 'MiniMax M2.1'),
+      AiModelPreset('abab6.5s-chat', 'abab6.5s'),
+    ],
+  ),
+  AiProviderPreset(
+    id: 'openrouter',
+    label: 'OpenRouter',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+    keyHint: 'sk-or-...',
+    description: '聚合多家模型，一个 Key 可用全部主流模型。',
+    models: [
+      AiModelPreset('google/gemini-3-flash', 'Gemini 3 Flash',
+          supportsVision: true),
+      AiModelPreset('google/gemini-2.5-flash', 'Gemini 2.5 Flash',
+          supportsVision: true),
+      AiModelPreset('anthropic/claude-sonnet-4.5', 'Claude Sonnet 4.5',
+          supportsVision: true),
+      AiModelPreset('openai/gpt-5-mini', 'GPT-5 Mini', supportsVision: true),
+      AiModelPreset('deepseek/deepseek-chat', 'DeepSeek Chat'),
+      AiModelPreset('qwen/qwen3-vl-235b-a22b-instruct', 'Qwen3 VL 235B',
+          supportsVision: true),
+      AiModelPreset('meta-llama/llama-4-maverick', 'Llama 4 Maverick',
+          supportsVision: true),
+    ],
+  ),
+  AiProviderPreset(
+    id: 'groq',
+    label: 'Groq',
+    endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    keyHint: 'gsk_...',
+    description: 'Groq 高速推理，适合快速问答。',
+    models: [
+      AiModelPreset('llama-3.3-70b-versatile', 'Llama 3.3 70B'),
+      AiModelPreset('llama-4-maverick-17b-128e-instruct', 'Llama 4 Maverick',
+          supportsVision: true),
+      AiModelPreset('qwen/qwen3-32b', 'Qwen3 32B'),
+      AiModelPreset('moonshotai/kimi-k2-instruct', 'Kimi K2'),
+    ],
+  ),
+  AiProviderPreset(
+    id: 'mistral',
+    label: 'Mistral',
+    endpoint: 'https://api.mistral.ai/v1/chat/completions',
+    keyHint: 'API Key',
+    description: 'Mistral 官方 API，Pixtral 支持图片识别。',
+    models: [
+      AiModelPreset('mistral-large-latest', 'Mistral Large'),
+      AiModelPreset('mistral-small-latest', 'Mistral Small'),
+      AiModelPreset('pixtral-large-latest', 'Pixtral Large（视觉）',
+          supportsVision: true),
+      AiModelPreset('pixtral-12b-2409', 'Pixtral 12B（视觉）',
+          supportsVision: true),
+    ],
+  ),
+  AiProviderPreset(
+    id: 'siliconflow',
+    label: '硅基流动 SiliconFlow',
+    endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+    keyHint: 'sk-...',
+    description: '国内聚合服务，含多种视觉模型。',
+    models: [
+      AiModelPreset('deepseek-ai/DeepSeek-V3.2', 'DeepSeek V3.2'),
+      AiModelPreset('Qwen/Qwen3-32B', 'Qwen3 32B'),
+      AiModelPreset('Qwen/Qwen3-VL-32B-Instruct', 'Qwen3 VL 32B（视觉）',
+          supportsVision: true),
+      AiModelPreset('THUDM/GLM-4.1V-9B-Thinking', 'GLM-4.1V（视觉）',
+          supportsVision: true),
+    ],
+  ),
+  customAiProvider,
 ];
+
+AiProviderPreset aiProviderById(String id) {
+  return builtInAiProviders.firstWhere(
+    (provider) => provider.id == id,
+    orElse: () => customAiProvider,
+  );
+}
+
+AiProviderPreset? aiProviderForEndpoint(String endpoint) {
+  final normalized = endpoint.trim().toLowerCase();
+  if (normalized.isEmpty) return null;
+  for (final provider in builtInAiProviders) {
+    if (provider.endpoint.isNotEmpty &&
+        provider.endpoint.toLowerCase() == normalized) {
+      return provider;
+    }
+  }
+  if (normalized.contains('blockrun')) return aiProviderById('blockrun');
+  if (normalized.contains('pollinations')) {
+    return aiProviderById('pollinations');
+  }
+  if (normalized.contains('opencode')) return aiProviderById('opencode');
+  if (normalized.contains('openai.com')) return aiProviderById('openai');
+  if (normalized.contains('anthropic')) return aiProviderById('anthropic');
+  if (normalized.contains('googleapis')) return aiProviderById('google');
+  if (normalized.contains('deepseek')) return aiProviderById('deepseek');
+  if (normalized.contains('bigmodel')) return aiProviderById('zhipu');
+  if (normalized.contains('dashscope')) return aiProviderById('qwen');
+  if (normalized.contains('moonshot')) return aiProviderById('moonshot');
+  if (normalized.contains('minimax')) return aiProviderById('minimax');
+  if (normalized.contains('openrouter')) return aiProviderById('openrouter');
+  if (normalized.contains('groq')) return aiProviderById('groq');
+  if (normalized.contains('mistral')) return aiProviderById('mistral');
+  if (normalized.contains('siliconflow')) return aiProviderById('siliconflow');
+  return null;
+}
+
+AiModelPreset? aiModelPreset(String endpoint, String model) {
+  final provider = aiProviderForEndpoint(endpoint);
+  if (provider == null) return null;
+  for (final preset in provider.models) {
+    if (preset.id == model) return preset;
+  }
+  return null;
+}
+
+bool aiModelSupportsVision(String endpoint, String model) {
+  return aiModelPreset(endpoint, model)?.supportsVision ?? false;
+}
 
 class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   ThemeProvider(
@@ -148,6 +450,7 @@ class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
 }
 
 class SettingsProvider extends ChangeNotifier {
+  static const String defaultAiProviderId = 'blockrun';
   static const String defaultAiEndpoint =
       'https://blockrun.ai/api/v1/chat/completions';
   static const String defaultAiModel = 'nvidia/gpt-oss-20b';
@@ -247,10 +550,12 @@ class SettingsProvider extends ChangeNotifier {
   bool _dashboardAiScanEnabled = false;
 
   bool _aiEnabled = false;
+  String _aiProviderId = defaultAiProviderId;
   String _aiEndpoint = defaultAiEndpoint;
   String _aiModel = defaultAiModel;
   String _aiApiKey = '';
   String _aiPrompt = '';
+  final Map<String, String> _aiProviderKeys = {};
 
   String _statusEmoji = '🔥';
   String _statusText = '今天的铁，也要镌刻进身体里';
@@ -286,11 +591,18 @@ class SettingsProvider extends ChangeNotifier {
   bool get dashboardAiScanEnabled => _dashboardAiScanEnabled;
 
   bool get aiEnabled => _aiEnabled;
+  String get aiProviderId => _aiProviderId;
+  AiProviderPreset get aiProvider => aiProviderById(_aiProviderId);
   String get aiEndpoint => _aiEndpoint;
   String get aiModel => _aiModel;
   String get aiApiKey => _aiApiKey;
   String get aiPrompt => _aiPrompt;
   bool get hasAiKey => _aiApiKey.trim().isNotEmpty;
+
+  String apiKeyForProvider(String providerId) {
+    if (providerId == _aiProviderId) return _aiApiKey;
+    return _aiProviderKeys[providerId] ?? '';
+  }
 
   String get statusEmoji => _statusEmoji;
   String get statusText => _statusText;
@@ -368,7 +680,19 @@ class SettingsProvider extends ChangeNotifier {
     }
     _aiEndpoint = savedEndpoint ?? defaultAiEndpoint;
     _aiModel = savedModel ?? defaultAiModel;
-    _aiApiKey = prefs.getString('ai_api_key') ?? '';
+    final savedProviderId = prefs.getString('ai_provider_id');
+    _aiProviderId = savedProviderId ??
+        aiProviderForEndpoint(_aiEndpoint)?.id ??
+        defaultAiProviderId;
+    for (final provider in builtInAiProviders) {
+      final value = prefs.getString('ai_api_key_${provider.id}');
+      if (value != null) _aiProviderKeys[provider.id] = value;
+    }
+    final legacyKey = prefs.getString('ai_api_key') ?? '';
+    _aiApiKey = _aiProviderKeys[_aiProviderId] ?? legacyKey;
+    if (_aiApiKey.isNotEmpty) {
+      _aiProviderKeys[_aiProviderId] = _aiApiKey;
+    }
     _aiPrompt = prefs.getString('ai_prompt') ?? '';
 
     _statusEmoji = prefs.getString('status_emoji') ?? '🔥';
@@ -593,10 +917,15 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<void> setAiConfig({
+    String? providerId,
     String? endpoint,
     String? model,
     String? apiKey,
   }) async {
+    if (providerId != null && providerId.trim().isNotEmpty) {
+      _aiProviderId = providerId.trim();
+      await _persist('ai_provider_id', _aiProviderId);
+    }
     if (endpoint != null) {
       _aiEndpoint =
           endpoint.trim().isEmpty ? defaultAiEndpoint : endpoint.trim();
@@ -608,7 +937,11 @@ class SettingsProvider extends ChangeNotifier {
     }
     if (apiKey != null) {
       _aiApiKey = apiKey.trim();
+      _aiProviderKeys[_aiProviderId] = _aiApiKey;
+      await _persist('ai_api_key_$_aiProviderId', _aiApiKey);
       await _persist('ai_api_key', _aiApiKey);
+    } else {
+      _aiApiKey = _aiProviderKeys[_aiProviderId] ?? '';
     }
     notifyListeners();
   }

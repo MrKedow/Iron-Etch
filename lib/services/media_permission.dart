@@ -54,7 +54,7 @@ class MediaPermission {
         content: Text(
           camera
               ? '为了拍摄训练打卡照片，需要访问你的相机。我们只会在你主动拍照时使用相机，不会在后台开启或上传画面。'
-              : '为了导入训练照片或主题背景，需要访问你的相册。我们只会读取你主动选择的图片，不会扫描或上传你的相册。',
+              : '为了导入训练照片或主题背景，需要访问你的相册。你可以选择允许全部照片，或只允许本次选中的照片。我们不会扫描或上传你的相册。',
         ),
         actions: [
           TextButton(
@@ -63,7 +63,7 @@ class MediaPermission {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(camera ? '允许使用相机' : '允许访问相册'),
+            child: Text(camera ? '允许使用相机' : '选择照片权限'),
           ),
         ],
       ),

@@ -2834,10 +2834,25 @@ class _ProjectCardState extends State<_ProjectCard> {
 
   bool _scanningDashboard = false;
 
-  double _readMetric(Map<String, dynamic> data, String key) {
-    final value = data[key];
-    if (value is num) return value.toDouble();
-    return double.tryParse(value?.toString() ?? '') ?? 0;
+  double _readMetric(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is num) return value.toDouble();
+      final text = value?.toString().trim() ?? '';
+      if (text.isEmpty) continue;
+      final clock =
+          RegExp(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$').firstMatch(text);
+      if (clock != null) {
+        final first = int.parse(clock.group(1)!);
+        final second = int.parse(clock.group(2)!);
+        final third = clock.group(3);
+        if (third == null) return first + second / 60;
+        return first * 60 + second + int.parse(third) / 60;
+      }
+      final number = RegExp(r'-?\d+(?:\.\d+)?').firstMatch(text);
+      if (number != null) return double.tryParse(number.group(0)!) ?? 0;
+    }
+    return 0;
   }
 
   Future<ImageSource?> _choosePhotoSource() {
@@ -2960,9 +2975,12 @@ class _ProjectCardState extends State<_ProjectCard> {
       }
 
       final bytes = await picked.readAsBytes();
+      final mimeType = picked.path.toLowerCase().endsWith('.png')
+          ? 'image/png'
+          : 'image/jpeg';
       final reply = await AiCoachService.readCardioDashboard(
         imageBase64: base64Encode(bytes),
-        mimeType: 'image/jpeg',
+        mimeType: mimeType,
         endpoint: settings.aiEndpoint,
         model: settings.aiModel,
         apiKey: settings.aiApiKey,
@@ -2986,9 +3004,18 @@ class _ProjectCardState extends State<_ProjectCard> {
         _showSnack('未识别到可解析的训练数据，照片已保存');
         return;
       }
-      final duration = _readMetric(data, 'durationMinutes');
-      final distance = _readMetric(data, 'distanceKm');
-      final speed = _readMetric(data, 'speedKmH');
+      final duration = _readMetric(
+        data,
+        const ['durationMinutes', 'duration', 'timeMinutes', 'minutes'],
+      );
+      final distance = _readMetric(
+        data,
+        const ['distanceKm', 'distance', 'distanceKilometers', 'km'],
+      );
+      final speed = _readMetric(
+        data,
+        const ['speedKmH', 'speed', 'speedKmh', 'pace'],
+      );
       if (duration <= 0 && distance <= 0 && speed <= 0) {
         _showSnack('照片中未识别到时长、距离或速度，已保存为打卡照片');
         return;

@@ -290,10 +290,12 @@ def main() -> None:
     # 现有手工动作的图片勘误：按中文名匹配 exercises-dataset-zh，优先使用其演示图。
     overrides: dict[str, str] = {}
     zh_by_name = {}
+    zh_by_id = {}
     for item in zh_data:
         english = item["name"]
         chinese = clean_zh_name(zh_names.get(english, english))
         zh_by_name[norm(chinese)] = item
+        zh_by_id[item["id"]] = item
     for name in handwritten_names:
         item = zh_by_name.get(norm(name))
         if item and item.get("image"):
@@ -304,6 +306,51 @@ def main() -> None:
                     destination = os.path.join(asset_dir, f"{overrides[name]}_{index}.jpg")
                     if not os.path.exists(destination):
                         shutil.copyfile(source, destination)
+
+    # 手工动作缺图补齐：优先使用仓库内已有图片，专项动作使用本地授权照片。
+    free_by_id = {}
+    for path in free_files:
+        try:
+            item = json.load(open(path, encoding="utf-8"))
+        except Exception:
+            continue
+        free_by_id[item["id"]] = item
+    override_file = os.path.join(project, "tool", "exercise_image_overrides.json")
+    curated = json.load(open(override_file, encoding="utf-8")) if os.path.exists(override_file) else {}
+    copy_errors: list[str] = []
+    for name, source in curated.items():
+        if name not in handwritten_names:
+            print(f"warning: override for unknown exercise: {name}")
+            continue
+        images: list[str] = []
+        slug = source
+        if source.startswith("zh:"):
+            item = zh_by_id.get(source[3:])
+            if item and item.get("image"):
+                slug = "zh_" + item["id"]
+                images = [os.path.join(zh_dir, item["image"])] * 2
+        elif source.startswith("free:"):
+            item = free_by_id.get(source[5:])
+            if item:
+                slug = "free_" + item["id"]
+                images = [os.path.join(free_dir, "exercises", image) for image in (item.get("images") or [])[:2]]
+        if images:
+            if not images[0] or not os.path.exists(images[0]):
+                copy_errors.append(f"{name}: missing source {images[0]}")
+                continue
+            if len(images) == 1 or not os.path.exists(images[1]):
+                images = [images[0], images[0]]
+            for index, image in enumerate(images):
+                destination = os.path.join(asset_dir, f"{slug}_{index}.jpg")
+                if not os.path.exists(destination):
+                    shutil.copyfile(image, destination)
+        else:
+            for index in (0, 1):
+                if not os.path.exists(os.path.join(asset_dir, f"{slug}_{index}.jpg")):
+                    copy_errors.append(f"{name}: missing asset {slug}_{index}.jpg")
+        overrides[name] = slug
+    if copy_errors:
+        raise SystemExit("image overrides failed:\n  " + "\n  ".join(copy_errors))
 
     def write_list(name: str, entries: list[dict]) -> str:
         lines = [f"const List<Map<String, Object?>> {name} = <Map<String, Object?>>[\n"]
@@ -328,7 +375,8 @@ def main() -> None:
     output = [
         "// 由 tool/generate_exercise_library.py 自动生成，请勿手工编辑。\n",
         "// 数据来源：exercises-dataset-zh (MIT)、free-exercise-db / exercises.json (Public Domain)。\n",
-        "// 图片：© Gym visual — https://gymvisual.com/（exercises-dataset-zh 媒体，180×180）。\n\n",
+        "// 图片：© Gym visual — https://gymvisual.com/（exercises-dataset-zh 媒体，180×180）。\n",
+        "// 专项动作照片来自 Wikimedia Commons（详见 assets/exercises/CREDITS.md）。\n\n",
         write_list("generatedExercises", zh_entries),
         "\n// free-exercise-db / exercises.json 自动生成补充动作。\n",
         write_list("freeGeneratedExercises", free_entries),

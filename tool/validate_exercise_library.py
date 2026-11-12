@@ -27,7 +27,7 @@ def parse_list(text: str, name: str) -> list[dict]:
     if not match:
         return []
     result = []
-    for raw in re.finditer(r"<String, Object\?>\{(.*?)\},\n", match.group(1), re.S):
+    for raw in re.finditer(r"<String, Object\?>\{(.*?)\},(?:\n|$)", match.group(1), re.S):
         body = raw.group(1)
         item = {}
         for key in ("name", "group", "kind", "equipment", "pattern", "cue", "imageSlug"):
@@ -52,6 +52,15 @@ def main() -> None:
     zh = parse_list(generated_text, "generatedExercises")
     free = parse_list(generated_text, "freeGeneratedExercises")
     all_items = zh + free
+    overrides_text = generated_text.split("generatedImageOverrides", 1)[1]
+    image_overrides = dict(re.findall(r"'((?:\\.|[^'])*)': '([^']+)'", overrides_text))
+    image_overrides = {name.replace("\\'", "'"): slug for name, slug in image_overrides.items()}
+    library_text = open(os.path.join(project, "lib", "data", "exercise_library.dart"), encoding="utf-8").read()
+    manual_names = re.findall(r"_e\('((?:\\.|[^'])*)'", library_text)
+    manual_names = [name.replace("\\'", "'") for name in manual_names]
+    illustrations_text = open(os.path.join(project, "lib", "data", "exercise_illustrations.dart"), encoding="utf-8").read()
+    manual_illustrations = dict(re.findall(r"'((?:\\.|[^'])*)': '([^']+)'", illustrations_text))
+    manual_illustrations = {name.replace("\\'", "'"): slug for name, slug in manual_illustrations.items()}
 
     zh_source = json.load(open(os.path.join(root, "exercises-dataset-zh", "data", "exercises.json"), encoding="utf-8"))
     zh_by_id = {item["id"]: item for item in zh_source}
@@ -72,6 +81,21 @@ def main() -> None:
 
     errors: list[str] = []
     warnings: list[str] = []
+
+    for name in manual_names:
+        slug = image_overrides.get(name) or manual_illustrations.get(name)
+        if not slug:
+            errors.append(f"manual exercise has no image: {name}")
+            continue
+        if slug.startswith("zh_") and slug[3:] not in zh_by_id:
+            errors.append(f"manual zh source id missing: {name} -> {slug[3:]}")
+        elif slug.startswith("free_") and slug[5:] not in free_source:
+            errors.append(f"manual free source id missing: {name} -> {slug[5:]}")
+        for index in (0, 1):
+            image_path = os.path.join(project, "assets", "exercises", f"{slug}_{index}.jpg")
+            if not os.path.exists(image_path):
+                errors.append(f"manual missing image: {image_path}")
+                break
 
     names = Counter(norm(item["name"]) for item in all_items)
     duplicates = [name for name, count in names.items() if count > 1]
@@ -133,6 +157,9 @@ def main() -> None:
     print(f"zh generated: {len(zh)}")
     print(f"free generated: {len(free)}")
     print(f"total generated: {len(all_items)}")
+    print(f"manual exercises: {len(manual_names)}")
+    print(f"manual image overrides: {len(image_overrides)}")
+    print(f"manual illustration slugs: {len(manual_illustrations)}")
     print(f"kind distribution: {dict(Counter(item['kind'] for item in all_items))}")
     print(f"group distribution: {dict(Counter(item['group'] for item in all_items))}")
     open_matches = 0

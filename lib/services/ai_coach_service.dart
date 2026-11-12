@@ -34,11 +34,13 @@ class _AiTarget {
   final String endpoint;
   final String model;
   final String label;
+  final String? apiKey;
 
   const _AiTarget({
     required this.endpoint,
     required this.model,
     required this.label,
+    this.apiKey,
   });
 }
 
@@ -160,43 +162,194 @@ class AiCoachService {
   }
 
   /// 读取跑步机/椭圆机仪表盘照片，返回包含时长、距离、速度和热量的文本。
-  /// 返回内容优先为 JSON，便于上层解析；不支持视觉的模型会返回失败信息。
+  /// 优先使用用户配置的视觉模型，否则自动回退到快速免费的视觉模型。
   static Future<AiCoachReply> readCardioDashboard({
     required String imageBase64,
     String mimeType = 'image/jpeg',
     String? endpoint,
     String? model,
     String? apiKey,
-  }) {
-    return chat(
-      endpoint: endpoint,
-      model: model,
-      apiKey: apiKey,
-      messages: [
-        {
-          'role': 'system',
-          'content': '你是健身器械仪表盘识别助手。只输出一个 JSON 对象，不要解释、不要 markdown。',
-        },
-        {
-          'role': 'user',
-          'content': [
-            {
-              'type': 'text',
-              'text':
-                  '读取图片中跑步机/椭圆机仪表盘的数字，输出 JSON：'
-                  '{"durationMinutes":数字,"distanceKm":数字,"speedKmH":数字,"calories":数字}。'
-                  '无法识别的字段填 0，不要臆造。',
-            },
-            {
-              'type': 'image_url',
-              'image_url': {
-                'url': 'data:$mimeType;base64,$imageBase64',
-              },
-            },
-          ],
-        },
-      ],
+  }) async {
+    final configuredEndpoint = (endpoint == null || endpoint.trim().isEmpty)
+        ? SettingsProvider.defaultAiEndpoint
+        : endpoint.trim();
+    final configuredModel = (model == null || model.trim().isEmpty)
+        ? SettingsProvider.defaultAiModel
+        : model.trim();
+    final key = apiKey?.trim() ?? '';
+    final provider = aiProviderForEndpoint(configuredEndpoint);
+    final targets = <_AiTarget>[];
+    final configuredVision =
+        aiModelSupportsVision(configuredEndpoint, configuredModel) ||
+            _looksLikeVisionModel(configuredModel);
+
+    void addTarget(_AiTarget target) {
+      final exists = targets.any(
+        (item) =>
+            item.endpoint == target.endpoint && item.model == target.model,
+      );
+      if (!exists) targets.add(target);
+    }
+
+    if (configuredVision) {
+      addTarget(_AiTarget(
+        endpoint: configuredEndpoint,
+        model: configuredModel,
+        label: '已配置视觉模型',
+        apiKey: key,
+      ));
+    }
+
+    if (key.isNotEmpty && provider != null) {
+      final fallback = _providerVisionTarget(provider.id, key);
+      if (fallback != null) addTarget(fallback);
+    }
+
+    addTarget(_AiTarget(
+      endpoint: openCodeEndpoint,
+      model: 'nemotron-3.5-super-vl-free',
+      label: 'OpenCode Zen · 免费视觉',
+      apiKey: provider?.id == 'opencode' ? key : '',
+    ));
+
+    final messages = _visionMessages(imageBase64, mimeType);
+    final errors = <String>[];
+    for (var i = 0; i < targets.length; i++) {
+      final target = targets[i];
+      final reply = await _attempt(
+        target,
+        messages,
+        apiKey: target.apiKey ?? '',
+        timeout: Duration(seconds: i == 0 ? 22 : 18),
+        temperature: .1,
+        maxTokens: 500,
+      );
+      if (reply.success) return reply;
+      errors.add('${target.label}：${reply.error ?? '未知错误'}');
+    }
+    return AiCoachReply.failure(
+      errors.isEmpty ? '没有可用的视觉模型。' : errors.join('；'),
     );
+  }
+
+  static _AiTarget? _providerVisionTarget(String providerId, String key) {
+    switch (providerId) {
+      case 'openai':
+        return _AiTarget(
+          endpoint: 'https://api.openai.com/v1/chat/completions',
+          model: 'gpt-5.4-mini',
+          label: 'OpenAI 视觉',
+          apiKey: key,
+        );
+      case 'anthropic':
+        return _AiTarget(
+          endpoint: 'https://api.anthropic.com/v1/chat/completions',
+          model: 'claude-sonnet-4-5',
+          label: 'Claude 视觉',
+          apiKey: key,
+        );
+      case 'google':
+        return _AiTarget(
+          endpoint:
+              'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+          model: 'gemini-3.5-flash',
+          label: 'Gemini 视觉',
+          apiKey: key,
+        );
+      case 'zhipu':
+        return _AiTarget(
+          endpoint: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+          model: 'glm-4v-flash',
+          label: 'GLM 视觉',
+          apiKey: key,
+        );
+      case 'qwen':
+        return _AiTarget(
+          endpoint:
+              'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+          model: 'qwen-vl-plus',
+          label: 'Qwen 视觉',
+          apiKey: key,
+        );
+      case 'openrouter':
+        return _AiTarget(
+          endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+          model: 'google/gemini-3-flash',
+          label: 'OpenRouter 视觉',
+          apiKey: key,
+        );
+      case 'siliconflow':
+        return _AiTarget(
+          endpoint: 'https://api.siliconflow.cn/v1/chat/completions',
+          model: 'Qwen/Qwen3-VL-32B-Instruct',
+          label: 'SiliconFlow 视觉',
+          apiKey: key,
+        );
+      case 'mistral':
+        return _AiTarget(
+          endpoint: 'https://api.mistral.ai/v1/chat/completions',
+          model: 'pixtral-large-latest',
+          label: 'Pixtral 视觉',
+          apiKey: key,
+        );
+      case 'groq':
+        return _AiTarget(
+          endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+          model: 'llama-4-maverick-17b-128e-instruct',
+          label: 'Groq 视觉',
+          apiKey: key,
+        );
+      case 'moonshot':
+        return _AiTarget(
+          endpoint: 'https://api.moonshot.cn/v1/chat/completions',
+          model: 'moonshot-v1-8k-vision-preview',
+          label: 'Kimi 视觉',
+          apiKey: key,
+        );
+      default:
+        return null;
+    }
+  }
+
+  static List<Map<String, dynamic>> _visionMessages(
+    String imageBase64,
+    String mimeType,
+  ) {
+    return [
+      {
+        'role': 'system',
+        'content': '你是健身器械仪表盘识别助手。只输出一个 JSON 对象，不要解释、不要 markdown。',
+      },
+      {
+        'role': 'user',
+        'content': [
+          {
+            'type': 'text',
+            'text': '读取图片中跑步机/椭圆机仪表盘的主数值，只输出 JSON：'
+                '{"durationMinutes":数字,"distanceKm":数字,"speedKmH":数字,"calories":数字}。'
+                '如果时长是 mm:ss 或 hh:mm:ss，请换算成分钟。'
+                '距离单位若是米请换算成公里。无法识别的字段填 0，不要臆造。',
+          },
+          {
+            'type': 'image_url',
+            'image_url': {
+              'url': 'data:$mimeType;base64,$imageBase64',
+            },
+          },
+        ],
+      },
+    ];
+  }
+
+  static bool _looksLikeVisionModel(String model) {
+    final lower = model.toLowerCase();
+    return lower.contains('vl') ||
+        lower.contains('vision') ||
+        lower.contains('pixtral') ||
+        lower.contains('gpt-4o') ||
+        lower.contains('gpt-5') ||
+        lower.contains('gemini') ||
+        lower.contains('claude');
   }
 
   static Future<AiCoachReply> _attempt(
@@ -204,6 +357,8 @@ class AiCoachService {
     List<Map<String, dynamic>> messages, {
     required String apiKey,
     required Duration timeout,
+    double temperature = .65,
+    int maxTokens = 1800,
   }) async {
     final uri = Uri.tryParse(target.endpoint);
     if (uri == null || !uri.hasScheme) {
@@ -214,15 +369,18 @@ class AiCoachService {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
-    if (apiKey.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $apiKey';
+    final effectiveKey = (target.apiKey == null || target.apiKey!.isEmpty)
+        ? apiKey
+        : target.apiKey!;
+    if (effectiveKey.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $effectiveKey';
     }
 
     final body = jsonEncode({
       'model': target.model,
       'messages': messages,
-      'temperature': .65,
-      'max_tokens': 1800,
+      'temperature': temperature,
+      'max_tokens': maxTokens,
       'stream': false,
       if (target.endpoint.contains('blockrun') ||
           target.model.contains('gpt-oss'))
@@ -254,7 +412,7 @@ class AiCoachService {
       final detail = _extractError(response.body);
       if (response.statusCode == 401 || response.statusCode == 403) {
         return AiCoachReply.failure(
-          apiKey.isEmpty ? '免费通道要求鉴权' : '鉴权失败，请检查 API Key',
+          effectiveKey.isEmpty ? '免费通道要求鉴权' : '鉴权失败，请检查 API Key',
           statusCode: response.statusCode,
         );
       }

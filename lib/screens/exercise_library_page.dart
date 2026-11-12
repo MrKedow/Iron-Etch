@@ -161,40 +161,40 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                 GestureDetector(
                   onTap: () => _openExerciseImage(sheetContext, exercise, spec),
                   child: Container(
-                  height: 210,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        spec.primary.withValues(alpha: .12),
-                        spec.secondary.withValues(alpha: .05),
+                    height: 210,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          spec.primary.withValues(alpha: .12),
+                          spec.secondary.withValues(alpha: .05),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: spec.primary.withValues(alpha: .14),
+                      ),
+                    ),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 34),
+                            child: _exerciseIllustration(exercise, spec),
+                          ),
+                        ),
+                        Positioned(
+                          left: 12,
+                          bottom: 10,
+                          child: Pill(
+                            label: exercise.pattern,
+                            icon: Icons.sync_alt_rounded,
+                          ),
+                        ),
                       ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: spec.primary.withValues(alpha: .14),
                     ),
                   ),
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(14, 14, 14, 34),
-                          child: _exerciseIllustration(exercise, spec),
-                        ),
-                      ),
-                      Positioned(
-                        left: 12,
-                        bottom: 10,
-                        child: Pill(
-                          label: exercise.pattern,
-                          icon: Icons.sync_alt_rounded,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 ),
                 const SizedBox(height: 12),
                 _detailSection(
@@ -291,10 +291,33 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
     );
   }
 
+  String? _imageSlug(ExerciseDefinition exercise) =>
+      generatedImageOverrides[exercise.name] ??
+      exercise.imageSlug ??
+      exerciseImageSlugs[exercise.name];
+
+  Widget _exerciseThumbnail(ExerciseDefinition exercise, AppThemeSpec spec) {
+    final slug = _imageSlug(exercise);
+    if (slug == null) {
+      return ExerciseIllustration(
+        pattern: exercise.pattern,
+        equipment: exercise.equipment,
+        color: spec.primary,
+      );
+    }
+    return Image.asset(
+      'assets/exercises/${slug}_0.jpg',
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => ExerciseIllustration(
+        pattern: exercise.pattern,
+        equipment: exercise.equipment,
+        color: spec.primary,
+      ),
+    );
+  }
+
   Widget _exerciseIllustration(ExerciseDefinition exercise, AppThemeSpec spec) {
-    final slug = generatedImageOverrides[exercise.name] ??
-        exercise.imageSlug ??
-        exerciseImageSlugs[exercise.name];
+    final slug = _imageSlug(exercise);
     if (slug == null) {
       return ExerciseIllustration(
         pattern: exercise.pattern,
@@ -701,11 +724,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
             ),
             child: Padding(
               padding: const EdgeInsets.all(3),
-              child: ExerciseIllustration(
-                pattern: exercise.pattern,
-                equipment: exercise.equipment,
-                color: spec.primary,
-              ),
+              child: _exerciseThumbnail(exercise, spec),
             ),
           ),
           const SizedBox(width: 11),
