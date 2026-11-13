@@ -20,7 +20,6 @@ import '../services/config_sync.dart';
 import '../services/media_permission.dart';
 import '../services/reminder_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/ai_config_dialog.dart';
 import '../widgets/app_ui.dart';
 import '../widgets/press_feedback.dart';
 import '../widgets/status_banner.dart';
@@ -534,8 +533,148 @@ class _SettingsPageState extends State<SettingsPage>
     await ReminderService.schedule(settings.reminderTime);
   }
 
-  Future<void> _editAiConfig(SettingsProvider settings) async {
-    await showAiConfigDialog(context, settings);
+  Future<void> _editAiDataScopes(SettingsProvider settings) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final spec = sheetContext.watch<ThemeProvider>().currentSpec;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final enabled = settings.aiDataScopes;
+            final allEnabled = enabled.length == aiDataScopeIds.length;
+            return SafeArea(
+              child: Container(
+                margin: const EdgeInsets.only(top: 60),
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * .82,
+                ),
+                decoration: BoxDecoration(
+                  color: spec.background,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(26)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: spec.textSecondary.withValues(alpha: .3),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '调整数据权限',
+                            style: TextStyle(
+                              color: spec.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(sheetContext),
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: spec.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '只有开启的分类会发送给 AI。关闭后，对应训练数据不会进入模型的上下文。',
+                      style: TextStyle(
+                        color: spec.textSecondary,
+                        fontSize: 11.5,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text(
+                          '已授权 ${enabled.length}/${aiDataScopeIds.length} 类',
+                          style: TextStyle(
+                            color: spec.primary,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () async {
+                            await settings.setAllAiDataScopes(!allEnabled);
+                            setSheetState(() {});
+                          },
+                          child: Text(allEnabled ? '全部关闭' : '全部开启'),
+                        ),
+                      ],
+                    ),
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: aiDataScopeOptions.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: spec.textPrimary.withValues(alpha: .06),
+                        ),
+                        itemBuilder: (context, index) {
+                          final option = aiDataScopeOptions[index];
+                          final value = enabled.contains(option.id);
+                          return SwitchListTile.adaptive(
+                            value: value,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              option.label,
+                              style: TextStyle(
+                                color: spec.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            subtitle: Text(
+                              option.description,
+                              style: TextStyle(
+                                color: spec.textSecondary,
+                                fontSize: 10.5,
+                                height: 1.45,
+                              ),
+                            ),
+                            onChanged: (next) async {
+                              await settings.setAiDataScope(option.id, next);
+                              setSheetState(() {});
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        child: const Text('完成'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _editAiPrompt(SettingsProvider settings) async {
@@ -1657,24 +1796,11 @@ class _SettingsPageState extends State<SettingsPage>
                           .setAiEnabled(!settings.aiEnabled),
                     ),
                     _SettingsTile(
-                      icon: Icons.hub_rounded,
-                      title: context.tr('提供商'),
-                      subtitle: settings.aiProvider.label,
-                      onTap: () => _editAiConfig(settings),
-                    ),
-                    _SettingsTile(
-                      icon: Icons.memory_rounded,
-                      title: context.tr('模型'),
-                      subtitle: settings.aiModel,
-                      onTap: () => _editAiConfig(settings),
-                    ),
-                    _SettingsTile(
-                      icon: Icons.key_rounded,
-                      title: 'API Key',
-                      subtitle: settings.hasAiKey
-                          ? context.tr('已保存 · 点击修改')
-                          : context.tr('未填写 · 使用免费通道'),
-                      onTap: () => _editAiConfig(settings),
+                      icon: Icons.shield_outlined,
+                      title: '调整数据权限',
+                      subtitle:
+                          '已授权 ${settings.aiDataScopeCount}/${aiDataScopeIds.length} 类 · 精细控制发送给 AI 的训练内容',
+                      onTap: () => _editAiDataScopes(settings),
                     ),
                     _SettingsTile(
                       icon: _testingAi

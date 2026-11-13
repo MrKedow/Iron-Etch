@@ -335,50 +335,79 @@ class CoachInsights {
 
   String buildAiContext(SettingsProvider settings) {
     final buffer = StringBuffer();
-    buffer.writeln('【用户画像】');
-    buffer.writeln(
-        '昵称：${settings.nickname}；目标：${settings.trainingGoal}；经验：${settings.experience}；体重：${settings.bodyWeight}kg；周训练目标：${settings.weeklyGoal}次。');
-    buffer.writeln();
-    buffer.writeln('【总体数据】');
-    buffer.writeln(
-        '累计训练：$totalSessions次；总组数：$totalSets组；总做功：${(totalWork / 1000).toStringAsFixed(1)}千焦；估算消耗：$totalCalories千卡；有氧时长：${totalDurationMinutes.toStringAsFixed(0)}分钟；有氧距离：${totalDistanceKm.toStringAsFixed(1)}公里；训练天数：$trainingDays天。');
-    buffer.writeln('本周训练：$thisWeekSessions次；上周：$lastWeekSessions次。');
-    buffer.writeln(
-        '最近7天做功：${(lastWeekWork / 1000).toStringAsFixed(1)}千焦；前7天：${(prevWeekWork / 1000).toStringAsFixed(1)}千焦。');
-    final fav = favoritePart;
-    if (fav != null) {
-      buffer.writeln('最常训练部位：${fav.part}（${fav.sessions}次，${fav.sets}组）。');
+    final hasAnyScope = settings.aiDataScopeCount > 0;
+    if (!hasAnyScope) {
+      return '【数据权限】用户未授权发送任何训练数据。请仅给出通用的训练建议，并提醒用户可在设置中调整数据权限。\n';
     }
-    buffer.writeln();
-    buffer.writeln('【部位分布】');
-    for (final stat in partStats) {
+
+    if (settings.aiDataScopeEnabled('profile')) {
+      buffer.writeln('【用户画像】');
       buffer.writeln(
-          '${stat.part}：${stat.sessions}次，${stat.sets}组，${(stat.work / 1000).toStringAsFixed(1)}千焦${stat.minutes > 0 ? '，${stat.minutes.toStringAsFixed(0)}分钟' : ''}');
+          '昵称：${settings.nickname}；目标：${settings.trainingGoal}；经验：${settings.experience}；体重：${settings.bodyWeight}kg；周训练目标：${settings.weeklyGoal}次。');
+      buffer.writeln();
     }
-    buffer.writeln();
-    buffer.writeln('【最近训练】');
-    final recent = sortedDesc.take(8).toList();
-    for (final record in recent) {
-      final projects =
-          record.projects.where((p) => p.name.trim().isNotEmpty).map((p) {
-        final detail = p.isTimeBased
-            ? '${p.durationMinutes.toStringAsFixed(0)}分钟${p.distanceKm > 0 ? ' ${p.distanceKm.toStringAsFixed(1)}公里' : ''} 约${p.estimatedCalories().round()}千卡'
-            : '${p.weight}kg×${p.sets}组×${p.repsPerSet}次';
-        return '${p.name}(${p.part}) $detail${p.feeling.trim().isEmpty ? '' : ' 感受:${p.feeling}'}';
-      }).join('；');
+
+    if (settings.aiDataScopeEnabled('summary')) {
+      buffer.writeln('【总体数据】');
       buffer.writeln(
-          '${DateFormat('yyyy-MM-dd').format(record.date)} 第${record.sessionNumber ?? '-'}次：$projects。总做功${(record.totalWork / 1000).toStringAsFixed(1)}千焦，有氧${record.totalDurationMinutes.toStringAsFixed(0)}分钟。');
+          '累计训练：$totalSessions次；总组数：$totalSets组；总做功：${(totalWork / 1000).toStringAsFixed(1)}千焦；估算消耗：$totalCalories千卡；有氧时长：${totalDurationMinutes.toStringAsFixed(0)}分钟；有氧距离：${totalDistanceKm.toStringAsFixed(1)}公里；训练天数：$trainingDays天。');
+      buffer.writeln();
     }
-    buffer.writeln();
-    buffer.writeln('【最近一次与上次的重量对比】');
-    for (final progress in lastExerciseProgress) {
-      final diff = progress.diff;
+
+    if (settings.aiDataScopeEnabled('weekly')) {
+      buffer.writeln('【周期对比】');
+      buffer.writeln('本周训练：$thisWeekSessions次；上周：$lastWeekSessions次。');
       buffer.writeln(
-          '${progress.name}：${progress.currentWeight}kg，上次${progress.previousWeight ?? '无'}kg${diff == null ? '' : '，变化${diff >= 0 ? '+' : ''}${diff.toStringAsFixed(1)}kg'}。');
+          '最近7天做功：${(lastWeekWork / 1000).toStringAsFixed(1)}千焦；前7天：${(prevWeekWork / 1000).toStringAsFixed(1)}千焦。');
+      buffer.writeln();
     }
-    buffer.writeln();
-    buffer.writeln(
-        '【本周缺失部位】${missingPartsWeek.isEmpty ? '无，覆盖全面' : missingPartsWeek.join('、')}');
+
+    if (settings.aiDataScopeEnabled('parts')) {
+      final fav = favoritePart;
+      buffer.writeln('【部位分布】');
+      if (fav != null) {
+        buffer.writeln('最常训练部位：${fav.part}（${fav.sessions}次，${fav.sets}组）。');
+      }
+      for (final stat in partStats) {
+        buffer.writeln(
+            '${stat.part}：${stat.sessions}次，${stat.sets}组，${(stat.work / 1000).toStringAsFixed(1)}千焦${stat.minutes > 0 ? '，${stat.minutes.toStringAsFixed(0)}分钟' : ''}');
+      }
+      buffer.writeln(
+          '本周缺失部位：${missingPartsWeek.isEmpty ? '无，覆盖全面' : missingPartsWeek.join('、')}');
+      buffer.writeln();
+    }
+
+    if (settings.aiDataScopeEnabled('recent')) {
+      buffer.writeln('【最近训练】');
+      final recent = sortedDesc.take(8).toList();
+      for (final record in recent) {
+        final projects =
+            record.projects.where((p) => p.name.trim().isNotEmpty).map((p) {
+          final detail = p.isTimeBased
+              ? '${p.durationMinutes.toStringAsFixed(0)}分钟${p.distanceKm > 0 ? ' ${p.distanceKm.toStringAsFixed(1)}公里' : ''} 约${p.estimatedCalories().round()}千卡'
+              : '${p.weight}kg×${p.sets}组×${p.repsPerSet}次';
+          final feeling = settings.aiDataScopeEnabled('feelings') &&
+                  p.feeling.trim().isNotEmpty
+              ? ' 感受:${p.feeling}'
+              : '';
+          return '${p.name}(${p.part}) $detail$feeling';
+        }).join('；');
+        buffer.writeln(
+            '${DateFormat('yyyy-MM-dd').format(record.date)} 第${record.sessionNumber ?? '-'}次：$projects。总做功${(record.totalWork / 1000).toStringAsFixed(1)}千焦，有氧${record.totalDurationMinutes.toStringAsFixed(0)}分钟。');
+      }
+      buffer.writeln();
+    }
+
+    if (settings.aiDataScopeEnabled('exercises')) {
+      buffer.writeln('【最近一次与上次的重量对比】');
+      for (final progress in lastExerciseProgress) {
+        final diff = progress.diff;
+        buffer.writeln(
+            '${progress.name}：${progress.currentWeight}kg，上次${progress.previousWeight ?? '无'}kg${diff == null ? '' : '，变化${diff >= 0 ? '+' : ''}${diff.toStringAsFixed(1)}kg'}。');
+      }
+      buffer.writeln();
+    }
+
     return buffer.toString();
   }
 }

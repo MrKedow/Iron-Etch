@@ -14,6 +14,7 @@ import '../services/knowledge_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ai_config_dialog.dart';
 import '../widgets/ai_message_text.dart';
+import '../widgets/ai_reasoning_panel.dart';
 import '../widgets/app_ui.dart';
 import 'insight_detail_pages.dart';
 import 'knowledge_page.dart';
@@ -146,13 +147,13 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
 训练建议必须遵循科学证据；不确定时说明不确定性；不要提供医疗诊断，若涉及伤痛请建议就医。
 重点分析：最近一次训练质量、容量与频率、肌群均衡、渐进超负荷、恢复与下周安排。
 
-输出格式（严格遵守）：
+输出格式：
 1. 只输出最终中文回答，不要输出思考过程、英文草稿或自我说明。
-2. 禁止使用 Markdown 符号（#、*、`、>、|）、表格、制表符和连续空行。
-3. 第一行用一句不超过 20 字的结论概括状态。
-4. 接下来写 2-3 个小标题段落，每个小标题以“结论：”“问题：”“安排：”这类短词开头，各配 1-2 句话。
+2. 可以使用 Markdown 组织内容，例如二级标题、粗体、项目符号和表格；不要在正文里堆砌星号。
+3. 第一行用一句不超过 24 字的结论概括状态。
+4. 接下来写 2-3 个小节，每节标题用“结论”“问题”“安排”这类短词，各配 1-3 句话。
 5. 最后单独一行以“今天先做：”开头，给一个今天就能执行的具体动作。
-6. 全文控制在 450 字以内，语气自然，像教练当面说话。
+6. 语气自然，像教练当面说话；内容完整优先，不要为了字数截断关键建议。
 
 以下是用户真实训练数据：
 ${insights.buildAiContext(settings)}
@@ -186,6 +187,7 @@ ${insights.buildAiContext(settings)}
         _chat.add(_ChatTurn(
           role: _ChatRole.assistant,
           content: reply.content,
+          reasoning: reply.reasoning,
         ));
       } else {
         _chat.add(_ChatTurn(
@@ -450,12 +452,14 @@ enum _ChatRole { user, assistant }
 class _ChatTurn {
   final _ChatRole role;
   final String content;
+  final String reasoning;
   final bool loading;
   final bool isError;
 
   const _ChatTurn({
     required this.role,
     required this.content,
+    this.reasoning = '',
     this.loading = false,
     this.isError = false,
   });
@@ -1603,6 +1607,8 @@ class _ChatBubble extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 6),
+            if (!isUser && turn.reasoning.trim().isNotEmpty)
+              AiReasoningPanel(reasoning: turn.reasoning, spec: spec),
             AiMessageText(
               text: turn.content,
               spec: spec,

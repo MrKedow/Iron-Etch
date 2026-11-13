@@ -8,6 +8,7 @@ import '../providers/app_providers.dart';
 class AiCoachReply {
   final bool success;
   final String content;
+  final String reasoning;
   final String? error;
   final int? statusCode;
   final String? channel;
@@ -15,6 +16,7 @@ class AiCoachReply {
   const AiCoachReply({
     required this.success,
     required this.content,
+    this.reasoning = '',
     this.error,
     this.statusCode,
     this.channel,
@@ -43,6 +45,26 @@ class _AiTarget {
     required this.label,
     this.apiKey,
     this.reasoningEffort,
+  });
+}
+
+class _AiExtractedReply {
+  final String content;
+  final String reasoning;
+
+  const _AiExtractedReply({
+    required this.content,
+    required this.reasoning,
+  });
+}
+
+class _AiThinkingSplit {
+  final String content;
+  final String reasoning;
+
+  const _AiThinkingSplit({
+    required this.content,
+    required this.reasoning,
   });
 }
 
@@ -364,7 +386,7 @@ class AiCoachService {
     required String apiKey,
     required Duration timeout,
     double temperature = .65,
-    int maxTokens = 1800,
+    int maxTokens = 4096,
   }) async {
     final uri = Uri.tryParse(target.endpoint);
     if (uri == null || !uri.hasScheme) {
@@ -393,7 +415,7 @@ class AiCoachService {
         : null;
     final effectiveMaxTokens =
         thinkingBudget != null && thinkingBudget >= maxTokens
-            ? thinkingBudget + 1024
+            ? thinkingBudget + 2048
             : maxTokens;
 
     final body = jsonEncode({
@@ -412,8 +434,9 @@ class AiCoachService {
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        final content = _extractContent(decoded);
-        if (content.trim().isEmpty) {
+        final extracted = _extractReply(decoded);
+        if (extracted.content.trim().isEmpty &&
+            extracted.reasoning.trim().isEmpty) {
           return AiCoachReply.failure(
             '返回了空内容',
             statusCode: response.statusCode,
@@ -421,7 +444,8 @@ class AiCoachService {
         }
         return AiCoachReply(
           success: true,
-          content: _cleanContent(content),
+          content: extracted.content,
+          reasoning: extracted.reasoning,
           statusCode: response.statusCode,
           channel: target.label,
         );
@@ -464,7 +488,9 @@ class AiCoachService {
     return '自定义 AI';
   }
 
-  static String _extractContent(dynamic decoded) {
+  static _AiExtractedReply _extractReply(dynamic decoded) {
+    var content = '';
+    var reasoning = '';
     if (decoded is Map<String, dynamic>) {
       final choices = decoded['choices'];
       if (choices is List && choices.isNotEmpty) {
@@ -472,26 +498,126 @@ class AiCoachService {
         if (first is Map) {
           final message = first['message'];
           if (message is Map) {
-            final content = message['content'];
-            if (content is String) return content;
-            if (content is List) {
-              return content.map((part) {
-                if (part is Map && part['text'] is String) {
-                  return part['text'] as String;
+            final contentValue = message['content'];
+            if (contentValue is String) {
+              content = contentValue;
+            } else if (contentValue is List) {
+              final contentParts = <String>[];
+              final reasoningParts = <String>[];
+              for (final part in contentValue) {
+                if (part is! Map || part['text'] is! String) continue;
+                final type = '${part['type'] ?? ''}'.toLowerCase();
+                if (type.contains('reason') || type.contains('think')) {
+                  reasoningParts.add(part['text'] as String);
+                } else {
+                  contentParts.add(part['text'] as String);
                 }
-                return '';
-              }).join();
+              }
+              content = contentParts.join();
+              reasoning = reasoningParts.join();
             }
+            reasoning = _joinText([
+              reasoning,
+              _firstText(message['reasoning_content']),
+              _firstText(message['reasoning']),
+              _firstText(message['thinking']),
+              _reasoningDetails(message['reasoning_details']),
+            ]);
           }
-          final text = first['text'];
-          if (text is String) return text;
+          if (content.trim().isEmpty) {
+            content = _firstText(first['text']);
+          }
         }
       }
-      final output = decoded['output_text'];
-      if (output is String) return output;
+      if (content.trim().isEmpty) {
+        content = _firstText(decoded['output_text']);
+      }
+      if (reasoning.trim().isEmpty) {
+        reasoning = _joinText([
+          _firstText(decoded['reasoning_content']),
+          _firstText(decoded['reasoning']),
+        ]);
+      }
+    } else if (decoded is String) {
+      content = decoded;
     }
-    if (decoded is String) return decoded;
+
+    final split = _splitThinking(content);
+    return _AiExtractedReply(
+      content: split.content,
+      reasoning: _joinText([reasoning, split.reasoning]),
+    );
+  }
+
+  static String _firstText(dynamic value) {
+    if (value is String) return value;
+    if (value is List) {
+      return value.map((item) {
+        if (item is String) return item;
+        if (item is Map) {
+          return _firstText(item['text'] ?? item['content']);
+        }
+        return '';
+      }).join();
+    }
+    if (value is Map) {
+      return _firstText(value['text'] ?? value['content']);
+    }
     return '';
+  }
+
+  static String _reasoningDetails(dynamic value) {
+    if (value is! List) return '';
+    return value.map((item) {
+      if (item is Map) {
+        return _firstText(item['text'] ?? item['summary'] ?? item['content']);
+      }
+      return _firstText(item);
+    }).join('\n');
+  }
+
+  static String _joinText(List<String> parts) {
+    return parts
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .join('\n\n')
+        .trim();
+  }
+
+  static _AiThinkingSplit _splitThinking(String input) {
+    var content = input
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .replaceAll('\t', '  ');
+    final reasoning = <String>[];
+    content = content.replaceAllMapped(
+      RegExp(
+        r'<\s*(think(?:ing)?|reasoning)\b[^>]*>([\s\S]*?)<\s*/\s*\1\s*>',
+        caseSensitive: false,
+      ),
+      (match) {
+        reasoning.add(match.group(2) ?? '');
+        return '';
+      },
+    );
+    content = content.replaceAllMapped(
+      RegExp(
+        r'```(?:think|thinking|reasoning)\s*([\s\S]*?)```',
+        caseSensitive: false,
+      ),
+      (match) {
+        reasoning.add(match.group(1) ?? '');
+        return '';
+      },
+    );
+    var cleaned = _cleanContent(content);
+    if (cleaned.isEmpty) {
+      cleaned = '';
+    }
+    return _AiThinkingSplit(
+      content: cleaned,
+      reasoning: _joinText(reasoning),
+    );
   }
 
   static String _cleanContent(String input) {
@@ -499,14 +625,6 @@ class AiCoachService {
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
         .replaceAll('\t', '  ');
-    text = text.replaceAll(
-      RegExp(r'```(?:think|thinking)[\s\S]*?```', caseSensitive: false),
-      '',
-    );
-    text = text.replaceAll(
-      RegExp(r'<think(?:ing)?[\s\S]*?</think(?:ing)?>', caseSensitive: false),
-      '',
-    );
     text = text.replaceAll(RegExp(r'<\|[^>]*\|>'), '');
     text = text.replaceAll(RegExp(r'\n{3,}'), '\n\n');
     return text.trim();

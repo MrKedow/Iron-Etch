@@ -201,6 +201,58 @@ const AiReasoningPreset lowHighMaxReasoningPreset = AiReasoningPreset(
   ],
 );
 
+const AiReasoningPreset lowMediumHighXHighReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningLow,
+    _reasoningMedium,
+    _reasoningHigh,
+    _reasoningXHigh,
+  ],
+);
+
+const AiReasoningPreset lowMediumXHighReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningLow,
+    _reasoningMedium,
+    _reasoningXHigh,
+  ],
+);
+
+const AiReasoningPreset lowMediumHighXHighMaxReasoningPreset =
+    AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningLow,
+    _reasoningMedium,
+    _reasoningHigh,
+    _reasoningXHigh,
+    _reasoningMax,
+  ],
+);
+
+const AiReasoningPreset highMaxReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningHigh,
+    _reasoningMax,
+  ],
+);
+
+const AiReasoningPreset noneHighReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningNone,
+    _reasoningHigh,
+  ],
+);
+
 const AiReasoningPreset qwenThinkingBudgetPreset = AiReasoningPreset(
   parameter: 'thinking_budget',
   options: [
@@ -287,40 +339,45 @@ const List<AiProviderPreset> builtInAiProviders = [
           'nemotron-3.5-super-vl-free', 'Nemotron 3.5 Super VL（免费 · 视觉）',
           supportsVision: true, free: true),
       AiModelPreset('deepseek-v4.1-flash-free', 'DeepSeek V4.1 Flash（免费）',
-          free: true),
-      AiModelPreset('glm-5.3-flash-free', 'GLM-5.3 Flash（免费）', free: true),
+          free: true, reasoning: lowHighMaxReasoningPreset),
+      AiModelPreset('glm-5.3-flash-free', 'GLM-5.3 Flash（免费）',
+          free: true, reasoning: lowHighMaxReasoningPreset),
       AiModelPreset('minimax-m3.1-flash-free', 'MiniMax M3.1 Flash（免费）',
-          free: true),
+          free: true, reasoning: lowMediumHighXHighMaxReasoningPreset),
       AiModelPreset('mimo-v2.6-flash-free', 'MiMo V2.6 Flash（免费）', free: true),
       AiModelPreset('nemotron-3.5-lightning-free', 'Nemotron 3.5 Lightning（免费）',
           free: true),
       AiModelPreset('nemotron-3-ultra-free', 'Nemotron 3 Ultra（免费）',
           free: true),
       AiModelPreset('longcat-2.5-free', 'LongCat 2.5（免费）', free: true),
-      AiModelPreset('flint-40b-free', 'Flint 40B（免费）', free: true),
+      AiModelPreset('flint-40b-free', 'Flint 40B（免费）',
+          free: true, reasoning: lowMediumHighXHighMaxReasoningPreset),
       AiModelPreset('iceman-free', 'Iceman（免费）', free: true),
       AiModelPreset('deepseek-v4.1-flash', 'DeepSeek V4.1 Flash',
           reasoning: lowHighMaxReasoningPreset),
       AiModelPreset('deepseek-v4-pro', 'DeepSeek V4 Pro',
-          reasoning: lowHighMaxReasoningPreset),
+          reasoning: highMaxReasoningPreset),
       AiModelPreset('glm-5.3-flash', 'GLM 5.3 Flash',
           reasoning: lowHighMaxReasoningPreset),
       AiModelPreset('glm-5.3', 'GLM 5.3', reasoning: lowHighMaxReasoningPreset),
       AiModelPreset('minimax-m3', 'MiniMax M3'),
       AiModelPreset('kimi-k2.7-code', 'Kimi K2.7 Code'),
-      AiModelPreset('kimi-k3', 'Kimi K3'),
+      AiModelPreset('kimi-k3', 'Kimi K3',
+          reasoning: lowHighMaxReasoningPreset),
       AiModelPreset('qwen3.8-flash', 'Qwen3.8 Flash',
-          reasoning: qwenEffortReasoningPreset),
+          reasoning: lowMediumXHighReasoningPreset),
       AiModelPreset('qwen3.8-max', 'Qwen3.8 Max',
-          reasoning: qwenEffortReasoningPreset),
+          reasoning: lowMediumXHighReasoningPreset),
       AiModelPreset('gemini-3.8-flash', 'Gemini 3.8 Flash',
-          reasoning: geminiReasoningPreset),
-      AiModelPreset('claude-sonnet-5', 'Claude Sonnet 5',
           reasoning: lowMediumHighReasoningPreset),
+      AiModelPreset('claude-sonnet-5', 'Claude Sonnet 5',
+          reasoning: noOffReasoningPreset),
       AiModelPreset('gpt-6.1-sol', 'GPT 6.1 Sol',
           reasoning: noOffReasoningPreset),
-      AiModelPreset('grok-4.7', 'Grok 4.7'),
-      AiModelPreset('mistral-large-4', 'Mistral Large 4'),
+      AiModelPreset('grok-4.7', 'Grok 4.7',
+          reasoning: lowMediumHighXHighReasoningPreset),
+      AiModelPreset('mistral-large-4', 'Mistral Large 4',
+          reasoning: noneHighReasoningPreset),
     ],
   ),
   AiProviderPreset(
@@ -609,6 +666,62 @@ Map<String, dynamic> aiReasoningPayload(
   return option?.payload ?? const {};
 }
 
+class AiDataScopeOption {
+  final String id;
+  final String label;
+  final String description;
+
+  const AiDataScopeOption(this.id, this.label, this.description);
+}
+
+const List<AiDataScopeOption> aiDataScopeOptions = [
+  AiDataScopeOption(
+    'profile',
+    '基础画像',
+    '昵称、训练目标、经验、体重、周训练目标',
+  ),
+  AiDataScopeOption(
+    'summary',
+    '训练汇总',
+    '累计训练次数、组数、做功、消耗、有氧时长与距离',
+  ),
+  AiDataScopeOption(
+    'weekly',
+    '周期对比',
+    '本周与上周训练次数、最近 7 天与前 7 天做功',
+  ),
+  AiDataScopeOption(
+    'parts',
+    '部位分布',
+    '各部位训练次数、组数、容量与本周缺失部位',
+  ),
+  AiDataScopeOption(
+    'recent',
+    '最近训练明细',
+    '最近 8 次训练的日期、动作、重量、组数、次数与有氧数据',
+  ),
+  AiDataScopeOption(
+    'exercises',
+    '动作重量对比',
+    '最近一次与上一次动作重量变化',
+  ),
+  AiDataScopeOption(
+    'feelings',
+    '训练感受',
+    '训练记录中的主观感受与备注文本',
+  ),
+];
+
+const List<String> aiDataScopeIds = [
+  'profile',
+  'summary',
+  'weekly',
+  'parts',
+  'recent',
+  'exercises',
+  'feelings',
+];
+
 class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   ThemeProvider(
     String initialThemeId, {
@@ -817,6 +930,7 @@ class SettingsProvider extends ChangeNotifier {
   String _aiApiKey = '';
   String _aiPrompt = '';
   final Map<String, String> _aiProviderKeys = {};
+  final Set<String> _aiDataScopes = {...aiDataScopeIds};
 
   String _appLanguageCode = 'zh';
   String _appFontId = 'system';
@@ -865,6 +979,9 @@ class SettingsProvider extends ChangeNotifier {
   String get aiApiKey => _aiApiKey;
   String get aiPrompt => _aiPrompt;
   bool get hasAiKey => _aiApiKey.trim().isNotEmpty;
+  Set<String> get aiDataScopes => Set.unmodifiable(_aiDataScopes);
+  int get aiDataScopeCount => _aiDataScopes.length;
+  bool aiDataScopeEnabled(String id) => _aiDataScopes.contains(id);
 
   String get appLanguageCode => _appLanguageCode;
   Locale get appLocale {
@@ -982,6 +1099,12 @@ class SettingsProvider extends ChangeNotifier {
       _aiProviderKeys[_aiProviderId] = _aiApiKey;
     }
     _aiPrompt = prefs.getString('ai_prompt') ?? '';
+    final savedDataScopes = prefs.getStringList('ai_data_scopes');
+    if (savedDataScopes != null) {
+      _aiDataScopes
+        ..clear()
+        ..addAll(savedDataScopes.where(aiDataScopeIds.contains));
+    }
 
     _appLanguageCode = prefs.getString('app_language') ?? 'zh';
     _appFontId = prefs.getString('app_font_id') ?? 'system';
@@ -1254,6 +1377,32 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> setAiPrompt(String value) async {
     _aiPrompt = value.trim();
     await _persist('ai_prompt', _aiPrompt);
+    notifyListeners();
+  }
+
+  Future<void> setAiDataScope(String id, bool enabled) async {
+    if (!aiDataScopeIds.contains(id)) return;
+    if (enabled) {
+      _aiDataScopes.add(id);
+    } else {
+      _aiDataScopes.remove(id);
+    }
+    final ordered =
+        aiDataScopeIds.where(_aiDataScopes.contains).toList(growable: false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('ai_data_scopes', ordered);
+    notifyListeners();
+  }
+
+  Future<void> setAllAiDataScopes(bool enabled) async {
+    _aiDataScopes
+      ..clear()
+      ..addAll(enabled ? aiDataScopeIds : const <String>[]);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'ai_data_scopes',
+      enabled ? List<String>.of(aiDataScopeIds) : const <String>[],
+    );
     notifyListeners();
   }
 

@@ -7,6 +7,7 @@ import '../providers/app_providers.dart';
 import '../services/ai_coach_service.dart';
 import '../services/knowledge_service.dart';
 import '../widgets/ai_message_text.dart';
+import '../widgets/ai_reasoning_panel.dart';
 import '../widgets/app_ui.dart';
 
 class KnowledgePage extends StatefulWidget {
@@ -327,6 +328,7 @@ class _KnowledgeDetailPageState extends State<KnowledgeDetailPage> {
   bool _loadingAbstract = false;
   bool _aiLoading = false;
   String? _aiReply;
+  String? _aiReasoning;
   String? _aiError;
 
   @override
@@ -360,6 +362,7 @@ class _KnowledgeDetailPageState extends State<KnowledgeDetailPage> {
       _aiLoading = true;
       _aiError = null;
       _aiReply = null;
+      _aiReasoning = null;
     });
 
     final article = widget.article;
@@ -372,8 +375,8 @@ class _KnowledgeDetailPageState extends State<KnowledgeDetailPage> {
         {
           'role': 'system',
           'content': '你是「铁镌」App 的运动科学解读助手。请用自然、易懂的中文把研究讲清楚。'
-              '输出格式：第一行一句不超过 20 字的结论；随后依次用“研究发现：”“对你的意义：”“注意：”三个短标题各写 1-2 句；'
-              '不使用 Markdown 符号（#、*、`、>、|）、表格或制表符；不超过 420 字；'
+              '输出格式：第一行一句不超过 24 字的结论；随后依次用“研究发现”“对你的意义”“注意”三个小节各写 1-3 句；'
+              '可以使用 Markdown 的标题、粗体和项目符号，但不要在正文里堆砌星号；内容要完整，不要为了字数截断关键信息；'
               '只输出最终中文回答，不要输出思考过程或英文草稿。不要做医疗诊断，证据不足时明确说明。',
         },
         {
@@ -389,6 +392,7 @@ class _KnowledgeDetailPageState extends State<KnowledgeDetailPage> {
       _aiLoading = false;
       if (reply.success) {
         _aiReply = reply.content;
+        _aiReasoning = reply.reasoning;
       } else {
         _aiError = reply.error ?? 'AI 暂时不可用';
       }
@@ -590,6 +594,8 @@ class _KnowledgeDetailPageState extends State<KnowledgeDetailPage> {
                     ],
                   ),
                   const SizedBox(height: 10),
+                  if ((_aiReasoning ?? '').trim().isNotEmpty)
+                    AiReasoningPanel(reasoning: _aiReasoning!, spec: spec),
                   AiMessageText(
                     text: _aiReply!,
                     spec: spec,
