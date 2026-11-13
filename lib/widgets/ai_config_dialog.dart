@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../providers/app_providers.dart';
 import '../services/ai_coach_service.dart';
 
@@ -15,6 +16,7 @@ Future<void> showAiConfigDialog(
       text: settings.apiKeyForProvider(initialProvider.id));
   var providerId = initialProvider.id;
   var modelId = settings.aiModel;
+  var reasoningEffort = settings.aiReasoningEffort;
   var obscureKey = true;
   var testing = false;
   String? result;
@@ -34,9 +36,8 @@ Future<void> showAiConfigDialog(
             AiModelPreset(modelId, '当前模型 · $modelId'),
           );
         }
-        final smallLabelStyle = TextStyle(
-          fontSize: 11.5,
-          color: spec.textSecondary,
+        const fieldLabelStyle = TextStyle(
+          fontSize: 15,
           fontWeight: FontWeight.w600,
         );
 
@@ -51,6 +52,12 @@ Future<void> showAiConfigDialog(
             if (!next.isCustom) {
               endpointController.text = next.endpoint;
             }
+            final nextEndpoint =
+                next.isCustom ? endpointController.text.trim() : next.endpoint;
+            final preset = aiReasoningPreset(nextEndpoint, modelId);
+            if (preset == null || !preset.supports(reasoningEffort)) {
+              reasoningEffort = preset?.defaultId ?? 'default';
+            }
             keyController.text = settings.apiKeyForProvider(next.id);
             result = null;
           });
@@ -61,9 +68,21 @@ Future<void> showAiConfigDialog(
             : provider.endpoint;
         String selectedModel() =>
             provider.isCustom ? modelController.text.trim() : modelId;
+        final reasoningPreset = aiReasoningPreset(
+          selectedEndpoint(),
+          selectedModel(),
+        );
+        final activeReasoning =
+            reasoningPreset != null && reasoningPreset.supports(reasoningEffort)
+                ? reasoningEffort
+                : (reasoningPreset?.defaultId ?? 'default');
+        final reasoningPreview = _reasoningPreview(
+          reasoningPreset,
+          activeReasoning,
+        );
 
         return AlertDialog(
-          title: const Text('AI 配置'),
+          title: Text(context.tr('AI 配置')),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -86,14 +105,13 @@ Future<void> showAiConfigDialog(
                   ),
                 ),
                 const SizedBox(height: 14),
-                Text('AI 提供商', style: smallLabelStyle),
-                const SizedBox(height: 7),
                 DropdownButtonFormField<String>(
                   key: ValueKey('provider-$providerId'),
                   initialValue: providerId,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: '提供商',
+                  decoration: InputDecoration(
+                    labelText: context.tr('AI 提供商'),
+                    labelStyle: fieldLabelStyle,
                   ),
                   items: builtInAiProviders
                       .map(
@@ -111,18 +129,17 @@ Future<void> showAiConfigDialog(
                 ),
                 if (!provider.isCustom) ...[
                   const SizedBox(height: 11),
-                  Text('模型', style: smallLabelStyle),
-                  const SizedBox(height: 7),
                   DropdownButtonFormField<String>(
                     key: ValueKey('model-$providerId-$modelId'),
                     initialValue: models.any((item) => item.id == modelId)
                         ? modelId
                         : (models.isEmpty ? null : models.first.id),
                     isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: '模型',
+                    decoration: InputDecoration(
+                      labelText: context.tr('模型'),
+                      labelStyle: fieldLabelStyle,
                     ),
-                    hint: const Text('选择模型'),
+                    hint: Text(context.tr('选择模型')),
                     items: models
                         .map(
                           (item) => DropdownMenuItem<String>(
@@ -139,6 +156,12 @@ Future<void> showAiConfigDialog(
                       if (value == null) return;
                       setDialogState(() {
                         modelId = value;
+                        final preset =
+                            aiReasoningPreset(provider.endpoint, value);
+                        if (preset == null ||
+                            !preset.supports(reasoningEffort)) {
+                          reasoningEffort = preset?.defaultId ?? 'default';
+                        }
                         result = null;
                       });
                     },
@@ -148,21 +171,73 @@ Future<void> showAiConfigDialog(
                   const SizedBox(height: 11),
                   TextField(
                     controller: endpointController,
-                    decoration: const InputDecoration(
-                      labelText: '接口地址',
+                    decoration: InputDecoration(
+                      labelText: context.tr('接口地址'),
                       hintText: 'https://example.com/v1/chat/completions',
                     ),
                   ),
                   const SizedBox(height: 11),
                   TextField(
                     controller: modelController,
-                    decoration: const InputDecoration(
-                      labelText: '模型 ID',
-                      hintText: '例如 gpt-4o-mini',
+                    decoration: InputDecoration(
+                      labelText: context.tr('模型 ID'),
+                      hintText: context.tr('例如 gpt-4o-mini'),
                     ),
                     onChanged: (value) => modelId = value.trim(),
                   ),
                 ],
+                const SizedBox(height: 11),
+                if (reasoningPreset == null)
+                  DropdownButtonFormField<String>(
+                    initialValue: '__unsupported__',
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: context.tr('推理强度'),
+                      labelStyle: fieldLabelStyle,
+                      helperText: context.tr('当前模型没有可调节的推理强度参数'),
+                    ),
+                    items: [
+                      DropdownMenuItem<String>(
+                        value: '__unsupported__',
+                        child: Text(context.tr('该模型不支持推理强度设置')),
+                      ),
+                    ],
+                    onChanged: null,
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    key: ValueKey(
+                      'reasoning-$providerId-${selectedModel()}-'
+                      '${reasoningPreset.parameter}-$activeReasoning',
+                    ),
+                    initialValue: activeReasoning,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: context.tr('推理强度'),
+                      labelStyle: fieldLabelStyle,
+                      helperText: reasoningPreview,
+                      helperMaxLines: 2,
+                    ),
+                    items: reasoningPreset.options
+                        .map(
+                          (option) => DropdownMenuItem<String>(
+                            value: option.id,
+                            child: Text(
+                              option.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() {
+                        reasoningEffort = value;
+                        result = null;
+                      });
+                    },
+                  ),
                 const SizedBox(height: 11),
                 TextField(
                   controller: keyController,
@@ -218,17 +293,18 @@ Future<void> showAiConfigDialog(
                       final endpoint = selectedEndpoint();
                       final model = selectedModel();
                       if (endpoint.isEmpty || model.isEmpty) {
-                        setDialogState(() => result = '请先选择提供商和模型');
+                        setDialogState(() => result = context.tr('请先选择提供商和模型'));
                         return;
                       }
                       setDialogState(() {
                         testing = true;
-                        result = '正在连接…';
+                        result = context.tr('正在连接…');
                       });
                       final reply = await AiCoachService.testConnection(
                         endpoint: endpoint,
                         model: model,
                         apiKey: keyController.text,
+                        reasoningEffort: activeReasoning,
                       );
                       if (!context.mounted) return;
                       setDialogState(() {
@@ -238,18 +314,18 @@ Future<void> showAiConfigDialog(
                             : (reply.error ?? '连接失败');
                       });
                     },
-              child: Text(testing ? '测试中…' : '测试连接'),
+              child: Text(testing ? context.tr('测试中…') : context.tr('测试连接')),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
+              child: Text(context.tr('取消')),
             ),
             ElevatedButton(
               onPressed: () async {
                 final endpoint = selectedEndpoint();
                 final model = selectedModel();
                 if (endpoint.isEmpty || model.isEmpty) {
-                  setDialogState(() => result = '请先选择提供商和模型');
+                  setDialogState(() => result = context.tr('请先选择提供商和模型'));
                   return;
                 }
                 await settings.setAiConfig(
@@ -257,10 +333,11 @@ Future<void> showAiConfigDialog(
                   endpoint: endpoint,
                   model: model,
                   apiKey: keyController.text,
+                  reasoningEffort: activeReasoning,
                 );
                 if (context.mounted) Navigator.pop(context);
               },
-              child: const Text('保存'),
+              child: Text(context.tr('保存')),
             ),
           ],
         );
@@ -270,4 +347,23 @@ Future<void> showAiConfigDialog(
   endpointController.dispose();
   modelController.dispose();
   keyController.dispose();
+}
+
+String _reasoningPreview(AiReasoningPreset? preset, String optionId) {
+  if (preset == null) return '当前模型没有可调节的推理强度参数';
+  final option = preset.byId(optionId);
+  final payload = option?.payload;
+  if (payload == null || payload.isEmpty) {
+    return '不发送推理参数，使用模型默认值';
+  }
+  final parts = payload.entries.map((entry) {
+    final value = entry.value;
+    if (value is Map) {
+      final nested =
+          value.entries.map((item) => '${item.key}: ${item.value}').join(', ');
+      return '${entry.key}={$nested}';
+    }
+    return '${entry.key}=$value';
+  }).join('，');
+  return '实际发送：$parts';
 }

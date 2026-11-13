@@ -4,9 +4,9 @@
 
 ## 当前版本
 
-- Android：**Android_v3.4.4**（`versionCode 11`）
+- Android：**Android_v3.5.4**（`versionCode 12`）
 - Flutter：**3.47.9** / Dart **3.13.7**
-- 发布页：<https://github.com/MrKedow/Iron-Etch/releases/tag/Android_v3.4.4>
+- 发布页：<https://github.com/MrKedow/Iron-Etch/releases/tag/Android_v3.5.4>
 - 默认分支：`Windows`
 - 其他分支：`Android`、`HTML`
 

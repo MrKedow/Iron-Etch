@@ -35,12 +35,14 @@ class _AiTarget {
   final String model;
   final String label;
   final String? apiKey;
+  final String? reasoningEffort;
 
   const _AiTarget({
     required this.endpoint,
     required this.model,
     required this.label,
     this.apiKey,
+    this.reasoningEffort,
   });
 }
 
@@ -61,6 +63,7 @@ class AiCoachService {
     String? endpoint,
     String? model,
     String? apiKey,
+    String? reasoningEffort,
   }) async {
     final configured = (endpoint == null || endpoint.trim().isEmpty)
         ? SettingsProvider.defaultAiEndpoint
@@ -79,6 +82,7 @@ class AiCoachService {
         endpoint: configured,
         model: configuredModel,
         label: _labelFor(configured),
+        reasoningEffort: reasoningEffort,
       ),
     ];
 
@@ -143,11 +147,13 @@ class AiCoachService {
     String? endpoint,
     String? model,
     String? apiKey,
+    String? reasoningEffort,
   }) {
     return chat(
       endpoint: endpoint,
       model: model,
       apiKey: apiKey,
+      reasoningEffort: reasoningEffort,
       messages: [
         {
           'role': 'system',
@@ -376,15 +382,27 @@ class AiCoachService {
       headers['Authorization'] = 'Bearer $effectiveKey';
     }
 
+    final reasoningPayload = aiReasoningPayload(
+      target.endpoint,
+      target.model,
+      target.reasoningEffort,
+    );
+    final thinking = reasoningPayload['thinking'];
+    final thinkingBudget = thinking is Map
+        ? int.tryParse('${thinking['budget_tokens'] ?? ''}')
+        : null;
+    final effectiveMaxTokens =
+        thinkingBudget != null && thinkingBudget >= maxTokens
+            ? thinkingBudget + 1024
+            : maxTokens;
+
     final body = jsonEncode({
       'model': target.model,
       'messages': messages,
-      'temperature': temperature,
-      'max_tokens': maxTokens,
+      if (thinking == null) 'temperature': temperature,
+      'max_tokens': effectiveMaxTokens,
       'stream': false,
-      if (target.endpoint.contains('blockrun') ||
-          target.model.contains('gpt-oss'))
-        'reasoning_effort': 'low',
+      ...reasoningPayload,
     });
 
     final client = http.Client();

@@ -1,21 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/app_fonts.dart';
 import '../services/app_haptics.dart';
 import '../services/work_energy.dart';
 import '../theme/app_theme.dart';
+
+class AiReasoningOption {
+  final String id;
+  final String label;
+  final Map<String, dynamic>? payload;
+
+  const AiReasoningOption(this.id, this.label, {this.payload});
+}
+
+class AiReasoningPreset {
+  final String parameter;
+  final List<AiReasoningOption> options;
+  final String defaultId;
+
+  const AiReasoningPreset({
+    required this.parameter,
+    required this.options,
+    this.defaultId = 'default',
+  });
+
+  AiReasoningOption? byId(String? id) {
+    final target = (id == null || id.trim().isEmpty) ? defaultId : id;
+    for (final option in options) {
+      if (option.id == target) return option;
+    }
+    return null;
+  }
+
+  bool supports(String? id) => byId(id) != null;
+}
 
 class AiModelPreset {
   final String id;
   final String label;
   final bool supportsVision;
   final bool free;
+  final AiReasoningPreset? reasoning;
 
   const AiModelPreset(
     this.id,
     this.label, {
     this.supportsVision = false,
     this.free = false,
+    this.reasoning,
   });
 }
 
@@ -52,6 +85,194 @@ const AiProviderPreset customAiProvider = AiProviderPreset(
   ],
 );
 
+const AiReasoningOption _reasoningDefault =
+    AiReasoningOption('default', '默认（不发送）');
+const AiReasoningOption _reasoningNone = AiReasoningOption(
+  'none',
+  '无（none）',
+  payload: {'reasoning_effort': 'none'},
+);
+const AiReasoningOption _reasoningMinimal = AiReasoningOption(
+  'minimal',
+  '极低（minimal）',
+  payload: {'reasoning_effort': 'minimal'},
+);
+const AiReasoningOption _reasoningLow = AiReasoningOption(
+  'low',
+  '低（low）',
+  payload: {'reasoning_effort': 'low'},
+);
+const AiReasoningOption _reasoningMedium = AiReasoningOption(
+  'medium',
+  '中（medium）',
+  payload: {'reasoning_effort': 'medium'},
+);
+const AiReasoningOption _reasoningHigh = AiReasoningOption(
+  'high',
+  '高（high）',
+  payload: {'reasoning_effort': 'high'},
+);
+const AiReasoningOption _reasoningXHigh = AiReasoningOption(
+  'xhigh',
+  '极高（xhigh）',
+  payload: {'reasoning_effort': 'xhigh'},
+);
+const AiReasoningOption _reasoningMax = AiReasoningOption(
+  'max',
+  '最大（max）',
+  payload: {'reasoning_effort': 'max'},
+);
+
+const AiReasoningPreset openAiReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningNone,
+    _reasoningMinimal,
+    _reasoningLow,
+    _reasoningMedium,
+    _reasoningHigh,
+    _reasoningXHigh,
+  ],
+);
+
+const AiReasoningPreset lowMediumHighReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningLow,
+    _reasoningMedium,
+    _reasoningHigh,
+  ],
+);
+
+const AiReasoningPreset noOffReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningLow,
+    _reasoningMedium,
+    _reasoningHigh,
+    _reasoningXHigh,
+    _reasoningMax,
+  ],
+);
+
+const AiReasoningPreset geminiReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningMinimal,
+    _reasoningLow,
+    _reasoningMedium,
+    _reasoningHigh,
+  ],
+);
+
+const AiReasoningPreset genericReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningNone,
+    _reasoningMinimal,
+    _reasoningLow,
+    _reasoningMedium,
+    _reasoningHigh,
+  ],
+);
+
+const AiReasoningPreset gptOssReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningLow,
+    _reasoningMedium,
+    _reasoningHigh,
+  ],
+);
+
+const AiReasoningPreset lowHighMaxReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    _reasoningLow,
+    _reasoningHigh,
+    _reasoningMax,
+  ],
+);
+
+const AiReasoningPreset qwenThinkingBudgetPreset = AiReasoningPreset(
+  parameter: 'thinking_budget',
+  options: [
+    _reasoningDefault,
+    AiReasoningOption(
+      'low',
+      '低（1024 tokens）',
+      payload: {'enable_thinking': true, 'thinking_budget': 1024},
+    ),
+    AiReasoningOption(
+      'medium',
+      '中（4096 tokens）',
+      payload: {'enable_thinking': true, 'thinking_budget': 4096},
+    ),
+    AiReasoningOption(
+      'high',
+      '高（8192 tokens）',
+      payload: {'enable_thinking': true, 'thinking_budget': 8192},
+    ),
+  ],
+);
+
+const AiReasoningPreset qwenEffortReasoningPreset = AiReasoningPreset(
+  parameter: 'reasoning_effort',
+  options: [
+    _reasoningDefault,
+    AiReasoningOption(
+      'low',
+      '低（low）',
+      payload: {'enable_thinking': true, 'reasoning_effort': 'low'},
+    ),
+    AiReasoningOption(
+      'medium',
+      '中（medium）',
+      payload: {'enable_thinking': true, 'reasoning_effort': 'medium'},
+    ),
+    AiReasoningOption(
+      'xhigh',
+      '极高（xhigh）',
+      payload: {'enable_thinking': true, 'reasoning_effort': 'xhigh'},
+    ),
+  ],
+);
+
+const AiReasoningPreset anthropicThinkingPreset = AiReasoningPreset(
+  parameter: 'thinking.budget_tokens',
+  options: [
+    _reasoningDefault,
+    AiReasoningOption(
+      'low',
+      '低（1024 tokens）',
+      payload: {
+        'thinking': {'type': 'enabled', 'budget_tokens': 1024},
+      },
+    ),
+    AiReasoningOption(
+      'medium',
+      '中（4096 tokens）',
+      payload: {
+        'thinking': {'type': 'enabled', 'budget_tokens': 4096},
+      },
+    ),
+    AiReasoningOption(
+      'high',
+      '高（8192 tokens）',
+      payload: {
+        'thinking': {'type': 'enabled', 'budget_tokens': 8192},
+      },
+    ),
+  ],
+);
+
 const List<AiProviderPreset> builtInAiProviders = [
   AiProviderPreset(
     id: 'opencode',
@@ -78,18 +299,26 @@ const List<AiProviderPreset> builtInAiProviders = [
       AiModelPreset('longcat-2.5-free', 'LongCat 2.5（免费）', free: true),
       AiModelPreset('flint-40b-free', 'Flint 40B（免费）', free: true),
       AiModelPreset('iceman-free', 'Iceman（免费）', free: true),
-      AiModelPreset('deepseek-v4.1-flash', 'DeepSeek V4.1 Flash'),
-      AiModelPreset('deepseek-v4-pro', 'DeepSeek V4 Pro'),
-      AiModelPreset('glm-5.3-flash', 'GLM 5.3 Flash'),
-      AiModelPreset('glm-5.3', 'GLM 5.3'),
+      AiModelPreset('deepseek-v4.1-flash', 'DeepSeek V4.1 Flash',
+          reasoning: lowHighMaxReasoningPreset),
+      AiModelPreset('deepseek-v4-pro', 'DeepSeek V4 Pro',
+          reasoning: lowHighMaxReasoningPreset),
+      AiModelPreset('glm-5.3-flash', 'GLM 5.3 Flash',
+          reasoning: lowHighMaxReasoningPreset),
+      AiModelPreset('glm-5.3', 'GLM 5.3', reasoning: lowHighMaxReasoningPreset),
       AiModelPreset('minimax-m3', 'MiniMax M3'),
       AiModelPreset('kimi-k2.7-code', 'Kimi K2.7 Code'),
       AiModelPreset('kimi-k3', 'Kimi K3'),
-      AiModelPreset('qwen3.8-flash', 'Qwen3.8 Flash'),
-      AiModelPreset('qwen3.8-max', 'Qwen3.8 Max'),
-      AiModelPreset('gemini-3.8-flash', 'Gemini 3.8 Flash'),
-      AiModelPreset('claude-sonnet-5', 'Claude Sonnet 5'),
-      AiModelPreset('gpt-6.1-sol', 'GPT 6.1 Sol'),
+      AiModelPreset('qwen3.8-flash', 'Qwen3.8 Flash',
+          reasoning: qwenEffortReasoningPreset),
+      AiModelPreset('qwen3.8-max', 'Qwen3.8 Max',
+          reasoning: qwenEffortReasoningPreset),
+      AiModelPreset('gemini-3.8-flash', 'Gemini 3.8 Flash',
+          reasoning: geminiReasoningPreset),
+      AiModelPreset('claude-sonnet-5', 'Claude Sonnet 5',
+          reasoning: lowMediumHighReasoningPreset),
+      AiModelPreset('gpt-6.1-sol', 'GPT 6.1 Sol',
+          reasoning: noOffReasoningPreset),
       AiModelPreset('grok-4.7', 'Grok 4.7'),
       AiModelPreset('mistral-large-4', 'Mistral Large 4'),
     ],
@@ -102,8 +331,10 @@ const List<AiProviderPreset> builtInAiProviders = [
     description: '免费 GPT-OSS 通道，适合日常训练分析。',
     requiresKey: false,
     models: [
-      AiModelPreset('nvidia/gpt-oss-20b', 'GPT-OSS 20B（免费）', free: true),
-      AiModelPreset('nvidia/gpt-oss-120b', 'GPT-OSS 120B（免费）', free: true),
+      AiModelPreset('nvidia/gpt-oss-20b', 'GPT-OSS 20B（免费）',
+          free: true, reasoning: gptOssReasoningPreset),
+      AiModelPreset('nvidia/gpt-oss-120b', 'GPT-OSS 120B（免费）',
+          free: true, reasoning: gptOssReasoningPreset),
     ],
   ),
   AiProviderPreset(
@@ -114,7 +345,8 @@ const List<AiProviderPreset> builtInAiProviders = [
     description: '免登录公共通道，作为免费回退使用。',
     requiresKey: false,
     models: [
-      AiModelPreset('gpt-oss-20b', 'GPT-OSS 20B（免费）', free: true),
+      AiModelPreset('gpt-oss-20b', 'GPT-OSS 20B（免费）',
+          free: true, reasoning: gptOssReasoningPreset),
       AiModelPreset('openai', 'OpenAI（免费）', free: true),
     ],
   ),
@@ -125,13 +357,17 @@ const List<AiProviderPreset> builtInAiProviders = [
     keyHint: 'sk-...',
     description: '官方 OpenAI API，需要 API Key。',
     models: [
-      AiModelPreset('gpt-5.4-mini', 'GPT-5.4 Mini', supportsVision: true),
-      AiModelPreset('gpt-5.4', 'GPT-5.4', supportsVision: true),
-      AiModelPreset('gpt-5.4-nano', 'GPT-5.4 Nano', supportsVision: true),
+      AiModelPreset('gpt-5.4-mini', 'GPT-5.4 Mini',
+          supportsVision: true, reasoning: openAiReasoningPreset),
+      AiModelPreset('gpt-5.4', 'GPT-5.4',
+          supportsVision: true, reasoning: openAiReasoningPreset),
+      AiModelPreset('gpt-5.4-nano', 'GPT-5.4 Nano',
+          supportsVision: true, reasoning: openAiReasoningPreset),
       AiModelPreset('gpt-4.1-mini', 'GPT-4.1 Mini', supportsVision: true),
       AiModelPreset('gpt-4.1', 'GPT-4.1', supportsVision: true),
       AiModelPreset('gpt-4o-mini', 'GPT-4o Mini', supportsVision: true),
-      AiModelPreset('o4-mini', 'o4 Mini', supportsVision: true),
+      AiModelPreset('o4-mini', 'o4 Mini',
+          supportsVision: true, reasoning: lowMediumHighReasoningPreset),
     ],
   ),
   AiProviderPreset(
@@ -142,10 +378,11 @@ const List<AiProviderPreset> builtInAiProviders = [
     description: 'Claude 官方 OpenAI 兼容接口。',
     models: [
       AiModelPreset('claude-sonnet-4-5', 'Claude Sonnet 4.5',
-          supportsVision: true),
+          supportsVision: true, reasoning: anthropicThinkingPreset),
       AiModelPreset('claude-haiku-4-5', 'Claude Haiku 4.5',
-          supportsVision: true),
-      AiModelPreset('claude-opus-4-5', 'Claude Opus 4.5', supportsVision: true),
+          supportsVision: true, reasoning: anthropicThinkingPreset),
+      AiModelPreset('claude-opus-4-5', 'Claude Opus 4.5',
+          supportsVision: true, reasoning: anthropicThinkingPreset),
     ],
   ),
   AiProviderPreset(
@@ -157,13 +394,15 @@ const List<AiProviderPreset> builtInAiProviders = [
     description: 'Gemini 官方 OpenAI 兼容接口，速度快、视觉能力强。',
     models: [
       AiModelPreset('gemini-3.5-flash', 'Gemini 3.5 Flash',
-          supportsVision: true),
+          supportsVision: true, reasoning: geminiReasoningPreset),
       AiModelPreset('gemini-3.5-flash-lite', 'Gemini 3.5 Flash Lite',
-          supportsVision: true),
-      AiModelPreset('gemini-3.1-pro', 'Gemini 3.1 Pro', supportsVision: true),
-      AiModelPreset('gemini-3-flash', 'Gemini 3 Flash', supportsVision: true),
+          supportsVision: true, reasoning: geminiReasoningPreset),
+      AiModelPreset('gemini-3.1-pro', 'Gemini 3.1 Pro',
+          supportsVision: true, reasoning: geminiReasoningPreset),
+      AiModelPreset('gemini-3-flash', 'Gemini 3 Flash',
+          supportsVision: true, reasoning: geminiReasoningPreset),
       AiModelPreset('gemini-2.5-flash', 'Gemini 2.5 Flash',
-          supportsVision: true),
+          supportsVision: true, reasoning: geminiReasoningPreset),
     ],
   ),
   AiProviderPreset(
@@ -201,10 +440,12 @@ const List<AiProviderPreset> builtInAiProviders = [
     models: [
       AiModelPreset('qwen-flash', 'Qwen Flash'),
       AiModelPreset('qwen-plus', 'Qwen Plus'),
-      AiModelPreset('qwen3-max', 'Qwen3 Max'),
+      AiModelPreset('qwen3-max', 'Qwen3 Max',
+          reasoning: qwenThinkingBudgetPreset),
       AiModelPreset('qwen-vl-plus', 'Qwen VL Plus（视觉）', supportsVision: true),
       AiModelPreset('qwen-vl-max', 'Qwen VL Max（视觉）', supportsVision: true),
-      AiModelPreset('qwen3-vl-plus', 'Qwen3 VL Plus（视觉）', supportsVision: true),
+      AiModelPreset('qwen3-vl-plus', 'Qwen3 VL Plus（视觉）',
+          supportsVision: true, reasoning: qwenThinkingBudgetPreset),
     ],
   ),
   AiProviderPreset(
@@ -240,12 +481,13 @@ const List<AiProviderPreset> builtInAiProviders = [
     description: '聚合多家模型，一个 Key 可用全部主流模型。',
     models: [
       AiModelPreset('google/gemini-3-flash', 'Gemini 3 Flash',
-          supportsVision: true),
+          supportsVision: true, reasoning: geminiReasoningPreset),
       AiModelPreset('google/gemini-2.5-flash', 'Gemini 2.5 Flash',
-          supportsVision: true),
+          supportsVision: true, reasoning: geminiReasoningPreset),
       AiModelPreset('anthropic/claude-sonnet-4.5', 'Claude Sonnet 4.5',
-          supportsVision: true),
-      AiModelPreset('openai/gpt-5-mini', 'GPT-5 Mini', supportsVision: true),
+          supportsVision: true, reasoning: lowMediumHighReasoningPreset),
+      AiModelPreset('openai/gpt-5-mini', 'GPT-5 Mini',
+          supportsVision: true, reasoning: openAiReasoningPreset),
       AiModelPreset('deepseek/deepseek-chat', 'DeepSeek Chat'),
       AiModelPreset('qwen/qwen3-vl-235b-a22b-instruct', 'Qwen3 VL 235B',
           supportsVision: true),
@@ -347,6 +589,24 @@ AiModelPreset? aiModelPreset(String endpoint, String model) {
 
 bool aiModelSupportsVision(String endpoint, String model) {
   return aiModelPreset(endpoint, model)?.supportsVision ?? false;
+}
+
+AiReasoningPreset? aiReasoningPreset(String endpoint, String model) {
+  final provider = aiProviderForEndpoint(endpoint);
+  if (provider == null || provider.isCustom) return genericReasoningPreset;
+  return aiModelPreset(endpoint, model)?.reasoning;
+}
+
+Map<String, dynamic> aiReasoningPayload(
+  String endpoint,
+  String model,
+  String? effortId,
+) {
+  if (effortId == null || effortId.trim().isEmpty || effortId == 'default') {
+    return const {};
+  }
+  final option = aiReasoningPreset(endpoint, model)?.byId(effortId);
+  return option?.payload ?? const {};
 }
 
 class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
@@ -553,9 +813,15 @@ class SettingsProvider extends ChangeNotifier {
   String _aiProviderId = defaultAiProviderId;
   String _aiEndpoint = defaultAiEndpoint;
   String _aiModel = defaultAiModel;
+  String _aiReasoningEffort = 'default';
   String _aiApiKey = '';
   String _aiPrompt = '';
   final Map<String, String> _aiProviderKeys = {};
+
+  String _appLanguageCode = 'zh';
+  String _appFontId = 'system';
+  String? _customFontPath;
+  String? _customFontFamily;
 
   String _statusEmoji = '🔥';
   String _statusText = '今天的铁，也要镌刻进身体里';
@@ -595,9 +861,30 @@ class SettingsProvider extends ChangeNotifier {
   AiProviderPreset get aiProvider => aiProviderById(_aiProviderId);
   String get aiEndpoint => _aiEndpoint;
   String get aiModel => _aiModel;
+  String get aiReasoningEffort => _aiReasoningEffort;
   String get aiApiKey => _aiApiKey;
   String get aiPrompt => _aiPrompt;
   bool get hasAiKey => _aiApiKey.trim().isNotEmpty;
+
+  String get appLanguageCode => _appLanguageCode;
+  Locale get appLocale {
+    switch (_appLanguageCode) {
+      case 'en':
+        return const Locale('en', 'US');
+      case 'ja':
+        return const Locale('ja', 'JP');
+      case 'ko':
+        return const Locale('ko', 'KR');
+      case 'ru':
+        return const Locale('ru', 'RU');
+      default:
+        return const Locale('zh', 'CN');
+    }
+  }
+
+  String get appFontId => _appFontId;
+  String? get customFontPath => _customFontPath;
+  String? get customFontFamily => _customFontFamily;
 
   String apiKeyForProvider(String providerId) {
     if (providerId == _aiProviderId) return _aiApiKey;
@@ -680,6 +967,7 @@ class SettingsProvider extends ChangeNotifier {
     }
     _aiEndpoint = savedEndpoint ?? defaultAiEndpoint;
     _aiModel = savedModel ?? defaultAiModel;
+    _aiReasoningEffort = prefs.getString('ai_reasoning_effort') ?? 'default';
     final savedProviderId = prefs.getString('ai_provider_id');
     _aiProviderId = savedProviderId ??
         aiProviderForEndpoint(_aiEndpoint)?.id ??
@@ -694,6 +982,17 @@ class SettingsProvider extends ChangeNotifier {
       _aiProviderKeys[_aiProviderId] = _aiApiKey;
     }
     _aiPrompt = prefs.getString('ai_prompt') ?? '';
+
+    _appLanguageCode = prefs.getString('app_language') ?? 'zh';
+    _appFontId = prefs.getString('app_font_id') ?? 'system';
+    _customFontPath = prefs.getString('app_custom_font_path');
+    _customFontFamily = prefs.getString('app_custom_font_family');
+    if (_customFontFamily != null && _customFontPath != null) {
+      await AppFonts.loadCustomFont(
+        family: _customFontFamily!,
+        path: _customFontPath!,
+      );
+    }
 
     _statusEmoji = prefs.getString('status_emoji') ?? '🔥';
     _statusText = prefs.getString('status_text') ?? '今天的铁，也要镌刻进身体里';
@@ -921,6 +1220,7 @@ class SettingsProvider extends ChangeNotifier {
     String? endpoint,
     String? model,
     String? apiKey,
+    String? reasoningEffort,
   }) async {
     if (providerId != null && providerId.trim().isNotEmpty) {
       _aiProviderId = providerId.trim();
@@ -934,6 +1234,11 @@ class SettingsProvider extends ChangeNotifier {
     if (model != null) {
       _aiModel = model.trim().isEmpty ? defaultAiModel : model.trim();
       await _persist('ai_model', _aiModel);
+    }
+    if (reasoningEffort != null) {
+      _aiReasoningEffort =
+          reasoningEffort.trim().isEmpty ? 'default' : reasoningEffort.trim();
+      await _persist('ai_reasoning_effort', _aiReasoningEffort);
     }
     if (apiKey != null) {
       _aiApiKey = apiKey.trim();
@@ -950,6 +1255,36 @@ class SettingsProvider extends ChangeNotifier {
     _aiPrompt = value.trim();
     await _persist('ai_prompt', _aiPrompt);
     notifyListeners();
+  }
+
+  Future<void> setAppLanguage(String code) async {
+    _appLanguageCode =
+        ['zh', 'en', 'ja', 'ko', 'ru'].contains(code) ? code : 'zh';
+    await _persist('app_language', _appLanguageCode);
+    notifyListeners();
+  }
+
+  Future<void> setAppFont(String id) async {
+    _appFontId = appFontById(id).id;
+    await _persist('app_font_id', _appFontId);
+    notifyListeners();
+  }
+
+  Future<bool> setCustomFont(String path) async {
+    final family = 'CustomFont${DateTime.now().microsecondsSinceEpoch}';
+    final loaded = await AppFonts.loadCustomFont(
+      family: family,
+      path: path,
+    );
+    if (loaded == null) return false;
+    _customFontPath = path;
+    _customFontFamily = family;
+    _appFontId = 'custom';
+    await _persist('app_custom_font_path', _customFontPath);
+    await _persist('app_custom_font_family', _customFontFamily);
+    await _persist('app_font_id', _appFontId);
+    notifyListeners();
+    return true;
   }
 
   Future<void> setStatus({

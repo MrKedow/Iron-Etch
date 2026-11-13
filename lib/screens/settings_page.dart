@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,8 +12,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart';
 import '../app_version.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/app_providers.dart';
 import '../services/ai_coach_service.dart';
+import '../services/app_fonts.dart';
 import '../services/config_sync.dart';
 import '../services/media_permission.dart';
 import '../services/reminder_service.dart';
@@ -84,25 +87,25 @@ class _SettingsPageState extends State<SettingsPage>
     final result = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('修改昵称'),
+        title: Text(context.tr('修改昵称')),
         content: TextField(
           controller: controller,
           autofocus: true,
           maxLength: 16,
-          decoration: const InputDecoration(
-            hintText: '铁友',
+          decoration: InputDecoration(
+            hintText: context.tr('铁友'),
             counterText: '',
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
+            child: Text(context.tr('取消')),
           ),
           ElevatedButton(
             onPressed: () =>
                 Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('保存'),
+            child: Text(context.tr('保存')),
           ),
         ],
       ),
@@ -139,7 +142,7 @@ class _SettingsPageState extends State<SettingsPage>
                 ListTile(
                   leading:
                       Icon(Icons.photo_library_outlined, color: spec.primary),
-                  title: const Text('更换头像'),
+                  title: Text(context.tr('更换头像')),
                   onTap: () => Navigator.pop(sheetContext, 'pick'),
                 ),
                 ListTile(
@@ -268,12 +271,72 @@ class _SettingsPageState extends State<SettingsPage>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('取消'),
+              child: Text(context.tr('取消')),
             ),
           ],
         );
       },
     );
+  }
+
+  Future<void> _pickLanguage(SettingsProvider settings) async {
+    final current = appLanguageByCode(settings.appLanguageCode);
+    final result = await _showChoiceDialog(
+      title: context.tr('界面语言'),
+      current: current.nativeLabel,
+      options: appLanguages.map((item) => item.nativeLabel).toList(),
+    );
+    if (result == null || !mounted) return;
+    final selected = appLanguages.firstWhere(
+      (item) => item.nativeLabel == result,
+      orElse: () => current,
+    );
+    await settings.setAppLanguage(selected.code);
+  }
+
+  Future<void> _pickFont(SettingsProvider settings) async {
+    final current = appFontById(settings.appFontId);
+    final result = await _showChoiceDialog(
+      title: context.tr('字体风格'),
+      current: current.label,
+      options: appFontOptions.map((item) => item.label).toList(),
+    );
+    if (result == null || !mounted) return;
+    final selected = appFontOptions.firstWhere(
+      (item) => item.label == result,
+      orElse: () => current,
+    );
+    if (selected.isCustom) {
+      await _importFont(settings);
+      return;
+    }
+    await settings.setAppFont(selected.id);
+  }
+
+  Future<void> _importFont(SettingsProvider settings) async {
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['ttf', 'otf', 'ttc'],
+    );
+    final sourcePath = picked?.files.single.path;
+    if (sourcePath == null) return;
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final extension = sourcePath.split('.').last.toLowerCase();
+      final target = File(
+        '${dir.path}${Platform.pathSeparator}'
+        'iron_etch_font_${DateTime.now().millisecondsSinceEpoch}.$extension',
+      );
+      await File(sourcePath).copy(target.path);
+      final ok = await settings.setCustomFont(target.path);
+      if (!mounted) return;
+      _showSnack(
+        ok ? context.tr('自定义字体已导入') : context.tr('字体导入失败，请确认文件有效'),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showSnack('${context.tr('字体导入失败')}：$error');
+    }
   }
 
   Future<double?> _showSliderDialog({
@@ -330,11 +393,11 @@ class _SettingsPageState extends State<SettingsPage>
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('取消'),
+                child: Text(context.tr('取消')),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(dialogContext, current),
-                child: const Text('确定'),
+                child: Text(context.tr('确定')),
               ),
             ],
           );
@@ -345,7 +408,7 @@ class _SettingsPageState extends State<SettingsPage>
 
   Future<void> _editGoal(SettingsProvider settings) async {
     final result = await _showChoiceDialog(
-      title: '训练目标',
+      title: context.tr('训练目标'),
       current: settings.trainingGoal,
       options: const ['增肌', '减脂', '力量', '塑形', '健康'],
     );
@@ -355,7 +418,7 @@ class _SettingsPageState extends State<SettingsPage>
 
   Future<void> _editExperience(SettingsProvider settings) async {
     final result = await _showChoiceDialog(
-      title: '训练经验',
+      title: context.tr('训练经验'),
       current: settings.experience,
       options: const ['新手', '进阶', '高阶'],
     );
@@ -365,7 +428,7 @@ class _SettingsPageState extends State<SettingsPage>
 
   Future<void> _editWeeklyGoal(SettingsProvider settings) async {
     final value = await _showSliderDialog(
-      title: '每周训练目标',
+      title: context.tr('每周训练目标'),
       description: 'AI 教练与首页会按这个目标评估你的训练频率。',
       value: settings.weeklyGoal.toDouble(),
       min: 1,
@@ -379,7 +442,7 @@ class _SettingsPageState extends State<SettingsPage>
 
   Future<void> _editBodyWeight(SettingsProvider settings) async {
     final value = await _showSliderDialog(
-      title: '体重',
+      title: context.tr('体重'),
       description: '用于估算训练做功与热量消耗。',
       value: settings.bodyWeight,
       min: 30,
@@ -393,7 +456,7 @@ class _SettingsPageState extends State<SettingsPage>
 
   Future<void> _editRestSeconds(SettingsProvider settings) async {
     final value = await _showSliderDialog(
-      title: '默认组间休息',
+      title: context.tr('默认组间休息'),
       description: '记录训练时参考用的默认休息时间。',
       value: settings.restSeconds.toDouble(),
       min: 15,
@@ -407,7 +470,7 @@ class _SettingsPageState extends State<SettingsPage>
 
   Future<void> _editWeightUnit(SettingsProvider settings) async {
     final result = await _showChoiceDialog(
-      title: '重量单位',
+      title: context.tr('重量单位'),
       current: settings.weightUnit,
       options: const ['kg', 'lb'],
     );
@@ -482,7 +545,7 @@ class _SettingsPageState extends State<SettingsPage>
       builder: (dialogContext) {
         final spec = dialogContext.watch<ThemeProvider>().currentSpec;
         return AlertDialog(
-          title: const Text('AI 提示词'),
+          title: Text(context.tr('AI 提示词')),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -501,8 +564,10 @@ class _SettingsPageState extends State<SettingsPage>
                   controller: controller,
                   minLines: 4,
                   maxLines: 10,
-                  decoration: const InputDecoration(
-                    hintText: '例如：你是一位严谨的力量举教练，只输出中文结论，不要输出思考过程…',
+                  decoration: InputDecoration(
+                    hintText: context.tr(
+                      '例如：你是一位严谨的力量举教练，只输出中文结论，不要输出思考过程…',
+                    ),
                     alignLabelWithHint: true,
                   ),
                 ),
@@ -514,15 +579,15 @@ class _SettingsPageState extends State<SettingsPage>
               onPressed: () {
                 controller.text = '';
               },
-              child: const Text('清空'),
+              child: Text(context.tr('清空')),
             ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('取消'),
+              child: Text(context.tr('取消')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('保存'),
+              child: Text(context.tr('保存')),
             ),
           ],
         );
@@ -544,6 +609,7 @@ class _SettingsPageState extends State<SettingsPage>
       endpoint: settings.aiEndpoint,
       model: settings.aiModel,
       apiKey: settings.aiApiKey,
+      reasoningEffort: settings.aiReasoningEffort,
     );
     if (!mounted) return;
     setState(() => _testingAi = false);
@@ -571,7 +637,7 @@ class _SettingsPageState extends State<SettingsPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('知道了'),
+            child: Text(context.tr('知道了')),
           ),
         ],
       ),
@@ -600,16 +666,16 @@ class _SettingsPageState extends State<SettingsPage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('整合同日记录'),
-        content: const Text('把同一天的多条记录合并为一条，动作会保留。是否继续？'),
+        title: Text(context.tr('整合同日记录')),
+        content: Text(context.tr('把同一天的多条记录合并为一条，动作会保留。是否继续？')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('取消'),
+            child: Text(context.tr('取消')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('整合'),
+            child: Text(context.tr('整合')),
           ),
         ],
       ),
@@ -623,17 +689,17 @@ class _SettingsPageState extends State<SettingsPage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('清空全部训练记录？'),
-        content: const Text('所有训练历史都会被删除，且无法恢复。建议先导出备份。'),
+        title: Text(context.tr('清空全部训练记录？')),
+        content: Text(context.tr('所有训练历史都会被删除，且无法恢复。建议先导出备份。')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('取消'),
+            child: Text(context.tr('取消')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('清空'),
+            child: Text(context.tr('清空')),
           ),
         ],
       ),
@@ -668,7 +734,7 @@ class _SettingsPageState extends State<SettingsPage>
                   size: 18, color: spec.onHero),
             ),
             const SizedBox(width: 10),
-            const Text('关于铁镌'),
+            Text(context.tr('关于铁镌')),
           ],
         ),
         content: Column(
@@ -722,7 +788,7 @@ class _SettingsPageState extends State<SettingsPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('关闭'),
+            child: Text(context.tr('关闭')),
           ),
         ],
       ),
@@ -734,7 +800,7 @@ class _SettingsPageState extends State<SettingsPage>
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('鸣谢'),
+        title: Text(context.tr('鸣谢')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -785,7 +851,7 @@ class _SettingsPageState extends State<SettingsPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('关闭'),
+            child: Text(context.tr('关闭')),
           ),
         ],
       ),
@@ -947,24 +1013,24 @@ class _SettingsPageState extends State<SettingsPage>
                 const SizedBox(height: 14),
                 ListTile(
                   leading: Icon(Icons.upload_rounded, color: spec.primary),
-                  title: const Text('同步配置到云端'),
+                  title: Text(context.tr('同步配置到云端')),
                   onTap: () => Navigator.pop(sheetContext, 'upload'),
                 ),
                 ListTile(
                   leading: Icon(Icons.download_rounded, color: spec.secondary),
-                  title: const Text('从云端恢复配置'),
+                  title: Text(context.tr('从云端恢复配置')),
                   onTap: () => Navigator.pop(sheetContext, 'download'),
                 ),
                 ListTile(
                   leading: Icon(Icons.tune_rounded, color: spec.textSecondary),
-                  title: const Text('同步内容'),
-                  subtitle: const Text('自定义允许上传与恢复的配置范围'),
+                  title: Text(context.tr('同步内容')),
+                  subtitle: Text(context.tr('自定义允许上传与恢复的配置范围')),
                   onTap: () => Navigator.pop(sheetContext, 'scopes'),
                 ),
                 ListTile(
                   leading: Icon(Icons.link_off_rounded,
                       color: const Color(0xFFF97316)),
-                  title: const Text('断开连接'),
+                  title: Text(context.tr('断开连接')),
                   onTap: () => Navigator.pop(sheetContext, 'disconnect'),
                 ),
               ],
@@ -992,7 +1058,7 @@ class _SettingsPageState extends State<SettingsPage>
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('连接坚果云'),
+        title: Text(context.tr('连接坚果云')),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1004,17 +1070,17 @@ class _SettingsPageState extends State<SettingsPage>
               const SizedBox(height: 14),
               TextField(
                 controller: usernameController,
-                decoration: const InputDecoration(
-                  labelText: '坚果云账号',
-                  hintText: '邮箱地址',
+                decoration: InputDecoration(
+                  labelText: context.tr('坚果云账号'),
+                  hintText: context.tr('邮箱地址'),
                 ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: passwordController,
                 obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: '应用密码',
+                decoration: InputDecoration(
+                  labelText: context.tr('应用密码'),
                 ),
               ),
             ],
@@ -1023,7 +1089,7 @@ class _SettingsPageState extends State<SettingsPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('取消'),
+            child: Text(context.tr('取消')),
           ),
           FilledButton(
             onPressed: () async {
@@ -1033,7 +1099,7 @@ class _SettingsPageState extends State<SettingsPage>
               );
               if (dialogContext.mounted) Navigator.pop(dialogContext, ok);
             },
-            child: const Text('连接'),
+            child: Text(context.tr('连接')),
           ),
         ],
       ),
@@ -1096,12 +1162,12 @@ class _SettingsPageState extends State<SettingsPage>
                       TextButton(
                         onPressed: () => setSheetState(
                             () => scopes = ConfigSyncService.allScopes.toSet()),
-                        child: const Text('全选'),
+                        child: Text(context.tr('全选')),
                       ),
                       TextButton(
                         onPressed: () =>
                             setSheetState(() => scopes = <ConfigSyncScope>{}),
-                        child: const Text('清空'),
+                        child: Text(context.tr('清空')),
                       ),
                     ],
                   ),
@@ -1155,7 +1221,7 @@ class _SettingsPageState extends State<SettingsPage>
                     child: FilledButton(
                       onPressed: () =>
                           Navigator.pop(sheetContext, Set.of(scopes)),
-                      child: const Text('保存选择'),
+                      child: Text(context.tr('保存选择')),
                     ),
                   ),
                 ],
@@ -1293,7 +1359,7 @@ class _SettingsPageState extends State<SettingsPage>
           SliverAppBar(
             pinned: true,
             backgroundColor: spec.background.withValues(alpha: .82),
-            title: const Text('设置'),
+            title: Text(context.tr('设置')),
           ),
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
@@ -1371,43 +1437,43 @@ class _SettingsPageState extends State<SettingsPage>
                     ],
                   ),
                 ),
-                const SectionHeader(
-                  title: '个人档案',
-                  subtitle: '让 AI 更懂你的训练背景',
+                SectionHeader(
+                  title: context.tr('个人档案'),
+                  subtitle: context.tr('让 AI 更懂你的训练背景'),
                 ),
                 _SettingsGroup(
                   children: [
                     _SettingsTile(
                       icon: Icons.account_circle_outlined,
-                      title: '头像',
+                      title: context.tr('头像'),
                       subtitle: settings.hasAvatar
-                          ? '已设置 · 点击更换或移除'
-                          : '未设置 · 点击从相册选择',
+                          ? context.tr('已设置 · 点击更换或移除')
+                          : context.tr('未设置 · 点击从相册选择'),
                       onTap: () => _chooseAvatar(settings),
                     ),
                     _SettingsTile(
                       icon: Icons.flag_rounded,
-                      title: '训练目标',
+                      title: context.tr('训练目标'),
                       subtitle: settings.trainingGoal,
                       onTap: () => _editGoal(settings),
                     ),
                     _SettingsTile(
                       icon: Icons.trending_up_rounded,
-                      title: '训练经验',
+                      title: context.tr('训练经验'),
                       subtitle: settings.experience,
                       onTap: () => _editExperience(settings),
                     ),
                     _SettingsTile(
                       icon: Icons.monitor_weight_outlined,
-                      title: '体重',
+                      title: context.tr('体重'),
                       subtitle: '${settings.bodyWeight.toStringAsFixed(1)} kg',
                       onTap: () => _editBodyWeight(settings),
                     ),
                     _SettingsTile(
                       icon: Icons.badge_outlined,
-                      title: '铁卡',
+                      title: context.tr('铁卡'),
                       subtitle: settings.heightCm == null
-                          ? '可选填写身高、年龄、体脂与静息心率'
+                          ? context.tr('可选填写身高、年龄、体脂与静息心率')
                           : '完整度 ${(settings.ironProfile.completeness * 100).round()}% · 点击完善',
                       onTap: () {
                         Navigator.push(
@@ -1420,36 +1486,36 @@ class _SettingsPageState extends State<SettingsPage>
                     ),
                   ],
                 ),
-                const SectionHeader(
-                  title: '训练偏好',
-                  subtitle: '这些设置会影响记录与 AI 分析',
+                SectionHeader(
+                  title: context.tr('训练偏好'),
+                  subtitle: context.tr('这些设置会影响记录与 AI 分析'),
                 ),
                 _SettingsGroup(
                   children: [
                     _SettingsTile(
                       icon: Icons.calendar_view_week_rounded,
-                      title: '每周训练目标',
-                      subtitle: '${settings.weeklyGoal} 天 / 周',
+                      title: context.tr('每周训练目标'),
+                      subtitle: '${settings.weeklyGoal} ${context.tr('天 / 周')}',
                       onTap: () => _editWeeklyGoal(settings),
                     ),
                     _SettingsTile(
                       icon: Icons.straighten_rounded,
-                      title: '重量单位',
+                      title: context.tr('重量单位'),
                       subtitle: settings.weightUnit,
                       onTap: () => _editWeightUnit(settings),
                     ),
                     _SettingsTile(
                       icon: Icons.timer_outlined,
-                      title: '默认组间休息',
-                      subtitle: '${settings.restSeconds} 秒',
+                      title: context.tr('默认组间休息'),
+                      subtitle: '${settings.restSeconds} ${context.tr('秒')}',
                       onTap: () => _editRestSeconds(settings),
                     ),
                     _SettingsTile(
                       icon: Icons.vibration_rounded,
-                      title: '触感反馈',
+                      title: context.tr('触感反馈'),
                       subtitle: settings.haptics
-                          ? '点击按钮、卡片与模块时的反馈'
-                          : '默认关闭 · 开启后可分别选择振动与动效',
+                          ? context.tr('点击按钮、卡片与模块时的反馈')
+                          : context.tr('默认关闭 · 开启后可分别选择振动与动效'),
                       trailing: Switch.adaptive(
                         value: settings.haptics,
                         onChanged: (value) =>
@@ -1462,8 +1528,8 @@ class _SettingsPageState extends State<SettingsPage>
                     if (settings.haptics) ...[
                       _SettingsTile(
                         icon: Icons.vibration_outlined,
-                        title: '振动',
-                        subtitle: '点击时提供轻触振动反馈',
+                        title: context.tr('振动'),
+                        subtitle: context.tr('点击时提供轻触振动反馈'),
                         trailing: Switch.adaptive(
                           value: settings.hapticsVibration,
                           onChanged: (value) => context
@@ -1476,8 +1542,8 @@ class _SettingsPageState extends State<SettingsPage>
                       ),
                       _SettingsTile(
                         icon: Icons.animation_rounded,
-                        title: '动效',
-                        subtitle: '按下内陷、变暗、缩小，松开回弹',
+                        title: context.tr('动效'),
+                        subtitle: context.tr('按下内陷、变暗、缩小，松开回弹'),
                         trailing: Switch.adaptive(
                           value: settings.hapticsMotion,
                           onChanged: (value) => context
@@ -1491,10 +1557,10 @@ class _SettingsPageState extends State<SettingsPage>
                     ],
                     _SettingsTile(
                       icon: Icons.photo_camera_rounded,
-                      title: '仪表盘拍照入口',
+                      title: context.tr('仪表盘拍照入口'),
                       subtitle: settings.dashboardCameraEnabled
-                          ? '卡片右侧显示彩色拍照按钮'
-                          : '已隐藏 · 时长/距离/速度自动铺满',
+                          ? context.tr('卡片右侧显示彩色拍照按钮')
+                          : context.tr('已隐藏 · 时长/距离/速度自动铺满'),
                       trailing: Switch.adaptive(
                         value: settings.dashboardCameraEnabled,
                         onChanged: (value) => context
@@ -1509,10 +1575,10 @@ class _SettingsPageState extends State<SettingsPage>
                     if (settings.dashboardCameraEnabled)
                       _SettingsTile(
                         icon: Icons.document_scanner_outlined,
-                        title: '识别打卡照片数据',
+                        title: context.tr('识别打卡照片数据'),
                         subtitle: settings.dashboardAiScanEnabled
-                            ? '识别照片中的距离/速度'
-                            : '关闭识别 · 照片仅作为打卡记录',
+                            ? context.tr('识别照片中的距离/速度')
+                            : context.tr('关闭识别 · 照片仅作为打卡记录'),
                         trailing: Switch.adaptive(
                           value: settings.dashboardAiScanEnabled,
                           onChanged: (value) => context
@@ -1526,7 +1592,7 @@ class _SettingsPageState extends State<SettingsPage>
                       ),
                     _SettingsTile(
                       icon: Icons.notifications_active_outlined,
-                      title: '训练提醒',
+                      title: context.tr('训练提醒'),
                       subtitle: settings.remindersEnabled
                           ? '每天 ${settings.reminderTime} 提醒 · 点击自定义文案'
                           : '关闭 · 点击自定义文案',
@@ -1562,22 +1628,24 @@ class _SettingsPageState extends State<SettingsPage>
                     if (settings.remindersEnabled)
                       _SettingsTile(
                         icon: Icons.schedule_rounded,
-                        title: '提醒时间',
+                        title: context.tr('提醒时间'),
                         subtitle: settings.reminderTime,
                         onTap: () => _pickReminderTime(settings),
                       ),
                   ],
                 ),
-                const SectionHeader(
-                  title: 'AI 教练',
-                  subtitle: '免费多通道 · 自动回退 · 真实大模型驱动',
+                SectionHeader(
+                  title: context.tr('AI 教练'),
+                  subtitle: context.tr('免费多通道 · 自动回退 · 真实大模型驱动'),
                 ),
                 _SettingsGroup(
                   children: [
                     _SettingsTile(
                       icon: Icons.auto_awesome_rounded,
-                      title: '启用 AI 建议',
-                      subtitle: settings.aiEnabled ? '已开启' : '已关闭',
+                      title: context.tr('启用 AI 建议'),
+                      subtitle: settings.aiEnabled
+                          ? context.tr('已开启')
+                          : context.tr('已关闭'),
                       trailing: Switch.adaptive(
                         value: settings.aiEnabled,
                         onChanged: (value) => context
@@ -1590,29 +1658,32 @@ class _SettingsPageState extends State<SettingsPage>
                     ),
                     _SettingsTile(
                       icon: Icons.hub_rounded,
-                      title: '提供商',
+                      title: context.tr('提供商'),
                       subtitle: settings.aiProvider.label,
                       onTap: () => _editAiConfig(settings),
                     ),
                     _SettingsTile(
                       icon: Icons.memory_rounded,
-                      title: '模型',
+                      title: context.tr('模型'),
                       subtitle: settings.aiModel,
                       onTap: () => _editAiConfig(settings),
                     ),
                     _SettingsTile(
                       icon: Icons.key_rounded,
                       title: 'API Key',
-                      subtitle:
-                          settings.hasAiKey ? '已保存 · 点击修改' : '未填写 · 使用免费通道',
+                      subtitle: settings.hasAiKey
+                          ? context.tr('已保存 · 点击修改')
+                          : context.tr('未填写 · 使用免费通道'),
                       onTap: () => _editAiConfig(settings),
                     ),
                     _SettingsTile(
                       icon: _testingAi
                           ? Icons.hourglass_top_rounded
                           : Icons.network_check_rounded,
-                      title: '测试连接',
-                      subtitle: _testingAi ? '正在测试 AI 通道…' : '检查免费通道或 Key 是否可用',
+                      title: context.tr('测试连接'),
+                      subtitle: _testingAi
+                          ? context.tr('正在测试 AI 通道…')
+                          : context.tr('检查免费通道或 Key 是否可用'),
                       trailing: _testingAi
                           ? const SizedBox(
                               width: 20,
@@ -1625,23 +1696,23 @@ class _SettingsPageState extends State<SettingsPage>
                     ),
                     _SettingsTile(
                       icon: Icons.edit_note_rounded,
-                      title: 'AI 提示词',
+                      title: context.tr('AI 提示词'),
                       subtitle: settings.aiPrompt.trim().isEmpty
-                          ? '使用内置默认提问 · 点击自定义'
+                          ? context.tr('使用内置默认提问 · 点击自定义')
                           : settings.aiPrompt,
                       onTap: () => _editAiPrompt(settings),
                     ),
                   ],
                 ),
-                const SectionHeader(
-                  title: '外观与个性',
-                  subtitle: '主题会改变整页配色、卡片与背景',
+                SectionHeader(
+                  title: context.tr('外观与个性'),
+                  subtitle: context.tr('主题会改变整页配色、卡片与背景'),
                 ),
                 _SettingsGroup(
                   children: [
                     _SettingsTile(
                       icon: Icons.palette_outlined,
-                      title: '主题工坊',
+                      title: context.tr('主题工坊'),
                       subtitle: '${spec.emoji} ${spec.name} · ${spec.subtitle}',
                       onTap: () {
                         Navigator.push(
@@ -1653,22 +1724,35 @@ class _SettingsPageState extends State<SettingsPage>
                       },
                     ),
                     _SettingsTile(
+                      icon: Icons.translate_rounded,
+                      title: context.tr('界面语言'),
+                      subtitle: appLanguageByCode(settings.appLanguageCode)
+                          .nativeLabel,
+                      onTap: () => _pickLanguage(settings),
+                    ),
+                    _SettingsTile(
+                      icon: Icons.font_download_outlined,
+                      title: context.tr('字体风格'),
+                      subtitle: appFontById(settings.appFontId).label,
+                      onTap: () => _pickFont(settings),
+                    ),
+                    _SettingsTile(
                       icon: Icons.bolt_rounded,
-                      title: '我的状态',
+                      title: context.tr('我的状态'),
                       subtitle:
                           '${settings.statusEmoji} ${settings.statusText}',
                       onTap: () => showStatusEditor(context),
                     ),
                     _SettingsTile(
                       icon: Icons.wb_sunny_outlined,
-                      title: '今日格言',
+                      title: context.tr('今日格言'),
                       subtitle: settings.todayQuote,
                     ),
                     if (themeProvider.hasCustomBackground)
                       _SettingsTile(
                         icon: Icons.image_outlined,
-                        title: '自定义背景',
-                        subtitle: '已应用 · 可在主题工坊中移除',
+                        title: context.tr('自定义背景'),
+                        subtitle: context.tr('已应用 · 可在主题工坊中移除'),
                         onTap: () {
                           Navigator.push(
                             context,
@@ -1680,63 +1764,64 @@ class _SettingsPageState extends State<SettingsPage>
                       ),
                   ],
                 ),
-                const SectionHeader(
-                  title: '数据管理',
-                  subtitle: '本地记录与导出备份',
+                SectionHeader(
+                  title: context.tr('数据管理'),
+                  subtitle: context.tr('本地记录与导出备份'),
                 ),
                 _SettingsGroup(
                   children: [
                     _SettingsTile(
                       icon: Icons.ios_share_rounded,
-                      title: '导出 Excel',
+                      title: context.tr('导出 Excel'),
                       subtitle:
                           '${context.watch<WorkoutProvider>().records.length} 条记录',
                       onTap: _exportData,
                     ),
                     _SettingsTile(
                       icon: Icons.merge_type_rounded,
-                      title: '整合同日记录',
-                      subtitle: '合并同一天的多次训练',
+                      title: context.tr('整合同日记录'),
+                      subtitle: context.tr('合并同一天的多次训练'),
                       onTap: _mergeData,
                     ),
                     _SettingsTile(
                       icon: Icons.delete_sweep_outlined,
-                      title: '清空训练记录',
-                      subtitle: '建议先导出备份',
+                      title: context.tr('清空训练记录'),
+                      subtitle: context.tr('建议先导出备份'),
                       danger: true,
                       onTap: _clearData,
                     ),
                   ],
                 ),
-                const SectionHeader(
-                  title: '云同步',
-                  subtitle: '配置与训练数据同步到坚果云',
+                SectionHeader(
+                  title: context.tr('云同步'),
+                  subtitle: context.tr('配置与训练数据同步到坚果云'),
                 ),
                 _SettingsGroup(
                   children: [
                     _SettingsTile(
                       icon: Icons.cloud_sync_rounded,
-                      title: '坚果云同步',
+                      title: context.tr('坚果云同步'),
                       subtitle: nutstore.isConnected
-                          ? '已连接 · ${nutstore.username}'
-                          : '未配置 · 点击配置',
+                          ? '${context.tr('已连接')} · ${nutstore.username}'
+                          : context.tr('未配置 · 点击配置'),
                       onTap: () => _showCloudSync(nutstore),
                     ),
                   ],
                 ),
-                const SectionHeader(title: '关于'),
+                SectionHeader(title: context.tr('关于')),
                 _SettingsGroup(
                   children: [
                     _SettingsTile(
                       icon: Icons.fitness_center_rounded,
-                      title: '铁镌',
-                      subtitle: '版本 $appVersion · 镌刻每一次撸铁',
+                      title: context.tr('铁镌'),
+                      subtitle: '${context.tr('版本')} $appVersion · '
+                          '${context.tr('镌刻每一次撸铁')}',
                       onTap: _showAbout,
                     ),
                     _SettingsTile(
                       icon: Icons.explore_rounded,
-                      title: '使用引导',
-                      subtitle: '重新查看功能说明与自定义开关',
+                      title: context.tr('使用引导'),
+                      subtitle: context.tr('重新查看功能说明与自定义开关'),
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -1746,7 +1831,7 @@ class _SettingsPageState extends State<SettingsPage>
                     ),
                     _SettingsTile(
                       icon: Icons.code_rounded,
-                      title: '开源地址',
+                      title: context.tr('开源地址'),
                       subtitle: 'github.com/MrKedow/Iron-Etch',
                       onTap: () => launchUrl(
                         Uri.parse(
@@ -1756,8 +1841,8 @@ class _SettingsPageState extends State<SettingsPage>
                     ),
                     _SettingsTile(
                       icon: Icons.volunteer_activism_rounded,
-                      title: '鸣谢',
-                      subtitle: '动作示意图与动作分类参考来源',
+                      title: context.tr('鸣谢'),
+                      subtitle: context.tr('动作示意图与动作分类参考来源'),
                       onTap: _showAcknowledgments,
                     ),
                   ],
@@ -1955,7 +2040,7 @@ class _ReminderMessageFieldState extends State<_ReminderMessageField> {
                   height: 1.4,
                 ),
                 decoration: InputDecoration(
-                  hintText: '输入提醒文案',
+                  hintText: context.tr('输入提醒文案'),
                   hintStyle: TextStyle(
                     color: spec.textSecondary.withValues(alpha: .65),
                     fontSize: 13.5,

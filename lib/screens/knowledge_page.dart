@@ -367,6 +367,7 @@ class _KnowledgeDetailPageState extends State<KnowledgeDetailPage> {
       endpoint: settings.aiEndpoint,
       model: settings.aiModel,
       apiKey: settings.aiApiKey,
+      reasoningEffort: settings.aiReasoningEffort,
       messages: [
         {
           'role': 'system',

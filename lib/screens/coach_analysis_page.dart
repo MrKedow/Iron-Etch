@@ -175,6 +175,7 @@ ${insights.buildAiContext(settings)}
       endpoint: settings.aiEndpoint,
       model: settings.aiModel,
       apiKey: settings.aiApiKey,
+      reasoningEffort: settings.aiReasoningEffort,
     );
 
     if (!mounted) return;

@@ -31,6 +31,8 @@ import 'package:fitness_tracker/widgets/status_banner.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:fitness_tracker/services/ai_coach_service.dart';
+import 'package:fitness_tracker/l10n/app_localizations.dart';
+import 'package:fitness_tracker/services/app_fonts.dart';
 import 'package:fitness_tracker/services/app_haptics.dart';
 import 'package:fitness_tracker/services/media_permission.dart';
 import 'package:fitness_tracker/services/reminder_service.dart';
@@ -1199,17 +1201,22 @@ class FitnessApp extends StatelessWidget {
   const FitnessApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeProvider>(
-      builder: (context, themeProvider, child) {
+    return Consumer2<ThemeProvider, SettingsProvider>(
+      builder: (context, themeProvider, settings, child) {
         return MaterialApp(
-          title: '铁镌',
+          onGenerateTitle: (context) => context.tr('铁镌'),
           debugShowCheckedModeBanner: false,
-          theme: themeProvider.currentTheme,
+          theme: AppFonts.apply(
+            themeProvider.currentTheme,
+            fontId: settings.appFontId,
+            customFamily: settings.customFontFamily,
+          ),
           themeAnimationDuration: const Duration(milliseconds: 650),
           themeAnimationCurve: Curves.easeOutCubic,
-          locale: const Locale('zh', 'CN'),
-          supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+          locale: settings.appLocale,
+          supportedLocales: AppLocalizations.supportedLocales,
           localizationsDelegates: const [
+            AppLocalizations.delegate,
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
@@ -1468,22 +1475,22 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       final choice = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('发现云端训练数据'),
+          title: Text(context.tr('发现云端训练数据')),
           content: Text(
             '云端有 ${cloudRecords.length} 条记录，本地有 ${provider.records.length} 条记录。\n请选择处理方式。',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('取消'),
+              child: Text(context.tr('取消')),
             ),
             TextButton(
               onPressed: () => Navigator.pop(ctx, 'upload'),
-              child: const Text('用本地覆盖云端'),
+              child: Text(context.tr('用本地覆盖云端')),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, 'merge'),
-              child: const Text('合并两边记录'),
+              child: Text(context.tr('合并两边记录')),
             ),
           ],
         ),
@@ -1572,7 +1579,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('连接坚果云'),
+          title: Text(context.tr('连接坚果云')),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1585,18 +1592,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 const SizedBox(height: 16),
                 TextField(
                   controller: usernameController,
-                  decoration: const InputDecoration(
-                    labelText: '坚果云账号',
-                    hintText: '邮箱地址',
+                  decoration: InputDecoration(
+                    labelText: context.tr('坚果云账号'),
+                    hintText: context.tr('邮箱地址'),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: passwordController,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: '应用密码',
-                    hintText: '不是登录密码',
+                  decoration: InputDecoration(
+                    labelText: context.tr('应用密码'),
+                    hintText: context.tr('不是登录密码'),
                   ),
                 ),
                 if (error != null) ...[
@@ -1613,7 +1620,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             TextButton(
               onPressed:
                   isConnecting ? null : () => Navigator.pop(dialogContext),
-              child: const Text('取消'),
+              child: Text(context.tr('取消')),
             ),
             ElevatedButton(
               onPressed: isConnecting
@@ -1650,7 +1657,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('连接'),
+                  : Text(context.tr('连接')),
             ),
           ],
         ),
@@ -1670,7 +1677,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           children: [
             ListTile(
               leading: const Icon(Icons.sync),
-              title: const Text('立即同步'),
+              title: Text(context.tr('立即同步')),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _syncWithCloud(context);
@@ -1678,7 +1685,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
-              title: const Text('断开连接', style: TextStyle(color: Colors.red)),
+              title: Text(context.tr('断开连接'),
+                  style: const TextStyle(color: Colors.red)),
               onTap: () async {
                 Navigator.pop(sheetContext);
                 await context.read<NutstoreService>().clearCredentials();
@@ -1860,7 +1868,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                         _showHistory(context);
                       },
                       icon: const Icon(Icons.history_rounded, size: 18),
-                      label: const Text('查看全部训练记录'),
+                      label: Text(context.tr('查看全部训练记录')),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(46),
                         foregroundColor: spec.primary,
@@ -2207,11 +2215,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           const SizedBox(height: 10),
           Row(
             children: [
-              _quickDateChip('今天', 0, spec),
+              _quickDateChip(context.tr('今天'), 0, spec),
               const SizedBox(width: 8),
-              _quickDateChip('昨天', 1, spec),
+              _quickDateChip(context.tr('昨天'), 1, spec),
               const SizedBox(width: 8),
-              _quickDateChip('前天', 2, spec),
+              _quickDateChip(context.tr('前天'), 2, spec),
             ],
           ),
         ],
@@ -2261,7 +2269,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         ),
         actions: [
           IconButton(
-            tooltip: 'AI 训练舱',
+            tooltip: context.tr('AI 训练舱'),
             visualDensity: VisualDensity.compact,
             onPressed: () {
               Navigator.push(
@@ -2272,7 +2280,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             icon: const Icon(Icons.auto_awesome_rounded),
           ),
           IconButton(
-            tooltip: '视频合集',
+            tooltip: context.tr('视频合集'),
             visualDensity: VisualDensity.compact,
             onPressed: () {
               Navigator.push(
@@ -2285,7 +2293,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             icon: const Icon(Icons.tv_rounded),
           ),
           IconButton(
-            tooltip: '阅读器',
+            tooltip: context.tr('阅读器'),
             visualDensity: VisualDensity.compact,
             onPressed: () {
               Navigator.push(
@@ -2296,19 +2304,19 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             icon: const Icon(Icons.menu_book_rounded),
           ),
           IconButton(
-            tooltip: '训练历史',
+            tooltip: context.tr('训练历史'),
             visualDensity: VisualDensity.compact,
             onPressed: () => _showHistory(context),
             icon: const Icon(Icons.history_rounded),
           ),
           IconButton(
-            tooltip: '主题工坊',
+            tooltip: context.tr('主题工坊'),
             visualDensity: VisualDensity.compact,
             onPressed: () => _showThemeGallery(context),
             icon: const Icon(Icons.palette_outlined),
           ),
           IconButton(
-            tooltip: '设置',
+            tooltip: context.tr('设置'),
             visualDensity: VisualDensity.compact,
             onPressed: () {
               Navigator.push(
@@ -2339,9 +2347,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   children: [
                     Expanded(
                       child: StatTile(
-                        label: '累计训练',
+                        label: context.tr('累计训练'),
                         value: '${provider.totalSessions}',
-                        unit: '次',
+                        unit: context.tr('次'),
                         icon: Icons.fitness_center_rounded,
                         accent: spec.primary,
                       ),
@@ -2349,9 +2357,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     const SizedBox(width: 10),
                     Expanded(
                       child: StatTile(
-                        label: '本周训练',
+                        label: context.tr('本周训练'),
                         value: '$weekSessions',
-                        unit: '次',
+                        unit: context.tr('次'),
                         icon: Icons.local_fire_department_rounded,
                         accent: const Color(0xFFF97316),
                       ),
@@ -2359,7 +2367,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     const SizedBox(width: 10),
                     Expanded(
                       child: StatTile(
-                        label: '累计做功',
+                        label: context.tr('累计做功'),
                         value: formatCompact(provider.totalWork / 1000),
                         unit: 'kJ',
                         icon: Icons.bolt_rounded,
@@ -2375,7 +2383,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(
-                        '记录今天的铁',
+                        context.tr('记录今天的铁'),
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
@@ -2385,7 +2393,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       ),
                       const SizedBox(width: 8),
                       Pill(
-                        label: '${projects.length} 个动作',
+                        label: '${projects.length} ${context.tr('个动作')}',
                         icon: Icons.list_alt_rounded,
                       ),
                     ],
@@ -2401,7 +2409,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       child: OutlinedButton.icon(
                         onPressed: _addProject,
                         icon: const Icon(Icons.add_rounded),
-                        label: const Text('添加动作'),
+                        label: Text(context.tr('添加动作')),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
                           side: BorderSide(
@@ -2438,7 +2446,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               color: spec.onHero, size: 22),
                           const SizedBox(width: 9),
                           Text(
-                            '保存训练记录',
+                            context.tr('保存训练记录'),
                             style: TextStyle(
                               color: spec.onHero,
                               fontSize: 16,
@@ -2461,7 +2469,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '最近训练',
+                              context.tr('最近训练'),
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800,
@@ -2471,7 +2479,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              '快速回看最近的训练节奏',
+                              context.tr('快速回看最近的训练节奏'),
                               style: TextStyle(
                                 fontSize: 12,
                                 color: spec.textSecondary,
@@ -2483,7 +2491,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       ),
                       TextButton(
                         onPressed: () => _showHistory(context),
-                        child: const Text('全部记录'),
+                        child: Text(context.tr('全部记录')),
                       ),
                     ],
                   ),
@@ -2497,7 +2505,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                             color: spec.primary, size: 34),
                         const SizedBox(height: 10),
                         Text(
-                          '还没有训练记录',
+                          context.tr('还没有训练记录'),
                           style: TextStyle(
                             color: spec.textPrimary,
                             fontWeight: FontWeight.w800,
@@ -2505,7 +2513,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '填写上方的动作和重量，保存你的第一次铁镌。',
+                          context.tr('填写上方的动作和重量，保存你的第一次铁镌。'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: spec.textSecondary,
@@ -2865,14 +2873,14 @@ class _ProjectCardState extends State<_ProjectCard> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_camera_rounded),
-              title: const Text('拍照'),
-              subtitle: const Text('使用相机拍摄训练打卡照片'),
+              title: Text(context.tr('拍照')),
+              subtitle: Text(context.tr('使用相机拍摄训练打卡照片')),
               onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_rounded),
-              title: const Text('从相册选择'),
-              subtitle: const Text('导入已有的训练打卡照片'),
+              title: Text(context.tr('从相册选择')),
+              subtitle: Text(context.tr('导入已有的训练打卡照片')),
               onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
             ),
             const SizedBox(height: 8),
@@ -2906,31 +2914,35 @@ class _ProjectCardState extends State<_ProjectCard> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('识别到训练数据'),
+        title: Text(context.tr('识别到训练数据')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('照片中识别到以下信息，是否使用它们计算本次消耗？'),
+            Text(context.tr('照片中识别到以下信息，是否使用它们计算本次消耗？')),
             const SizedBox(height: 12),
-            if (duration > 0) Text('时长：${_formatMetric(duration)} 分钟'),
-            if (distance > 0) Text('距离：${_formatMetric(distance, 2)} km'),
-            if (speed > 0) Text('速度：${_formatMetric(speed)} km/h'),
+            if (duration > 0)
+              Text('${context.tr('时长')}：${_formatMetric(duration)} '
+                  '${context.tr('分钟')}'),
+            if (distance > 0)
+              Text('${context.tr('距离')}：${_formatMetric(distance, 2)} km'),
+            if (speed > 0)
+              Text('${context.tr('速度')}：${_formatMetric(speed)} km/h'),
             const SizedBox(height: 10),
-            const Text(
-              '照片无论是否使用这些数据，都会作为本次训练的打卡照片保存。',
-              style: TextStyle(fontSize: 12),
+            Text(
+              context.tr('照片无论是否使用这些数据，都会作为本次训练的打卡照片保存。'),
+              style: const TextStyle(fontSize: 12),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('不使用'),
+            child: Text(context.tr('不使用')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('使用这些数据'),
+            child: Text(context.tr('使用这些数据')),
           ),
         ],
       ),
@@ -3327,7 +3339,7 @@ class _ProjectCardState extends State<_ProjectCard> {
                     fontSize: 15,
                   ),
                   decoration: InputDecoration(
-                    hintText: '动作名称，例如：卧推',
+                    hintText: context.tr('动作名称，例如：卧推'),
                     hintStyle: TextStyle(
                       color: spec.textSecondary,
                       fontSize: 13,
@@ -3362,7 +3374,7 @@ class _ProjectCardState extends State<_ProjectCard> {
               ),
               IconButton(
                 onPressed: _pickExercise,
-                tooltip: '从动作库选择',
+                tooltip: context.tr('从动作库选择'),
                 icon: Icon(
                   Icons.menu_book_rounded,
                   color: spec.primary,
@@ -3373,7 +3385,7 @@ class _ProjectCardState extends State<_ProjectCard> {
                 const SizedBox(width: 2),
                 IconButton(
                   onPressed: widget.onRemove,
-                  tooltip: '删除这个动作',
+                  tooltip: context.tr('删除这个动作'),
                   icon: Icon(
                     Icons.close_rounded,
                     color: spec.textSecondary,
@@ -3403,7 +3415,7 @@ class _ProjectCardState extends State<_ProjectCard> {
                 TextButton.icon(
                   onPressed: _pickExercise,
                   icon: const Icon(Icons.search_rounded, size: 15),
-                  label: const Text('动作库'),
+                  label: Text(context.tr('动作库')),
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     minimumSize: const Size(0, 30),

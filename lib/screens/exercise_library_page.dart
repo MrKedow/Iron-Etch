@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../data/exercise_library.dart';
 import '../data/exercise_library_generated.dart';
+import '../l10n/app_localizations.dart';
 import '../data/exercise_illustrations.dart';
 import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
@@ -27,6 +28,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
   final TextEditingController _search = TextEditingController();
   ExerciseKind? _kind;
   String? _group;
+  String? _pattern;
   String _query = '';
 
   @override
@@ -46,11 +48,13 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
   }
 
   List<ExerciseDefinition> get _results {
-    return ExerciseLibrary.search(
+    final results = ExerciseLibrary.search(
       query: _query,
       kind: _kind,
       group: _group,
     );
+    if (_pattern == null) return results;
+    return results.where((item) => item.pattern == _pattern).toList();
   }
 
   List<String> get _groups {
@@ -69,6 +73,16 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
     setState(() {
       _kind = _kind == kind ? null : kind;
       if (_group != null && !_groups.contains(_group)) _group = null;
+    });
+  }
+
+  void _filterByPattern(String pattern) {
+    _search.clear();
+    setState(() {
+      _query = '';
+      _kind = null;
+      _group = null;
+      _pattern = pattern;
     });
   }
 
@@ -118,13 +132,30 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            exercise.name,
-                            style: TextStyle(
-                              color: spec.textPrimary,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  exercise.name,
+                                  style: TextStyle(
+                                    color: spec.textPrimary,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                              if (exercise.pattern.isNotEmpty) ...[
+                                const SizedBox(width: 8),
+                                _GlowTypeBadge(
+                                  label: exercise.pattern,
+                                  spec: spec,
+                                  onTap: () {
+                                    Navigator.pop(sheetContext);
+                                    _filterByPattern(exercise.pattern);
+                                  },
+                                ),
+                              ],
+                            ],
                           ),
                           const SizedBox(height: 4),
                           Wrap(
@@ -162,6 +193,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                   onTap: () => _openExerciseImage(sheetContext, exercise, spec),
                   child: Container(
                     height: 210,
+                    clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
@@ -176,38 +208,24 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                         color: spec.primary.withValues(alpha: .14),
                       ),
                     ),
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 34),
-                            child: _exerciseIllustration(exercise, spec),
-                          ),
-                        ),
-                        Positioned(
-                          left: 12,
-                          bottom: 10,
-                          child: Pill(
-                            label: exercise.pattern,
-                            icon: Icons.sync_alt_rounded,
-                          ),
-                        ),
-                      ],
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: _exerciseIllustration(exercise, spec),
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
                 _detailSection(
                   spec,
-                  '动作要领',
+                  context.tr('动作要领'),
                   exercise.cue,
                   Icons.lightbulb_outline_rounded,
                 ),
                 const SizedBox(height: 12),
                 _detailSection(
                   spec,
-                  '动作模式',
-                  '${exercise.pattern} · 难度 ${_difficultyLabel(exercise.difficulty)}',
+                  context.tr('动作模式'),
+                  '${exercise.pattern} · 难度 ${context.tr(_difficultyLabel(exercise.difficulty))}',
                   Icons.sync_alt_rounded,
                 ),
                 if (group != null) ...[
@@ -218,12 +236,19 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                   const SizedBox(height: 12),
                   _detailSection(
                     spec,
-                    '常见别名',
+                    context.tr('常见别名'),
                     exercise.aliases.join('、'),
                     Icons.tag_rounded,
                   ),
                 ],
                 const SizedBox(height: 18),
+                if (widget.selectMode)
+                  FilledButton.icon(
+                    onPressed: () => Navigator.pop(sheetContext, exercise),
+                    icon: const Icon(Icons.check_rounded),
+                    label: Text(context.tr('使用这个动作')),
+                  ),
+                if (widget.selectMode) const SizedBox(height: 18),
                 Text(
                   ExerciseLibrary.source,
                   style: TextStyle(
@@ -232,13 +257,6 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                     height: 1.5,
                   ),
                 ),
-                const SizedBox(height: 18),
-                if (widget.selectMode)
-                  FilledButton.icon(
-                    onPressed: () => Navigator.pop(sheetContext, exercise),
-                    icon: const Icon(Icons.check_rounded),
-                    label: const Text('使用这个动作'),
-                  ),
               ],
             ),
           ),
@@ -359,9 +377,9 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
 
     return Row(
       children: [
-        frame(0, '起始'),
+        frame(0, context.tr('起始')),
         const SizedBox(width: 10),
-        frame(1, '结束'),
+        frame(1, context.tr('结束')),
       ],
     );
   }
@@ -441,7 +459,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                   size: 18, color: spec.primary),
               const SizedBox(width: 8),
               Text(
-                '解剖肌群',
+                context.tr('解剖肌群'),
                 style: TextStyle(
                   color: spec.textPrimary,
                   fontSize: 13,
@@ -452,7 +470,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
           ),
           const SizedBox(height: 10),
           Text(
-            '主要发力',
+            context.tr('主要发力'),
             style: TextStyle(
               color: spec.textSecondary,
               fontSize: 10.5,
@@ -472,7 +490,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
           if (exercise.emphasis.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
-              '本动作侧重：${exercise.emphasis.join('、')}',
+              '${context.tr('本动作侧重')}：${exercise.emphasis.join('、')}',
               style: TextStyle(
                 color: spec.primary,
                 fontSize: 11.5,
@@ -483,7 +501,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
           ],
           const SizedBox(height: 8),
           Text(
-            '协同肌群',
+            context.tr('协同肌群'),
             style: TextStyle(
               color: spec.textSecondary,
               fontSize: 10.5,
@@ -524,13 +542,14 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
           SliverAppBar(
             pinned: true,
             backgroundColor: spec.background.withValues(alpha: .9),
-            title: Text(widget.selectMode ? '选择动作' : '动作库'),
+            title: Text(
+                widget.selectMode ? context.tr('选择动作') : context.tr('动作库')),
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: Center(
                   child: Pill(
-                    label: '${ExerciseLibrary.all.length} 个动作',
+                    label: '${ExerciseLibrary.all.length} ${context.tr('个动作')}',
                     icon: Icons.menu_book_rounded,
                   ),
                 ),
@@ -545,7 +564,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                   controller: _search,
                   style: TextStyle(color: spec.textPrimary, fontSize: 14),
                   decoration: InputDecoration(
-                    hintText: '搜索动作、肌群或器械',
+                    hintText: context.tr('搜索动作、肌群或器械'),
                     hintStyle: TextStyle(
                       color: spec.textSecondary,
                       fontSize: 13,
@@ -564,7 +583,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _kindChip(null, '全部', spec),
+                      _kindChip(null, context.tr('全部'), spec),
                       for (final kind in ExerciseKind.values) ...[
                         const SizedBox(width: 7),
                         _kindChip(kind, kind.label, spec),
@@ -572,12 +591,53 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                     ],
                   ),
                 ),
+                if (_pattern != null) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _pattern = null),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: spec.secondary.withValues(alpha: .16),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: spec.secondary.withValues(alpha: .4),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.filter_alt_off_rounded,
+                              size: 14,
+                              color: spec.secondary,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '${context.tr('类型')}： · ',
+                              style: TextStyle(
+                                color: spec.secondary,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      _groupChip(null, '全部部位', spec),
+                      _groupChip(null, context.tr('全部部位'), spec),
                       for (final group in groups) ...[
                         const SizedBox(width: 7),
                         _groupChip(group, group, spec),
@@ -589,7 +649,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                 Row(
                   children: [
                     Text(
-                      '${results.length} 个结果',
+                      '${results.length} ${context.tr('个结果')}',
                       style: TextStyle(
                         color: spec.textSecondary,
                         fontSize: 11.5,
@@ -598,7 +658,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                     ),
                     const Spacer(),
                     Text(
-                      '点击查看解剖与要领',
+                      context.tr('点击查看解剖与要领'),
                       style: TextStyle(
                         color: spec.textSecondary,
                         fontSize: 10.5,
@@ -615,7 +675,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
               hasScrollBody: false,
               child: Center(
                 child: Text(
-                  '没有找到匹配的动作',
+                  context.tr('没有找到匹配的动作'),
                   style: TextStyle(
                     color: spec.textSecondary,
                     fontSize: 13,
@@ -718,14 +778,12 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
           Container(
             width: 46,
             height: 46,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: spec.primary.withValues(alpha: .11),
               borderRadius: BorderRadius.circular(13),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(3),
-              child: _exerciseThumbnail(exercise, spec),
-            ),
+            child: _exerciseThumbnail(exercise, spec),
           ),
           const SizedBox(width: 11),
           Expanded(
@@ -752,7 +810,7 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${exercise.equipment} · ${exercise.pattern} · ${_difficultyLabel(exercise.difficulty)}'
+                  '${exercise.equipment} · ${exercise.pattern} · ${context.tr(_difficultyLabel(exercise.difficulty))}'
                   '${group == null ? '' : ' · ${group.primary.first}'}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -796,5 +854,94 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
     if (difficulty <= 1) return '入门';
     if (difficulty == 2) return '进阶';
     return '高阶';
+  }
+}
+
+class _GlowTypeBadge extends StatefulWidget {
+  final String label;
+  final AppThemeSpec spec;
+  final VoidCallback onTap;
+
+  const _GlowTypeBadge({
+    required this.label,
+    required this.spec,
+    required this.onTap,
+  });
+
+  @override
+  State<_GlowTypeBadge> createState() => _GlowTypeBadgeState();
+}
+
+class _GlowTypeBadgeState extends State<_GlowTypeBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = widget.spec;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final progress = _controller.value;
+        return GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  spec.primary.withValues(alpha: .16),
+                  spec.secondary.withValues(alpha: .12),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: spec.primary.withValues(alpha: .35),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: spec.primary.withValues(
+                    alpha: .1 + .08 * (1 - (progress - .5).abs() * 2),
+                  ),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: ShaderMask(
+              blendMode: BlendMode.srcIn,
+              shaderCallback: (bounds) => LinearGradient(
+                begin: Alignment(-1.6 + progress * 3.2, -.3),
+                end: Alignment(-.6 + progress * 3.2, .3),
+                colors: [
+                  spec.primary,
+                  Colors.white,
+                  spec.secondary,
+                  spec.primary,
+                ],
+                stops: const [0, .42, .58, 1],
+              ).createShader(bounds),
+              child: Text(
+                widget.label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
