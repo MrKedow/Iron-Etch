@@ -1438,9 +1438,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         if (mounted) _showToast(trGlobal('导出失败'), isError: true);
         return;
       }
-      await Share.shareXFiles(
-        [XFile(filePath)],
-        text: trGlobal('铁镌训练数据'),
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(filePath)],
+          text: trGlobal('铁镌训练数据'),
+        ),
       );
     } catch (e) {
       if (mounted) {

@@ -297,8 +297,8 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
         type: FileType.custom,
         allowedExtensions: const ['epub'],
       );
-      if (result == null || result.files.isEmpty) return;
-      final path = result.files.single.path;
+      if (result.isEmpty) return;
+      final path = result.single.path;
       if (path == null || path.isEmpty) {
         _showMessage('无法读取所选文件，请换一个 EPUB 试试。');
         return;

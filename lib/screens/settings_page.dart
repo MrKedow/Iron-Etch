@@ -496,8 +496,9 @@ class _SettingsPageState extends State<SettingsPage>
       type: FileType.custom,
       allowedExtensions: const ['ttf', 'otf', 'ttc'],
     );
-    final sourcePath = picked?.files.single.path;
-    if (sourcePath == null) return;
+    if (picked.isEmpty) return;
+    final sourcePath = picked.single.path;
+    if (sourcePath == null || sourcePath.isEmpty) return;
     try {
       final dir = await getApplicationSupportDirectory();
       final extension = sourcePath.split('.').last.toLowerCase();
@@ -830,7 +831,12 @@ class _SettingsPageState extends State<SettingsPage>
         _showSnack(trGlobal('导出失败，请稍后重试'));
         return;
       }
-      await Share.shareXFiles([XFile(path)], text: trGlobal('铁镌训练数据'));
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(path)],
+          text: trGlobal('铁镌训练数据'),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         _showSnack(trGlobalArgs('导出失败：{e}', {'e': '$e'}));
