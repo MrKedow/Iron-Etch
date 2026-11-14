@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.mrkedow.ironetch"
-    compileSdk = 36
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
