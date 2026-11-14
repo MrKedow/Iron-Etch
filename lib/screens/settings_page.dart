@@ -899,15 +899,14 @@ class _SettingsPageState extends State<SettingsPage>
       builder: (dialogContext) => AlertDialog(
         title: Row(
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                gradient: spec.heroGradient,
-                borderRadius: BorderRadius.circular(10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset(
+                'assets/icon/app_icon.png',
+                width: 34,
+                height: 34,
+                fit: BoxFit.cover,
               ),
-              child: Icon(Icons.fitness_center_rounded,
-                  size: 18, color: spec.onHero),
             ),
             const SizedBox(width: 10),
             Text(context.tr('关于铁镌')),

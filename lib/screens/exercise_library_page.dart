@@ -1,4 +1,5 @@
 import '../l10n/localized_material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../data/exercise_library.dart';
@@ -313,6 +314,27 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
       exercise.imageSlug ??
       exerciseImageSlugs[exercise.name];
 
+  static final Map<String, Future<bool>> _frameIdentityCache = {};
+
+  Future<bool> _framesIdentical(String slug) {
+    return _frameIdentityCache.putIfAbsent(slug, () async {
+      try {
+        final start = await rootBundle.load('assets/exercises/${slug}_0.jpg');
+        final end = await rootBundle.load('assets/exercises/${slug}_1.jpg');
+        if (start.lengthInBytes != end.lengthInBytes) return false;
+        final a =
+            start.buffer.asUint8List(start.offsetInBytes, start.lengthInBytes);
+        final b = end.buffer.asUint8List(end.offsetInBytes, end.lengthInBytes);
+        for (var i = 0; i < a.length; i++) {
+          if (a[i] != b[i]) return false;
+        }
+        return true;
+      } catch (_) {
+        return false;
+      }
+    });
+  }
+
   Widget _exerciseThumbnail(ExerciseDefinition exercise, AppThemeSpec spec) {
     final slug = _imageSlug(exercise);
     if (slug == null) {
@@ -374,12 +396,22 @@ class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
       );
     }
 
-    return Row(
-      children: [
-        frame(0, context.tr('起始')),
-        const SizedBox(width: 10),
-        frame(1, context.tr('结束')),
-      ],
+    return FutureBuilder<bool>(
+      future: _framesIdentical(slug),
+      builder: (context, snapshot) {
+        final identical = snapshot.connectionState != ConnectionState.done ||
+            snapshot.data == true;
+        if (identical) {
+          return Row(children: [frame(0, context.tr('动作示意'))]);
+        }
+        return Row(
+          children: [
+            frame(0, context.tr('起始')),
+            const SizedBox(width: 10),
+            frame(1, context.tr('结束')),
+          ],
+        );
+      },
     );
   }
 
