@@ -302,8 +302,12 @@ const Map<String, Map<String, String>> _translations = {
     '删除字体': 'Delete font',
     '字体下载失败，请检查网络': 'Font download failed. Check your network.',
     '已删除字体：{name}': 'Font deleted: {name}',
-    '内置字体来源（SIL Open Font License 1.1，经 jsDelivr 按需下载）':
-        'Built-in font source (SIL Open Font License 1.1, downloaded on demand via jsDelivr)',
+    '点击可修正': 'Tap to adjust',
+    '修正估算消耗': 'Adjust estimated burn',
+    '输入本次消耗': 'Enter calories for this workout',
+    '恢复自动估算': 'Reset to automatic',
+    '内置字体来源（SIL Open Font License 1.1，经 jsDelivr / GitHub 多源按需下载）':
+        'Built-in font source (SIL Open Font License 1.1, downloaded on demand via jsDelivr / GitHub mirrors)',
     '头像设置失败：{e}': 'Failed to set avatar: {e}',
     '：': ': ',
     '下载失败': 'Download failed',
@@ -672,8 +676,12 @@ const Map<String, Map<String, String>> _translations = {
     '删除字体': 'フォントを削除',
     '字体下载失败，请检查网络': 'フォントのダウンロードに失敗しました。ネットワークを確認してください。',
     '已删除字体：{name}': 'フォントを削除しました：{name}',
-    '内置字体来源（SIL Open Font License 1.1，经 jsDelivr 按需下载）':
-        '内蔵フォントの提供元（SIL Open Font License 1.1、jsDelivr 経由で必要時にダウンロード）',
+    '点击可修正': 'タップして修正',
+    '修正估算消耗': '推定消費を修正',
+    '输入本次消耗': '今回の消費カロリーを入力',
+    '恢复自动估算': '自動推定に戻す',
+    '内置字体来源（SIL Open Font License 1.1，经 jsDelivr / GitHub 多源按需下载）':
+        '内蔵フォントの提供元（SIL Open Font License 1.1、jsDelivr / GitHub ミラー経由で必要時にダウンロード）',
     '头像设置失败：{e}': 'アイコンの設定に失敗しました：{e}',
     '：': '：',
     '下载失败': 'ダウンロードに失敗',
@@ -1024,8 +1032,12 @@ const Map<String, Map<String, String>> _translations = {
     '删除字体': '글꼴 삭제',
     '字体下载失败，请检查网络': '글꼴 다운로드에 실패했습니다. 네트워크를 확인하세요.',
     '已删除字体：{name}': '글꼴을 삭제했습니다: {name}',
-    '内置字体来源（SIL Open Font License 1.1，经 jsDelivr 按需下载）':
-        '내장 글꼴 출처(SIL Open Font License 1.1, jsDelivr를 통해 필요 시 다운로드)',
+    '点击可修正': '탭하여 수정',
+    '修正估算消耗': '예상 소모 수정',
+    '输入本次消耗': '이번 소모 칼로리 입력',
+    '恢复自动估算': '자동 추정으로 복원',
+    '内置字体来源（SIL Open Font License 1.1，经 jsDelivr / GitHub 多源按需下载）':
+        '내장 글꼴 출처(SIL Open Font License 1.1, jsDelivr / GitHub 미러를 통해 필요 시 다운로드)',
     '头像设置失败：{e}': '프로필 사진 설정 실패: {e}',
     '：': ': ',
     '下载失败': '다운로드 실패',
@@ -1376,8 +1388,12 @@ const Map<String, Map<String, String>> _translations = {
     '删除字体': 'Удалить шрифт',
     '字体下载失败，请检查网络': 'Не удалось загрузить шрифт. Проверьте сеть.',
     '已删除字体：{name}': 'Шрифт удален: {name}',
-    '内置字体来源（SIL Open Font License 1.1，经 jsDelivr 按需下载）':
-        'Источник встроенных шрифтов (SIL Open Font License 1.1, загрузка по запросу через jsDelivr)',
+    '点击可修正': 'Нажмите, чтобы изменить',
+    '修正估算消耗': 'Изменить оценку расхода',
+    '输入本次消耗': 'Введите расход за тренировку',
+    '恢复自动估算': 'Вернуть автооценку',
+    '内置字体来源（SIL Open Font License 1.1，经 jsDelivr / GitHub 多源按需下载）':
+        'Источник встроенных шрифтов (SIL Open Font License 1.1, загрузка по запросу через jsDelivr / зеркала GitHub)',
     '头像设置失败：{e}': 'Не удалось установить аватар: {e}',
     '：': ': ',
     '下载失败': 'Ошибка загрузки',

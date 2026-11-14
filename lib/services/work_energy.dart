@@ -223,38 +223,44 @@ class IronProfile {
     return math.max(0, met) * 3.5 * weight / 200 * minutes;
   }
 
-  /// 统一的有氧消耗估算：时长优先，缺失时用距离/速度补算；
-  /// 速度存在时用 ACSM 公式校正 MET，让速度真正参与消耗计算。
+  /// 统一的有氧消耗估算（ACSM 代谢方程）。
+  ///
+  /// 唯一输入是用户填写的时长、距离、速度，以及铁卡中的体重：
+  /// - 时长、距离、速度三者互相补全（距离 ÷ 时长可推算速度）；
+  /// - 得到速度后按 ACSM 走路/跑步方程换算摄氧量，再乘体重换算热量；
+  /// - 没有距离/速度时仅按时长与固定强度估算，不再受动作名称或 MET 影响。
+  ///
+  /// 参考 American College of Sports Medicine《Guidelines for Exercise
+  /// Testing and Prescription》：
+  /// 走路 VO2 = 0.1 · v + 3.5；跑步 VO2 = 0.2 · v + 3.5（v 为 m/min，
+  /// 坡度按 0 计），1 L O2 约等于 5 kcal。
   double estimateCardioCaloriesFromMetrics({
-    required String name,
     required String category,
-    required double met,
     required double minutes,
     required double distanceKm,
     required double speedKmH,
   }) {
-    final effectiveMinutes = minutes > 0
-        ? minutes
-        : (distanceKm > 0 && speedKmH > 0 ? distanceKm / speedKmH * 60 : 0.0);
+    var effectiveMinutes = minutes;
+    var effectiveSpeed = speedKmH;
+
+    if (effectiveMinutes <= 0 && distanceKm > 0 && speedKmH > 0) {
+      effectiveMinutes = distanceKm / speedKmH * 60;
+    }
+    if (effectiveSpeed <= 0 && distanceKm > 0 && effectiveMinutes > 0) {
+      effectiveSpeed = distanceKm / (effectiveMinutes / 60);
+    }
     if (effectiveMinutes <= 0) return 0;
 
-    var intensity = met > 0 ? met : (category == '柔韧' ? 2.5 : 6.5);
-    if (speedKmH > 0) {
-      final metersPerMinute = speedKmH * 1000 / 60;
-      final speedMet = (0.2 * metersPerMinute + 3.5) / 3.5;
-      final lower = name.toLowerCase();
-      final isRunWalk = name.contains('跑') ||
-          name.contains('走') ||
-          name.contains('步行') ||
-          lower.contains('run') ||
-          lower.contains('walk');
-      final speedWeighted =
-          isRunWalk ? speedMet : intensity * .25 + speedMet * .75;
-      if (speedWeighted > intensity) intensity = speedWeighted;
+    if (effectiveSpeed > 0) {
+      final metersPerMinute = effectiveSpeed * 1000 / 60;
+      final vo2 = effectiveSpeed < 8
+          ? 0.1 * metersPerMinute + 3.5
+          : 0.2 * metersPerMinute + 3.5;
+      final kcalPerMinute = vo2 * bodyWeightKg / 1000 * 5.0;
+      return math.max(0, kcalPerMinute * effectiveMinutes);
     }
-    return estimateCardioCalories(
-      met: intensity.clamp(1.0, 23.0).toDouble(),
-      minutes: effectiveMinutes,
-    );
+
+    final met = category == '柔韧' ? 2.5 : 6.0;
+    return estimateCardioCalories(met: met, minutes: effectiveMinutes);
   }
 }

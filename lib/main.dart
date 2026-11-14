@@ -125,6 +125,7 @@ class WorkoutProject {
   double distanceKm;
   double speedKmH;
   double met;
+  double? caloriesOverride;
 
   WorkoutProject({
     required this.name,
@@ -139,6 +140,7 @@ class WorkoutProject {
     this.distanceKm = 0,
     this.speedKmH = 0,
     this.met = 0,
+    this.caloriesOverride,
   });
 
   factory WorkoutProject.empty() {
@@ -178,6 +180,7 @@ class WorkoutProject {
       distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0,
       speedKmH: (json['speedKmH'] as num?)?.toDouble() ?? 0,
       met: (json['met'] as num?)?.toDouble() ?? definition?.met ?? 0,
+      caloriesOverride: (json['caloriesOverride'] as num?)?.toDouble(),
     );
   }
 
@@ -195,6 +198,7 @@ class WorkoutProject {
       distanceKm: distanceKm,
       speedKmH: speedKmH,
       met: met,
+      caloriesOverride: caloriesOverride,
     );
   }
 
@@ -212,6 +216,7 @@ class WorkoutProject {
       'distanceKm': distanceKm,
       'speedKmH': speedKmH,
       'met': met,
+      'caloriesOverride': caloriesOverride,
     };
   }
 
@@ -240,15 +245,16 @@ class WorkoutProject {
 
   double estimatedCalories({double bodyWeight = 70}) {
     final profile = IronProfile.instance;
+    final cardioLike = isCardio || category == '柔韧' || category == '功能';
+    if (cardioLike && caloriesOverride != null && caloriesOverride! >= 0) {
+      return caloriesOverride!;
+    }
     final cardioMinutes = durationMinutes > 0
         ? durationMinutes
         : (distanceKm > 0 && speedKmH > 0 ? distanceKm / speedKmH * 60 : 0);
-    if ((isCardio || category == '柔韧' || category == '功能') &&
-        cardioMinutes > 0) {
+    if (cardioLike && cardioMinutes > 0) {
       return profile.estimateCardioCaloriesFromMetrics(
-        name: name,
         category: category,
-        met: met,
         minutes: durationMinutes,
         distanceKm: distanceKm,
         speedKmH: speedKmH,
@@ -309,6 +315,7 @@ class WorkoutProject {
         distanceKm.toStringAsFixed(3),
         speedKmH.toStringAsFixed(2),
         met.toStringAsFixed(2),
+        caloriesOverride?.toStringAsFixed(2) ?? '',
       ].join('|');
 }
 
@@ -1200,38 +1207,43 @@ class FitnessApp extends StatelessWidget {
   const FitnessApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return Consumer2<ThemeProvider, SettingsProvider>(
-      builder: (context, themeProvider, settings, child) {
-        AppLocalizations.currentLanguageCode = settings.appLanguageCode;
-        return MaterialApp(
-          onGenerateTitle: (context) => context.tr('铁镌'),
-          debugShowCheckedModeBanner: false,
-          theme: AppFonts.apply(
-            themeProvider.currentTheme,
-            fontId: settings.appFontId,
-            customFamily: settings.customFontFamily,
-          ),
-          themeAnimationDuration: const Duration(milliseconds: 650),
-          themeAnimationCurve: Curves.easeOutCubic,
-          locale: settings.appLocale,
-          supportedLocales: AppLocalizations.supportedLocales,
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          builder: (context, child) => AppBackdrop(
-            child: GlobalTapFeedback(
-              child: Stack(
-                children: [
-                  if (child != null) Positioned.fill(child: child),
-                  const BookDownloadToastHost(),
-                ],
+    return ListenableBuilder(
+      listenable: AppFonts.notifier,
+      builder: (context, _) {
+        return Consumer2<ThemeProvider, SettingsProvider>(
+          builder: (context, themeProvider, settings, child) {
+            AppLocalizations.currentLanguageCode = settings.appLanguageCode;
+            return MaterialApp(
+              onGenerateTitle: (context) => context.tr('铁镌'),
+              debugShowCheckedModeBanner: false,
+              theme: AppFonts.apply(
+                themeProvider.currentTheme,
+                fontId: settings.appFontId,
+                customFamily: settings.customFontFamily,
               ),
-            ),
-          ),
-          home: const SplashScreen(),
+              themeAnimationDuration: const Duration(milliseconds: 650),
+              themeAnimationCurve: Curves.easeOutCubic,
+              locale: settings.appLocale,
+              supportedLocales: AppLocalizations.supportedLocales,
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              builder: (context, child) => AppBackdrop(
+                child: GlobalTapFeedback(
+                  child: Stack(
+                    children: [
+                      if (child != null) Positioned.fill(child: child),
+                      const BookDownloadToastHost(),
+                    ],
+                  ),
+                ),
+              ),
+              home: const SplashScreen(),
+            );
+          },
         );
       },
     );
@@ -1260,6 +1272,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   final List<TextEditingController> durationControllers = [];
   final List<TextEditingController> distanceControllers = [];
   final List<TextEditingController> speedControllers = [];
+  final List<TextEditingController> calorieOverrideControllers = [];
   final List<ValueNotifier<String>> partNotifiers = [];
   final List<ValueNotifier<String?>> photoNotifiers = [];
 
@@ -1352,6 +1365,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           distanceKm: double.tryParse(distanceControllers[i].text.trim()) ?? 0,
           speedKmH: double.tryParse(speedControllers[i].text.trim()) ?? 0,
           met: definition?.met ?? 0,
+          caloriesOverride:
+              double.tryParse(calorieOverrideControllers[i].text.trim()),
         ));
       }
     }
@@ -1968,6 +1983,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       durationController: durationControllers[index],
       distanceController: distanceControllers[index],
       speedController: speedControllers[index],
+      calorieOverrideController: calorieOverrideControllers[index],
       photoNotifier: photoNotifiers[index],
       canRemove: projects.length > 1,
       onRemove: () => _removeProjectAt(index),
@@ -1986,6 +2002,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       durationControllers.add(TextEditingController());
       distanceControllers.add(TextEditingController());
       speedControllers.add(TextEditingController());
+      calorieOverrideControllers.add(TextEditingController());
       partNotifiers.add(ValueNotifier<String>('胸'));
       photoNotifiers.add(ValueNotifier<String?>(null));
     });
@@ -2004,6 +2021,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       durationControllers.removeAt(index).dispose();
       distanceControllers.removeAt(index).dispose();
       speedControllers.removeAt(index).dispose();
+      calorieOverrideControllers.removeAt(index).dispose();
       partNotifiers.removeAt(index).dispose();
       photoNotifiers.removeAt(index).dispose();
     });
@@ -2035,6 +2053,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       ));
       speedControllers.add(TextEditingController(
         text: project.speedKmH == 0 ? '' : project.speedKmH.toString(),
+      ));
+      calorieOverrideControllers.add(TextEditingController(
+        text: project.caloriesOverride == null
+            ? ''
+            : project.caloriesOverride!.toString(),
       ));
       partNotifiers.add(ValueNotifier<String>(project.part));
       photoNotifiers.add(ValueNotifier<String?>(null));
@@ -2069,6 +2092,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     for (final c in speedControllers) {
       c.dispose();
     }
+    for (final c in calorieOverrideControllers) {
+      c.dispose();
+    }
     for (final n in partNotifiers) {
       n.dispose();
     }
@@ -2084,6 +2110,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     durationControllers.clear();
     distanceControllers.clear();
     speedControllers.clear();
+    calorieOverrideControllers.clear();
     partNotifiers.clear();
     photoNotifiers.clear();
   }
@@ -2754,6 +2781,7 @@ class _ProjectCard extends StatefulWidget {
   final TextEditingController durationController;
   final TextEditingController distanceController;
   final TextEditingController speedController;
+  final TextEditingController calorieOverrideController;
   final ValueNotifier<String?> photoNotifier;
   final bool canRemove;
   final VoidCallback onRemove;
@@ -2771,6 +2799,7 @@ class _ProjectCard extends StatefulWidget {
     required this.durationController,
     required this.distanceController,
     required this.speedController,
+    required this.calorieOverrideController,
     required this.photoNotifier,
     required this.canRemove,
     required this.onRemove,
@@ -2811,6 +2840,8 @@ class _ProjectCardState extends State<_ProjectCard> {
     widget.durationController.addListener(_refresh);
     widget.distanceController.addListener(_refresh);
     widget.speedController.addListener(_refresh);
+    widget.calorieOverrideController.addListener(_refresh);
+    _loadCalorieHintVisibility();
   }
 
   void _onPartChanged() {
@@ -2844,7 +2875,24 @@ class _ProjectCardState extends State<_ProjectCard> {
     widget.durationController.removeListener(_refresh);
     widget.distanceController.removeListener(_refresh);
     widget.speedController.removeListener(_refresh);
+    widget.calorieOverrideController.removeListener(_refresh);
     super.dispose();
+  }
+
+  bool _showCalorieHint = true;
+
+  Future<void> _loadCalorieHintVisibility() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hidden = prefs.getBool('hide_calorie_edit_hint') ?? false;
+    if (!mounted) return;
+    setState(() => _showCalorieHint = !hidden);
+  }
+
+  Future<void> _dismissCalorieHint() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hide_calorie_edit_hint', true);
+    if (!mounted) return;
+    setState(() => _showCalorieHint = false);
   }
 
   String get _category =>
@@ -2872,6 +2920,53 @@ class _ProjectCardState extends State<_ProjectCard> {
       sets: sets,
       reps: reps,
     );
+  }
+
+  Future<void> _editCalories(double current) async {
+    final controller = TextEditingController(
+      text: widget.calorieOverrideController.text.isNotEmpty
+          ? widget.calorieOverrideController.text
+          : (current > 0 ? current.toStringAsFixed(0) : ''),
+    );
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.tr('修正估算消耗')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            suffixText: 'kcal',
+            hintText: context.tr('输入本次消耗'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, 'auto'),
+            child: Text(context.tr('恢复自动估算')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(context.tr('取消')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: Text(context.tr('确定')),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (result == 'auto') {
+      widget.calorieOverrideController.clear();
+    } else if (result != null) {
+      final value = double.tryParse(result.trim());
+      if (value != null && value >= 0) {
+        widget.calorieOverrideController.text = value.toString();
+      }
+    }
+    setState(() {});
   }
 
   bool _scanningDashboard = false;
@@ -3328,15 +3423,15 @@ class _ProjectCardState extends State<_ProjectCard> {
     final duration = double.tryParse(widget.durationController.text) ?? 0;
     final distance = double.tryParse(widget.distanceController.text) ?? 0;
     final speed = double.tryParse(widget.speedController.text) ?? 0;
-    final met = _definition?.met ?? 0;
-    final kcal = IronProfile.instance.estimateCardioCaloriesFromMetrics(
-      name: widget.nameController.text.trim(),
+    final manualKcal =
+        double.tryParse(widget.calorieOverrideController.text.trim());
+    final computedKcal = IronProfile.instance.estimateCardioCaloriesFromMetrics(
       category: _category,
-      met: met,
       minutes: duration,
       distanceKm: distance,
       speedKmH: speed,
     );
+    final kcal = manualKcal ?? computedKcal;
     return GlassPanel(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
@@ -3584,44 +3679,77 @@ class _ProjectCardState extends State<_ProjectCard> {
             ],
           ),
           const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            decoration: BoxDecoration(
-              color: spec.primary.withValues(alpha: .07),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  _isTimeBased
-                      ? Icons.local_fire_department_rounded
-                      : Icons.bolt_rounded,
-                  size: 16,
-                  color: spec.primary,
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  _isTimeBased ? '估算消耗' : '预计做功',
-                  style: TextStyle(
-                    color: spec.textSecondary,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  _isTimeBased
-                      ? '${kcal.toStringAsFixed(0)} kcal'
-                      : '${formatCompact(work)} J',
-                  style: TextStyle(
+          GestureDetector(
+            onTap: _isTimeBased ? () => _editCalories(kcal) : null,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: spec.primary.withValues(alpha: .07),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _isTimeBased
+                        ? Icons.local_fire_department_rounded
+                        : Icons.bolt_rounded,
+                    size: 16,
                     color: spec.primary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 5),
+                  Text(
+                    _isTimeBased ? '估算消耗' : '预计做功',
+                    style: TextStyle(
+                      color: spec.textSecondary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    _isTimeBased
+                        ? '${kcal.toStringAsFixed(0)} kcal'
+                        : '${formatCompact(work)} J',
+                    style: TextStyle(
+                      color: spec.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+          if (_isTimeBased && _showCalorieHint)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, right: 2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    context.tr('点击可修正'),
+                    style: TextStyle(
+                      color: spec.textSecondary.withValues(alpha: .65),
+                      fontSize: 10,
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  GestureDetector(
+                    onTap: _dismissCalorieHint,
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 12,
+                        color: spec.textSecondary.withValues(alpha: .55),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

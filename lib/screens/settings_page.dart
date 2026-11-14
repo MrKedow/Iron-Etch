@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -297,12 +298,10 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Future<void> _pickFont(SettingsProvider settings) async {
-    final downloaded = <String, bool>{};
     for (final option in appFontOptions.where((item) => item.isDownloadable)) {
-      downloaded[option.id] = await AppFonts.isDownloaded(option);
+      await AppFonts.isDownloaded(option);
     }
     if (!mounted) return;
-    String? busyId;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -310,50 +309,39 @@ class _SettingsPageState extends State<SettingsPage>
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         final spec = sheetContext.watch<ThemeProvider>().currentSpec;
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
+        return AnimatedBuilder(
+          animation: AppFonts.notifier,
+          builder: (context, _) {
             Future<void> select(AppFontOption option) async {
-              if (busyId != null) return;
               if (option.isCustom) {
                 Navigator.pop(sheetContext);
                 await _importFont(settings);
                 return;
               }
-              if (option.isDownloadable) {
-                setSheetState(() => busyId = option.id);
-                final family = await AppFonts.downloadAndLoad(option);
-                if (!sheetContext.mounted) return;
-                setSheetState(() {
-                  busyId = null;
-                  downloaded[option.id] = family != null;
-                });
-                if (family == null) {
-                  if (mounted) {
-                    _showSnack(context.tr('字体下载失败，请检查网络'));
-                  }
-                  return;
-                }
+              if (option.isSystem) {
+                await settings.setAppFont('system');
+                if (sheetContext.mounted) Navigator.pop(sheetContext);
+                return;
               }
+              final already = AppFonts.isKnownDownloaded(option.id) ||
+                  AppFonts.isLoaded(option.id);
               await settings.setAppFont(option.id);
+              if (!already) {
+                unawaited(AppFonts.downloadAndLoad(option));
+                return;
+              }
               if (sheetContext.mounted) Navigator.pop(sheetContext);
             }
 
             Future<void> remove(AppFontOption option) async {
-              if (busyId != null) return;
-              setSheetState(() => busyId = option.id);
               await AppFonts.delete(option);
               if (settings.appFontId == option.id) {
                 await settings.setAppFont('system');
               }
-              if (!sheetContext.mounted) return;
-              setSheetState(() {
-                busyId = null;
-                downloaded[option.id] = false;
-              });
               if (mounted) {
                 _showSnack(
-                  context.trArgs('已删除字体：{name}', {
-                    'name': context.tr(option.label),
+                  this.context.trArgs('已删除字体：{name}', {
+                    'name': this.context.tr(option.label),
                   }),
                 );
               }
@@ -417,19 +405,28 @@ class _SettingsPageState extends State<SettingsPage>
                         itemBuilder: (context, index) {
                           final option = appFontOptions[index];
                           final isCurrent = settings.appFontId == option.id;
-                          final isBusy = busyId == option.id;
-                          final isDownloaded = downloaded[option.id] ?? false;
+                          final status = AppFonts.statusFor(option.id);
+                          final isBusy = status.downloading;
+                          final failed = status.error != null && !isBusy;
+                          final isDownloaded =
+                              AppFonts.isKnownDownloaded(option.id) ||
+                                  AppFonts.isLoaded(option.id);
+                          final percent = status.progress > 0
+                              ? ' ${(status.progress * 100).toStringAsFixed(0)}%'
+                              : '';
                           final subtitle = option.isSystem
                               ? context.tr('跟随系统字体')
                               : option.isCustom
                                   ? context.tr('从本地导入字体文件')
                                   : isBusy
-                                      ? context.tr('正在下载字体…')
-                                      : isCurrent
-                                          ? context.tr('使用中')
-                                          : isDownloaded
-                                              ? context.tr('已下载')
-                                              : context.tr('未下载 · 点击下载并启用');
+                                      ? '${context.tr('正在下载字体…')}$percent'
+                                      : failed
+                                          ? context.tr('字体下载失败，请检查网络')
+                                          : isCurrent
+                                              ? context.tr('使用中')
+                                              : isDownloaded
+                                                  ? context.tr('已下载')
+                                                  : context.tr('未下载 · 点击下载并启用');
                           return ListTile(
                             contentPadding:
                                 const EdgeInsets.symmetric(horizontal: 10),
@@ -1029,7 +1026,7 @@ class _SettingsPageState extends State<SettingsPage>
             _ackItem(
               spec,
               'Google Fonts',
-              '内置字体来源（SIL Open Font License 1.1，经 jsDelivr 按需下载）',
+              '内置字体来源（SIL Open Font License 1.1，经 jsDelivr / GitHub 多源按需下载）',
               'https://github.com/google/fonts',
             ),
           ],

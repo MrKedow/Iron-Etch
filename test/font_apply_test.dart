@@ -34,13 +34,13 @@ void main() {
     expect(appFontById(null).isSystem, isTrue);
   });
 
-  test('only bundled options expose a download url', () {
+  test('only bundled options expose a download path', () {
     for (final option in appFontOptions) {
       if (option.isSystem || option.isCustom) {
-        expect(option.url, isNull);
+        expect(option.repoPath, isNull);
       } else {
-        expect(option.url, isNotNull);
-        expect(option.url, startsWith('https://'));
+        expect(option.repoPath, isNotNull);
+        expect(option.repoPath, isNotEmpty);
       }
     }
   });

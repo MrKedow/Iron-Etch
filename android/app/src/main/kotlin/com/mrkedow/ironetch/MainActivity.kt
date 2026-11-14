@@ -137,12 +137,15 @@ class MainActivity : FlutterActivity() {
                     "enqueueDownload" -> {
                         val url = call.argument<String>("url")
                         val fileName = call.argument<String>("fileName") ?: "download.bin"
+                        val title = call.argument<String>("title") ?: "下载内置书"
+                        val description =
+                            call.argument<String>("description") ?: "正在下载《北科·健身全书》，可切到后台继续"
                         if (url == null) {
                             result.error("bad_args", "url is required", null)
                             return@setMethodCallHandler
                         }
                         try {
-                            result.success(enqueueDownload(url, fileName))
+                            result.success(enqueueDownload(url, fileName, title, description))
                         } catch (error: Exception) {
                             result.error("download_failed", error.message, null)
                         }
@@ -238,12 +241,17 @@ class MainActivity : FlutterActivity() {
         return File(dir, fileName)
     }
 
-    private fun enqueueDownload(url: String, fileName: String): Map<String, Any> {
+    private fun enqueueDownload(
+        url: String,
+        fileName: String,
+        title: String,
+        description: String,
+    ): Map<String, Any> {
         val target = externalDownloadFile(fileName)
         if (target.exists()) target.delete()
         val request = DownloadManager.Request(Uri.parse(url))
-            .setTitle("下载内置书")
-            .setDescription("正在下载《北科·健身全书》，可切到后台继续")
+            .setTitle(title)
+            .setDescription(description)
             .setNotificationVisibility(
                 DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED,
             )
@@ -254,7 +262,8 @@ class MainActivity : FlutterActivity() {
             )
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(true)
-        val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val manager = getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
+            ?: return emptyMap()
         val id = manager.enqueue(request)
         return mapOf("id" to id, "path" to target.absolutePath)
     }
