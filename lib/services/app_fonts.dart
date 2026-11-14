@@ -334,8 +334,7 @@ class AppFonts {
       final family =
           'AppFont_${option.id}_${DateTime.now().microsecondsSinceEpoch}';
       final loader = FontLoader(family)
-        ..addFont(
-            Future.value(ByteData.sublistView(Uint8List.fromList(bytes))));
+        ..addFont(Future.value(ByteData.sublistView(bytes)));
       await loader.load();
       _loadedFamilies[option.id] = family;
       _knownDownloaded.add(option.id);
@@ -646,9 +645,7 @@ class AppFonts {
     try {
       final bytes = await file.readAsBytes();
       final loader = FontLoader(family)
-        ..addFont(
-          Future.value(ByteData.sublistView(Uint8List.fromList(bytes))),
-        );
+        ..addFont(Future.value(ByteData.sublistView(bytes)));
       await loader.load();
       _loadedCustomFamilies.add(family);
       return family;

@@ -126,6 +126,7 @@ class WorkoutProject {
   double speedKmH;
   double met;
   double? caloriesOverride;
+  double? workOverride;
 
   WorkoutProject({
     required this.name,
@@ -141,6 +142,7 @@ class WorkoutProject {
     this.speedKmH = 0,
     this.met = 0,
     this.caloriesOverride,
+    this.workOverride,
   });
 
   factory WorkoutProject.empty() {
@@ -181,6 +183,7 @@ class WorkoutProject {
       speedKmH: (json['speedKmH'] as num?)?.toDouble() ?? 0,
       met: (json['met'] as num?)?.toDouble() ?? definition?.met ?? 0,
       caloriesOverride: (json['caloriesOverride'] as num?)?.toDouble(),
+      workOverride: (json['workOverride'] as num?)?.toDouble(),
     );
   }
 
@@ -199,6 +202,7 @@ class WorkoutProject {
       speedKmH: speedKmH,
       met: met,
       caloriesOverride: caloriesOverride,
+      workOverride: workOverride,
     );
   }
 
@@ -217,6 +221,7 @@ class WorkoutProject {
       'speedKmH': speedKmH,
       'met': met,
       'caloriesOverride': caloriesOverride,
+      'workOverride': workOverride,
     };
   }
 
@@ -234,6 +239,9 @@ class WorkoutProject {
     }
     if (category == '柔韧') {
       return 0;
+    }
+    if (workOverride != null && workOverride! >= 0) {
+      return workOverride!;
     }
     return IronProfile.instance.estimateMechanicalWork(
       part: part,
@@ -316,6 +324,7 @@ class WorkoutProject {
         speedKmH.toStringAsFixed(2),
         met.toStringAsFixed(2),
         caloriesOverride?.toStringAsFixed(2) ?? '',
+        workOverride?.toStringAsFixed(2) ?? '',
       ].join('|');
 }
 
@@ -1273,6 +1282,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   final List<TextEditingController> distanceControllers = [];
   final List<TextEditingController> speedControllers = [];
   final List<TextEditingController> calorieOverrideControllers = [];
+  final List<TextEditingController> workOverrideControllers = [];
   final List<ValueNotifier<String>> partNotifiers = [];
   final List<ValueNotifier<String?>> photoNotifiers = [];
 
@@ -1367,6 +1377,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           met: definition?.met ?? 0,
           caloriesOverride:
               double.tryParse(calorieOverrideControllers[i].text.trim()),
+          workOverride: double.tryParse(workOverrideControllers[i].text.trim()),
         ));
       }
     }
@@ -1984,6 +1995,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       distanceController: distanceControllers[index],
       speedController: speedControllers[index],
       calorieOverrideController: calorieOverrideControllers[index],
+      workOverrideController: workOverrideControllers[index],
       photoNotifier: photoNotifiers[index],
       canRemove: projects.length > 1,
       onRemove: () => _removeProjectAt(index),
@@ -2003,6 +2015,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       distanceControllers.add(TextEditingController());
       speedControllers.add(TextEditingController());
       calorieOverrideControllers.add(TextEditingController());
+      workOverrideControllers.add(TextEditingController());
       partNotifiers.add(ValueNotifier<String>('胸'));
       photoNotifiers.add(ValueNotifier<String?>(null));
     });
@@ -2022,6 +2035,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       distanceControllers.removeAt(index).dispose();
       speedControllers.removeAt(index).dispose();
       calorieOverrideControllers.removeAt(index).dispose();
+      workOverrideControllers.removeAt(index).dispose();
       partNotifiers.removeAt(index).dispose();
       photoNotifiers.removeAt(index).dispose();
     });
@@ -2059,6 +2073,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ? ''
             : project.caloriesOverride!.toString(),
       ));
+      workOverrideControllers.add(TextEditingController(
+        text: project.workOverride == null
+            ? ''
+            : project.workOverride!.toString(),
+      ));
       partNotifiers.add(ValueNotifier<String>(project.part));
       photoNotifiers.add(ValueNotifier<String?>(null));
     }
@@ -2095,6 +2114,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     for (final c in calorieOverrideControllers) {
       c.dispose();
     }
+    for (final c in workOverrideControllers) {
+      c.dispose();
+    }
     for (final n in partNotifiers) {
       n.dispose();
     }
@@ -2111,6 +2133,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     distanceControllers.clear();
     speedControllers.clear();
     calorieOverrideControllers.clear();
+    workOverrideControllers.clear();
     partNotifiers.clear();
     photoNotifiers.clear();
   }
@@ -2782,6 +2805,7 @@ class _ProjectCard extends StatefulWidget {
   final TextEditingController distanceController;
   final TextEditingController speedController;
   final TextEditingController calorieOverrideController;
+  final TextEditingController workOverrideController;
   final ValueNotifier<String?> photoNotifier;
   final bool canRemove;
   final VoidCallback onRemove;
@@ -2800,6 +2824,7 @@ class _ProjectCard extends StatefulWidget {
     required this.distanceController,
     required this.speedController,
     required this.calorieOverrideController,
+    required this.workOverrideController,
     required this.photoNotifier,
     required this.canRemove,
     required this.onRemove,
@@ -2841,6 +2866,7 @@ class _ProjectCardState extends State<_ProjectCard> {
     widget.distanceController.addListener(_refresh);
     widget.speedController.addListener(_refresh);
     widget.calorieOverrideController.addListener(_refresh);
+    widget.workOverrideController.addListener(_refresh);
     _loadCalorieHintVisibility();
   }
 
@@ -2876,6 +2902,7 @@ class _ProjectCardState extends State<_ProjectCard> {
     widget.distanceController.removeListener(_refresh);
     widget.speedController.removeListener(_refresh);
     widget.calorieOverrideController.removeListener(_refresh);
+    widget.workOverrideController.removeListener(_refresh);
     super.dispose();
   }
 
@@ -2932,20 +2959,36 @@ class _ProjectCardState extends State<_ProjectCard> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(context.tr('修正估算消耗')),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            suffixText: 'kcal',
-            hintText: context.tr('输入本次消耗'),
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                suffixText: 'kcal',
+                hintText: context.tr('输入本次消耗'),
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, 'auto'),
+              icon: const Icon(Icons.restart_alt_rounded, size: 18),
+              label: Text(context.tr('恢复自动估算')),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                textStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, 'auto'),
-            child: Text(context.tr('恢复自动估算')),
-          ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: Text(context.tr('取消')),
@@ -2964,6 +3007,69 @@ class _ProjectCardState extends State<_ProjectCard> {
       final value = double.tryParse(result.trim());
       if (value != null && value >= 0) {
         widget.calorieOverrideController.text = value.toString();
+      }
+    }
+    setState(() {});
+  }
+
+  Future<void> _editWork(double current) async {
+    final controller = TextEditingController(
+      text: widget.workOverrideController.text.isNotEmpty
+          ? widget.workOverrideController.text
+          : (current > 0 ? current.toStringAsFixed(0) : ''),
+    );
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.tr('修正预计做功')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                suffixText: 'J',
+                hintText: context.tr('输入本次做功'),
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextButton.icon(
+              onPressed: () => Navigator.pop(dialogContext, 'auto'),
+              icon: const Icon(Icons.restart_alt_rounded, size: 18),
+              label: Text(context.tr('恢复自动估算')),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                textStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(context.tr('取消')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: Text(context.tr('确定')),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (result == 'auto') {
+      widget.workOverrideController.clear();
+    } else if (result != null) {
+      final value = double.tryParse(result.trim());
+      if (value != null && value >= 0) {
+        widget.workOverrideController.text = value.toString();
       }
     }
     setState(() {});
@@ -3419,7 +3525,10 @@ class _ProjectCardState extends State<_ProjectCard> {
   Widget build(BuildContext context) {
     final spec = context.watch<ThemeProvider>().currentSpec;
     final settings = context.watch<SettingsProvider>();
-    final work = _calculateWork();
+    final computedWork = _calculateWork();
+    final manualWork =
+        double.tryParse(widget.workOverrideController.text.trim());
+    final work = manualWork ?? computedWork;
     final duration = double.tryParse(widget.durationController.text) ?? 0;
     final distance = double.tryParse(widget.distanceController.text) ?? 0;
     final speed = double.tryParse(widget.speedController.text) ?? 0;
@@ -3680,7 +3789,7 @@ class _ProjectCardState extends State<_ProjectCard> {
           ),
           const SizedBox(height: 12),
           GestureDetector(
-            onTap: _isTimeBased ? () => _editCalories(kcal) : null,
+            onTap: () => _isTimeBased ? _editCalories(kcal) : _editWork(work),
             behavior: HitTestBehavior.opaque,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -3721,7 +3830,7 @@ class _ProjectCardState extends State<_ProjectCard> {
               ),
             ),
           ),
-          if (_isTimeBased && _showCalorieHint)
+          if (_showCalorieHint)
             Padding(
               padding: const EdgeInsets.only(top: 4, right: 2),
               child: Row(

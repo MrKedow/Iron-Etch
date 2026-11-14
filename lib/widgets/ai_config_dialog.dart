@@ -386,23 +386,33 @@ Future<void> showAiConfigDialog(
                       Expanded(
                         child: OutlinedButton(
                           onPressed: testing ? null : runTest,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
                           child: testing
-                              ? Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SizedBox(
-                                      width: 15,
-                                      height: 15,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: spec.primary,
+                              ? FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        width: 15,
+                                        height: 15,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: spec.primary,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(context.tr('测试中…')),
-                                  ],
+                                      const SizedBox(width: 6),
+                                      Text(context.tr('测试中…')),
+                                    ],
+                                  ),
                                 )
-                              : Text(context.tr('测试连接')),
+                              : FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(context.tr('测试连接')),
+                                ),
                         ),
                       ),
                       const SizedBox(width: 8),

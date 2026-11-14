@@ -886,19 +886,34 @@ class _RecentAnalysisCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  '${formatMonthDay(last.date)} · '
-                  '${context.trArgs('第 {n} 次训练', {
-                        'n': '${last.sessionNumber ?? '—'}'
-                      })}',
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: spec.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      formatMonthDay(last.date),
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: spec.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.trArgs('第 {n} 次训练', {
+                        'n': '${last.sessionNumber ?? '—'}',
+                      }),
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: spec.textSecondary,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               Pill(

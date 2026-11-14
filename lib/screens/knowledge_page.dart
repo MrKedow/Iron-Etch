@@ -373,37 +373,45 @@ class _KnowledgeDetailPageState extends State<KnowledgeDetailPage> {
       'ru' => 'Russian',
       _ => 'Chinese',
     };
-    final reply = await AiCoachService.chat(
-      endpoint: settings.aiEndpoint,
-      model: settings.aiModel,
-      apiKey: settings.aiApiKey,
-      reasoningEffort: settings.aiReasoningEffort,
-      messages: [
-        {
-          'role': 'system',
-          'content': 'You are the sports science explainer of the Iron Etch app. Explain the research in natural, easy-to-understand $languageName. '
-              'Output format: start with a one-sentence conclusion of no more than 24 words; then write three short sections similar to "Research findings", "What it means for you", and "Caveats", each with 1-3 sentences; '
-              'you may use Markdown headings, bold text, and bullet points, but do not litter the body with asterisks; keep the content complete and never cut key information just to save words; '
-              'output only the final answer in $languageName, with no reasoning process or English draft. Do not make a medical diagnosis, and clearly state when evidence is insufficient.',
-        },
-        {
-          'role': 'user',
-          'content':
-              'Title: ${article.title}\nSource: ${article.source}\nSummary: ${_abstract ?? article.summary}\nPlease explain this news item.',
-        },
-      ],
-    );
+    try {
+      final reply = await AiCoachService.chat(
+        endpoint: settings.aiEndpoint,
+        model: settings.aiModel,
+        apiKey: settings.aiApiKey,
+        reasoningEffort: settings.aiReasoningEffort,
+        messages: [
+          {
+            'role': 'system',
+            'content': 'You are the sports science explainer of the Iron Etch app. Explain the research in natural, easy-to-understand $languageName. '
+                'Output format: start with a one-sentence conclusion of no more than 24 words; then write three short sections similar to "Research findings", "What it means for you", and "Caveats", each with 1-3 sentences; '
+                'you may use Markdown headings, bold text, and bullet points, but do not litter the body with asterisks; keep the content complete and never cut key information just to save words; '
+                'output only the final answer in $languageName, with no reasoning process or English draft. Do not make a medical diagnosis, and clearly state when evidence is insufficient.',
+          },
+          {
+            'role': 'user',
+            'content':
+                'Title: ${article.title}\nSource: ${article.source}\nSummary: ${_abstract ?? article.summary}\nPlease explain this news item.',
+          },
+        ],
+      );
 
-    if (!mounted) return;
-    setState(() {
-      _aiLoading = false;
-      if (reply.success) {
-        _aiReply = reply.content;
-        _aiReasoning = reply.reasoning;
-      } else {
-        _aiError = reply.error ?? trGlobal('AI 暂时不可用');
-      }
-    });
+      if (!mounted) return;
+      setState(() {
+        _aiLoading = false;
+        if (reply.success) {
+          _aiReply = reply.content;
+          _aiReasoning = reply.reasoning;
+        } else {
+          _aiError = reply.error ?? trGlobal('AI 暂时不可用');
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _aiLoading = false;
+        _aiError = trGlobalArgs('AI 解读失败：{e}', {'e': '$error'});
+      });
+    }
   }
 
   Future<void> _openSource() async {
