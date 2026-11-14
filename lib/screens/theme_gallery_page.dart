@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import '../l10n/localized_material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -10,6 +9,7 @@ import '../providers/app_providers.dart';
 import '../services/media_permission.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
+import 'photo_picker_page.dart';
 
 class ThemeGalleryPage extends StatelessWidget {
   const ThemeGalleryPage({super.key});
@@ -206,17 +206,18 @@ class ThemeGalleryPage extends StatelessWidget {
                             final granted = await MediaPermission.request(
                                 context, MediaPermissionType.gallery);
                             if (!granted || !context.mounted) return;
-                            final picker = ImagePicker();
-                            final picked = await picker.pickImage(
-                              source: ImageSource.gallery,
-                              imageQuality: 90,
+                            final pickedPath = await Navigator.push<String>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const PhotoPickerPage(),
+                              ),
                             );
-                            if (picked == null) return;
+                            if (pickedPath == null) return;
                             final dir =
                                 await getApplicationDocumentsDirectory();
                             final target =
                                 '${dir.path}/theme_bg_${DateTime.now().millisecondsSinceEpoch}.jpg';
-                            await File(picked.path).copy(target);
+                            await File(pickedPath).copy(target);
                             await themeProvider.setCustomBackground(target);
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(

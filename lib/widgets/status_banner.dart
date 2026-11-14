@@ -2,11 +2,11 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import '../l10n/localized_material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-
 import '../providers/app_providers.dart';
+import '../screens/photo_picker_page.dart';
+import '../services/media_permission.dart';
 import 'app_ui.dart';
 import 'press_feedback.dart';
 import 'status_level.dart';
@@ -763,14 +763,20 @@ Future<void> showStatusEditor(BuildContext context) async {
           final hasImage = _fileExists(imagePath);
 
           Future<void> pickImage() async {
-            final picker = ImagePicker();
-            final picked = await picker.pickImage(
-                source: ImageSource.gallery, imageQuality: 88);
-            if (picked == null) return;
+            final granted = await MediaPermission.request(
+              context,
+              MediaPermissionType.gallery,
+            );
+            if (!granted || !context.mounted) return;
+            final pickedPath = await Navigator.push<String>(
+              context,
+              MaterialPageRoute(builder: (_) => const PhotoPickerPage()),
+            );
+            if (pickedPath == null) return;
             final dir = await getApplicationDocumentsDirectory();
             final target =
                 '${dir.path}/status_${DateTime.now().millisecondsSinceEpoch}.jpg';
-            await File(picked.path).copy(target);
+            await File(pickedPath).copy(target);
             setSheetState(() => imagePath = target);
           }
 

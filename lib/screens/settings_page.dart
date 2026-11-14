@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import '../l10n/localized_material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -26,6 +25,7 @@ import '../widgets/status_banner.dart';
 import '../widgets/user_avatar.dart';
 import 'iron_card_page.dart';
 import 'onboarding_page.dart';
+import 'photo_picker_page.dart';
 import 'theme_gallery_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -184,20 +184,19 @@ class _SettingsPageState extends State<SettingsPage>
       final granted =
           await MediaPermission.request(context, MediaPermissionType.gallery);
       if (!granted || !mounted) return;
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1200,
-        imageQuality: 88,
+      final pickedPath = await Navigator.push<String>(
+        context,
+        MaterialPageRoute(builder: (_) => const PhotoPickerPage()),
       );
-      if (picked == null || !mounted) return;
+      if (pickedPath == null || !mounted) return;
       final directory = await getApplicationDocumentsDirectory();
-      final dot = picked.name.lastIndexOf('.');
+      final dot = pickedPath.lastIndexOf('.');
       final extension =
-          dot >= 0 ? picked.name.substring(dot).toLowerCase() : '.jpg';
+          dot >= 0 ? pickedPath.substring(dot).toLowerCase() : '.jpg';
       final target = File(
         '${directory.path}/profile_avatar_${DateTime.now().millisecondsSinceEpoch}$extension',
       );
-      await File(picked.path).copy(target.path);
+      await File(pickedPath).copy(target.path);
       final previousPath = settings.avatarPath;
       await settings.setAvatarPath(target.path);
       if (previousPath != null &&

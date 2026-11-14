@@ -17,6 +17,7 @@ import 'package:fitness_tracker/screens/settings_page.dart';
 import 'package:fitness_tracker/screens/coach_analysis_page.dart';
 import 'package:fitness_tracker/screens/exercise_library_page.dart';
 import 'package:fitness_tracker/screens/history_page.dart';
+import 'package:fitness_tracker/screens/photo_picker_page.dart';
 import 'package:fitness_tracker/screens/splash_screen.dart';
 import 'package:fitness_tracker/screens/theme_gallery_page.dart';
 import 'package:fitness_tracker/screens/video_collection_page.dart';
@@ -3204,12 +3205,23 @@ class _ProjectCardState extends State<_ProjectCard> {
           : MediaPermissionType.gallery,
     );
     if (!granted || !mounted) return;
-    final picked = await ImagePicker().pickImage(
-      source: source,
-      imageQuality: 88,
-      maxWidth: 1800,
-    );
-    if (picked == null || !mounted) return;
+    final XFile picked;
+    if (source == ImageSource.gallery) {
+      final path = await Navigator.push<String>(
+        context,
+        MaterialPageRoute(builder: (_) => const PhotoPickerPage()),
+      );
+      if (path == null || !mounted) return;
+      picked = XFile(path);
+    } else {
+      final result = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 88,
+        maxWidth: 1800,
+      );
+      if (result == null || !mounted) return;
+      picked = result;
+    }
 
     setState(() => _scanningDashboard = true);
     try {
