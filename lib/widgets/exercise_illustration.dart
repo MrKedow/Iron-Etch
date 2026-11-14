@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 
 /// 动作库教学示意图：按「动作模式」绘制侧视小人 + 器械提示。
 /// 29 种动作模式覆盖全部 176 个动作。

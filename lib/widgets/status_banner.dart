@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -577,9 +577,9 @@ class _StreakStartDialogState extends State<_StreakStartDialog> {
       initialDate: _value,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      helpText: '选择坚持起点日期',
-      cancelText: '取消',
-      confirmText: '确定',
+      helpText: context.tr('选择坚持起点日期'),
+      cancelText: context.tr('取消'),
+      confirmText: context.tr('确定'),
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -598,9 +598,9 @@ class _StreakStartDialogState extends State<_StreakStartDialog> {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_value),
-      helpText: '选择坚持起点时间',
-      cancelText: '取消',
-      confirmText: '确定',
+      helpText: context.tr('选择坚持起点时间'),
+      cancelText: context.tr('取消'),
+      confirmText: context.tr('确定'),
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -883,8 +883,8 @@ Future<void> showStatusEditor(BuildContext context) async {
                       maxLength: 42,
                       maxLines: 2,
                       onChanged: (_) => setSheetState(() {}),
-                      decoration: const InputDecoration(
-                        hintText: '写下今天想对自己说的话…',
+                      decoration: InputDecoration(
+                        hintText: context.tr('写下今天想对自己说的话…'),
                         counterText: '',
                       ),
                     ),
@@ -1163,7 +1163,7 @@ Future<void> showStatusEditor(BuildContext context) async {
                                 setSheetState(() => imagePath = null),
                             icon: const Icon(Icons.delete_outline,
                                 color: Colors.redAccent),
-                            tooltip: '移除图片',
+                            tooltip: context.tr('移除图片'),
                           ),
                         ],
                       ],

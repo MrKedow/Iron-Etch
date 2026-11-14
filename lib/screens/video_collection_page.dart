@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -572,7 +572,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                         ),
                       ),
                       IconButton(
-                        tooltip: '删除合集',
+                        tooltip: context.tr('删除合集'),
                         onPressed: () => _deleteCollection(category),
                         icon: const Icon(Icons.close_rounded),
                       ),
@@ -601,7 +601,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                           ),
                           title: Text(creator.name),
                           trailing: IconButton(
-                            tooltip: '删除 UP 主',
+                            tooltip: context.tr('删除 UP 主'),
                             onPressed: () => _deleteCreator(category, creator),
                             icon: const Icon(Icons.close_rounded, size: 18),
                           ),
@@ -877,31 +877,31 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
       appBar: AppBar(
         backgroundColor: spec.background,
         surfaceTintColor: Colors.transparent,
-        title: const Text('视频合集'),
+        title: Text(context.tr('视频合集')),
         actions: [
           if (_editMode)
             IconButton(
-              tooltip: '完成编辑',
+              tooltip: context.tr('完成编辑'),
               onPressed: () => setState(() => _editMode = false),
               icon: const Icon(Icons.check_rounded),
             ),
           IconButton(
-            tooltip: '恢复内置合集',
+            tooltip: context.tr('恢复内置合集'),
             onPressed: _resetCollections,
             icon: const Icon(Icons.restart_alt_rounded),
           ),
           IconButton(
-            tooltip: '添加喜欢的 UP 主',
+            tooltip: context.tr('添加喜欢的 UP 主'),
             onPressed: _addingUp ? null : () => _showAddUpDialog(),
             icon: const Icon(Icons.electrical_services_rounded),
           ),
           IconButton(
-            tooltip: '刷新视频',
+            tooltip: context.tr('刷新视频'),
             onPressed: _refreshing || _addingUp ? null : _refreshAll,
             icon: const Icon(Icons.refresh_rounded),
           ),
           IconButton(
-            tooltip: '说明',
+            tooltip: context.tr('说明'),
             onPressed: () => _showInfo(spec),
             icon: const Icon(Icons.info_outline_rounded),
           ),
@@ -1040,7 +1040,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                 ),
                 IconButton(
                   onPressed: _hideIntro,
-                  tooltip: '关闭',
+                  tooltip: context.tr('关闭'),
                   icon: Icon(
                     Icons.close_rounded,
                     size: 18,
@@ -1151,7 +1151,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                 : '${entries.length} 位 UP 主',
             padding: const EdgeInsets.fromLTRB(2, 20, 2, 10),
             trailing: IconButton(
-              tooltip: collapsed ? '展开合集' : '折叠合集',
+              tooltip: context.tr(collapsed ? '展开合集' : '折叠合集'),
               visualDensity: VisualDensity.compact,
               onPressed: () {
                 setState(() {
@@ -1197,7 +1197,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
         fontWeight: FontWeight.w600,
       ),
       decoration: InputDecoration(
-        hintText: '搜索 UP 主 / 视频',
+        hintText: context.tr('搜索 UP 主 / 视频'),
         hintStyle: TextStyle(color: spec.textSecondary, fontSize: 12),
         prefixIcon: Icon(
           Icons.search_rounded,
@@ -1211,7 +1211,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                   _searchController.clear();
                   setState(() => _query = '');
                 },
-                tooltip: '清空搜索',
+                tooltip: context.tr('清空搜索'),
                 icon: Icon(
                   Icons.close_rounded,
                   color: spec.textSecondary,
@@ -1371,7 +1371,7 @@ class _VideoCollectionPageState extends State<VideoCollectionPage> {
                       if (creator.audience.isNotEmpty) ...[
                         const SizedBox(height: 7),
                         Text(
-                          '适合：${creator.audience}',
+                          '${context.tr('适合')}：${context.tr(creator.audience)}',
                           style: TextStyle(
                             color: spec.textSecondary,
                             fontSize: 11,
@@ -1727,7 +1727,7 @@ class _AddUpDialogState extends State<_AddUpDialog> {
                     fontSize: 12,
                   ),
                 ),
-                hintText: '选择已有合集或输入新名称',
+                hintText: context.tr('选择已有合集或输入新名称'),
                 textStyle: TextStyle(
                   color: spec.textPrimary,
                   fontSize: 13.5,
@@ -1753,8 +1753,8 @@ class _AddUpDialogState extends State<_AddUpDialog> {
                   fontWeight: FontWeight.w600,
                 ),
                 decoration: InputDecoration(
-                  labelText: 'UP 主名称',
-                  hintText: '例如：帕梅拉PamelaReif',
+                  labelText: context.tr('UP 主名称'),
+                  hintText: context.tr('例如：帕梅拉PamelaReif'),
                   labelStyle: TextStyle(
                     color: spec.textSecondary,
                     fontSize: 12,

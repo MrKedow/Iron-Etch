@@ -1,5 +1,5 @@
 // ==================== main.dart (JSON存储 + 云同步) ====================
-import 'package:flutter/material.dart';
+import 'l10n/localized_material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -31,7 +31,6 @@ import 'package:fitness_tracker/widgets/status_banner.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:fitness_tracker/services/ai_coach_service.dart';
-import 'package:fitness_tracker/l10n/app_localizations.dart';
 import 'package:fitness_tracker/services/app_fonts.dart';
 import 'package:fitness_tracker/services/app_haptics.dart';
 import 'package:fitness_tracker/services/media_permission.dart';
@@ -271,7 +270,7 @@ class WorkoutProject {
     if (isCardio) {
       final parts = <String>[];
       if (durationMinutes > 0) {
-        parts.add('${_trimNumber(durationMinutes)} 分钟');
+        parts.add('${_trimNumber(durationMinutes)} ${trGlobal('分钟')}');
       }
       if (distanceKm > 0) {
         parts.add('${_trimNumber(distanceKm)} km');
@@ -281,8 +280,8 @@ class WorkoutProject {
     }
     if (category == '柔韧' || category == '功能') {
       final minutes = durationMinutes > 0
-          ? '${_trimNumber(durationMinutes)} 分钟'
-          : '$sets 组 × $repsPerSet 次';
+          ? '${_trimNumber(durationMinutes)} ${trGlobal('分钟')}'
+          : '$sets ${trGlobal('组')} × $repsPerSet ${trGlobal('次')}';
       if (weight > 0) {
         return '$minutes · ${_trimNumber(weight)} kg';
       }
@@ -290,7 +289,7 @@ class WorkoutProject {
     }
     final weightText =
         weight % 1 == 0 ? weight.toStringAsFixed(0) : weight.toStringAsFixed(1);
-    return '$weightText kg × $sets 组 × $repsPerSet 次';
+    return '$weightText kg × $sets ${trGlobal('组')} × $repsPerSet ${trGlobal('次')}';
   }
 
   static String _trimNumber(double value) {
@@ -1203,6 +1202,7 @@ class FitnessApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer2<ThemeProvider, SettingsProvider>(
       builder: (context, themeProvider, settings, child) {
+        AppLocalizations.currentLanguageCode = settings.appLanguageCode;
         return MaterialApp(
           onGenerateTitle: (context) => context.tr('铁镌'),
           debugShowCheckedModeBanner: false,
@@ -1315,9 +1315,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       initialDate: selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      helpText: '选择训练日期',
-      cancelText: '取消',
-      confirmText: '确定',
+      helpText: context.tr('选择训练日期'),
+      cancelText: context.tr('取消'),
+      confirmText: context.tr('确定'),
     );
     if (picked != null && !_isSameDay(picked, selectedDate)) {
       _jumpToDate(picked);
@@ -1357,7 +1357,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
     if (validProjects.isEmpty) {
       AppHaptics.heavy();
-      _showToast('请至少填写一个动作名称', isError: true);
+      _showToast(context.tr('请至少填写一个动作名称'), isError: true);
       return;
     }
 
@@ -1389,7 +1389,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         ..add(WorkoutProject.empty());
       _initializeControllers();
     });
-    _showToast('已保存到第 ${provider.sessionNumberForDate(selectedDate)} 次训练');
+    _showToast(context.trArgs('已保存到第 {n} 次训练', {
+      'n': '${provider.sessionNumberForDate(selectedDate)}',
+    }));
   }
 
   @override
@@ -1407,15 +1409,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       final filePath =
           await ExcelExportService().exportToExcel(provider.records);
       if (filePath == null) {
-        if (mounted) _showToast('导出失败', isError: true);
+        if (mounted) _showToast(trGlobal('导出失败'), isError: true);
         return;
       }
       await Share.shareXFiles(
         [XFile(filePath)],
-        text: '铁镌训练数据',
+        text: trGlobal('铁镌训练数据'),
       );
     } catch (e) {
-      if (mounted) _showToast('导出失败：$e', isError: true);
+      if (mounted) {
+        _showToast(trGlobalArgs('导出失败：{e}', {'e': '$e'}), isError: true);
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -1435,7 +1439,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     try {
       final isStillConnected = await nutstore.checkConnection();
       if (!isStillConnected) {
-        _showToast('云服务认证已过期，请重新登录', isError: true);
+        _showToast(trGlobal('云服务认证已过期，请重新登录'), isError: true);
         await nutstore.clearCredentials();
         if (context.mounted) _showCloudLoginDialog(context);
         return;
@@ -1467,7 +1471,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       final hasLocal = provider.records.isNotEmpty;
       if (!hasLocal) {
         provider.loadRecords(cloudRecords);
-        _showToast('已将云端 ${cloudRecords.length} 条记录下载到本地');
+        _showToast(context.trArgs('已将云端 {n} 条记录下载到本地', {
+          'n': '${cloudRecords.length}',
+        }));
         return;
       }
 
@@ -1477,7 +1483,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         builder: (ctx) => AlertDialog(
           title: Text(context.tr('发现云端训练数据')),
           content: Text(
-            '云端有 ${cloudRecords.length} 条记录，本地有 ${provider.records.length} 条记录。\n请选择处理方式。',
+            context.trArgs('云端有 {c} 条记录，本地有 {l} 条记录。\n请选择处理方式。', {
+              'c': '${cloudRecords.length}',
+              'l': '${provider.records.length}',
+            }),
           ),
           actions: [
             TextButton(
@@ -1547,7 +1556,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final jsonService = context.read<JsonStorageService>();
     final path = await jsonService.saveRecords(provider.records);
     if (path == null) {
-      if (mounted) _showToast('保存本地数据失败', isError: true);
+      if (mounted) _showToast(trGlobal('保存本地数据失败'), isError: true);
       return;
     }
     final ok = await nutstore.uploadFile(path);
@@ -1566,7 +1575,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       }
     }
     if (!mounted) return;
-    _showToast(ok ? '云端数据已更新' : '上传失败，请稍后重试', isError: !ok);
+    _showToast(ok ? trGlobal('云端数据已更新') : trGlobal('上传失败，请稍后重试'), isError: !ok);
   }
 
   void _showCloudLoginDialog(BuildContext context) {
@@ -1643,7 +1652,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       if (!dialogContext.mounted) return;
                       if (ok) {
                         Navigator.pop(dialogContext);
-                        _showToast('坚果云连接成功');
+                        _showToast(context.tr('坚果云连接成功'));
                       } else {
                         setDialogState(() {
                           isConnecting = false;
@@ -1690,7 +1699,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               onTap: () async {
                 Navigator.pop(sheetContext);
                 await context.read<NutstoreService>().clearCredentials();
-                if (mounted) _showToast('已断开坚果云连接');
+                if (mounted) _showToast(trGlobal('已断开坚果云连接'));
               },
             ),
           ],
@@ -1733,7 +1742,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${DateFormat('M月d日').format(record.date)} · ${weekdayLabel(record.date)}',
+                              '${formatMonthDay(record.date)} · ${weekdayLabel(record.date)}',
                               style: TextStyle(
                                 color: spec.textPrimary,
                                 fontSize: 19,
@@ -1742,9 +1751,23 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '第 ${record.sessionNumber ?? '—'} 次训练 · '
-                              '${projects.length} 个动作'
-                              '${record.totalDurationMinutes > 0 ? ' · ${record.totalDurationMinutes.toStringAsFixed(0)} 分钟' : ''}',
+                              record.totalDurationMinutes > 0
+                                  ? context.trArgs(
+                                      '第 {n} 次训练 · {p} 个项目 · {m} 分钟',
+                                      {
+                                        'n': '${record.sessionNumber ?? '—'}',
+                                        'p': '${projects.length}',
+                                        'm': record.totalDurationMinutes
+                                            .toStringAsFixed(0),
+                                      },
+                                    )
+                                  : context.trArgs(
+                                      '第 {n} 次训练 · {p} 个项目',
+                                      {
+                                        'n': '${record.sessionNumber ?? '—'}',
+                                        'p': '${projects.length}',
+                                      },
+                                    ),
                               style: TextStyle(
                                 color: spec.textSecondary,
                                 fontSize: 12,
@@ -1818,9 +1841,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               const SizedBox(height: 5),
                               Text(
                                 project.isTimeBased
-                                    ? '估算消耗 ${project.estimatedCalories().round()} kcal'
-                                    : '做功 ${formatCompact(project.calculateWork())} J'
-                                        ' · 估算 ${project.estimatedCalories().round()} kcal',
+                                    ? trGlobalArgs('估算消耗 {n} kcal', {
+                                        'n':
+                                            '${project.estimatedCalories().round()}',
+                                      })
+                                    : trGlobalArgs('做功 {w} J · 估算 {n} kcal', {
+                                        'w': formatCompact(
+                                            project.calculateWork()),
+                                        'n':
+                                            '${project.estimatedCalories().round()}',
+                                      }),
                                 style: TextStyle(
                                   color: spec.primary,
                                   fontSize: 11,
@@ -1833,9 +1863,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 Text(
                                   [
                                     if (project.feeling.trim().isNotEmpty)
-                                      '感受：${project.feeling.trim()}',
+                                      '${trGlobal('感受')}：${project.feeling.trim()}',
                                     if (project.supplement.trim().isNotEmpty)
-                                      '备注：${project.supplement.trim()}',
+                                      '${trGlobal('备注')}：${project.supplement.trim()}',
                                   ].join('  ·  '),
                                   style: TextStyle(
                                     color: spec.textSecondary,
@@ -2133,7 +2163,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        '${DateFormat('yyyy年M月d日').format(selectedDate)} · ${weekdayLabel(selectedDate)}',
+                        '${formatFullDate(selectedDate)} · ${weekdayLabel(selectedDate)}',
                         maxLines: 1,
                         softWrap: false,
                         style: TextStyle(
@@ -2154,8 +2184,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                   alignment: Alignment.centerRight,
                   child: Pill(
                     label: hasRecord
-                        ? '第 $sessionNumber 次 · 合并'
-                        : '第 $sessionNumber 次',
+                        ? context.trArgs('第 {n} 次 · 合并', {
+                            'n': '$sessionNumber',
+                          })
+                        : context.trArgs('第 {n} 次', {'n': '$sessionNumber'}),
                     icon: Icons.tag_rounded,
                     filled: true,
                   ),
@@ -2582,7 +2614,7 @@ class _RecentRecordCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${record.date.month}月',
+                  formatMonthOnly(record.date),
                   style: TextStyle(
                     color: spec.textSecondary,
                     fontSize: 9,
@@ -2608,7 +2640,9 @@ class _RecentRecordCard extends StatelessWidget {
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              '第 ${record.sessionNumber ?? '-'} 次训练',
+                              context.trArgs('第 {n} 次训练', {
+                                'n': '${record.sessionNumber ?? '-'}',
+                              }),
                               maxLines: 1,
                               softWrap: false,
                               style: TextStyle(
@@ -2693,10 +2727,10 @@ class _RecentRecordCard extends StatelessWidget {
               ),
               Text(
                 record.totalWork > 0
-                    ? '焦耳'
+                    ? trGlobal('焦耳')
                     : record.totalDistanceKm > 0
-                        ? '分钟 · ${record.totalDistanceKm.toStringAsFixed(1)} km'
-                        : '分钟',
+                        ? '${trGlobal('分钟')} · ${record.totalDistanceKm.toStringAsFixed(1)} km'
+                        : trGlobal('分钟'),
                 style: TextStyle(color: spec.textSecondary, fontSize: 9),
               ),
             ],
@@ -2982,7 +3016,7 @@ class _ProjectCardState extends State<_ProjectCard> {
 
       final settings = context.read<SettingsProvider>();
       if (!settings.dashboardAiScanEnabled || !_isCardio) {
-        _showSnack('打卡照片已添加，将随训练记录保存');
+        _showSnack(context.tr('打卡照片已添加，将随训练记录保存'));
         return;
       }
 
@@ -2999,7 +3033,9 @@ class _ProjectCardState extends State<_ProjectCard> {
       );
       if (!mounted) return;
       if (!reply.success) {
-        _showSnack(reply.error ?? 'AI 识别失败，照片已保存为打卡照片');
+        _showSnack(
+          reply.error ?? context.tr('AI 识别失败，照片已保存为打卡照片'),
+        );
         return;
       }
       final raw = reply.content;
@@ -3013,7 +3049,7 @@ class _ProjectCardState extends State<_ProjectCard> {
         } catch (_) {}
       }
       if (data == null) {
-        _showSnack('未识别到可解析的训练数据，照片已保存');
+        _showSnack(context.tr('未识别到可解析的训练数据，照片已保存'));
         return;
       }
       final duration = _readMetric(
@@ -3029,7 +3065,7 @@ class _ProjectCardState extends State<_ProjectCard> {
         const ['speedKmH', 'speed', 'speedKmh', 'pace'],
       );
       if (duration <= 0 && distance <= 0 && speed <= 0) {
-        _showSnack('照片中未识别到时长、距离或速度，已保存为打卡照片');
+        _showSnack(context.tr('照片中未识别到时长、距离或速度，已保存为打卡照片'));
         return;
       }
       if (!mounted) return;
@@ -3051,12 +3087,12 @@ class _ProjectCardState extends State<_ProjectCard> {
             widget.speedController.text = _formatMetric(speed);
           }
         });
-        _showSnack('已使用识别到的数据计算消耗');
+        _showSnack(context.tr('已使用识别到的数据计算消耗'));
       } else {
-        _showSnack('已忽略识别结果，照片仍作为打卡照片保存');
+        _showSnack(context.tr('已忽略识别结果，照片仍作为打卡照片保存'));
       }
     } catch (error) {
-      if (mounted) _showSnack('处理照片失败：$error');
+      if (mounted) _showSnack(context.trArgs('处理照片失败：{e}', {'e': '$error'}));
     } finally {
       if (mounted) setState(() => _scanningDashboard = false);
     }
@@ -3120,8 +3156,8 @@ class _ProjectCardState extends State<_ProjectCard> {
             fontSize: 16,
           ),
           decoration: InputDecoration(
-            hintText: hint,
-            suffixText: suffix,
+            hintText: context.tr(hint),
+            suffixText: suffix == null ? null : context.tr(suffix),
             suffixStyle: TextStyle(
               color: spec.textSecondary,
               fontSize: 10,
@@ -3171,7 +3207,7 @@ class _ProjectCardState extends State<_ProjectCard> {
           controller: controller,
           style: TextStyle(color: spec.textPrimary, fontSize: 13.5),
           decoration: InputDecoration(
-            hintText: hint,
+            hintText: context.tr(hint),
             hintStyle: TextStyle(color: spec.textSecondary, fontSize: 12),
             isDense: true,
             filled: true,

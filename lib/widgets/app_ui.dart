@@ -1,7 +1,9 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+
+import '../l10n/localized_material.dart';
 
 import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
@@ -672,18 +674,60 @@ String formatCompact(num value) {
   return value.toStringAsFixed(value is int ? 0 : 1);
 }
 
+String trGlobal(String source) {
+  return AppLocalizations(
+    localeForLanguage(AppLocalizations.currentLanguageCode),
+  ).t(source);
+}
+
+String trGlobalArgs(String source, Map<String, String> args) {
+  var result = trGlobal(source);
+  for (final entry in args.entries) {
+    result = result.replaceAll('{${entry.key}}', entry.value);
+  }
+  return result;
+}
+
 String weekdayLabel(DateTime date) {
-  const labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-  return labels[date.weekday - 1];
+  final code = AppLocalizations.currentLanguageCode;
+  if (code == 'zh') {
+    const labels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    return labels[date.weekday - 1];
+  }
+  return DateFormat.E(code).format(date);
+}
+
+String formatFullDate(DateTime date) {
+  final code = AppLocalizations.currentLanguageCode;
+  if (code == 'zh') return DateFormat('yyyy年M月d日').format(date);
+  return DateFormat.yMMMd(code).format(date);
+}
+
+String formatMonthDay(DateTime date) {
+  final code = AppLocalizations.currentLanguageCode;
+  if (code == 'zh') return DateFormat('M月d日').format(date);
+  return DateFormat.MMMd(code).format(date);
+}
+
+String formatMonthOnly(DateTime date) {
+  final code = AppLocalizations.currentLanguageCode;
+  if (code == 'zh') return '${date.month}月';
+  return DateFormat.MMM(code).format(date);
+}
+
+String formatYearMonth(DateTime date) {
+  final code = AppLocalizations.currentLanguageCode;
+  if (code == 'zh') return DateFormat('yyyy年M月').format(date);
+  return DateFormat.yMMM(code).format(date);
 }
 
 String dayGreeting() {
   final hour = DateTime.now().hour;
-  if (hour < 6) return '凌晨好';
-  if (hour < 11) return '早上好';
-  if (hour < 14) return '中午好';
-  if (hour < 18) return '下午好';
-  return '晚上好';
+  if (hour < 6) return trGlobal('凌晨好');
+  if (hour < 11) return trGlobal('早上好');
+  if (hour < 14) return trGlobal('中午好');
+  if (hour < 18) return trGlobal('下午好');
+  return trGlobal('晚上好');
 }
 
 AppThemeSpec specOf(BuildContext context) {

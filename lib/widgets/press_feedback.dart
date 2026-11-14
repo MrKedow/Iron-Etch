@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 
 import '../services/app_haptics.dart';
 

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -56,10 +56,10 @@ class _KnowledgePageState extends State<KnowledgePage> {
       appBar: AppBar(
         backgroundColor: spec.background,
         surfaceTintColor: Colors.transparent,
-        title: const Text('知识补给'),
+        title: Text(context.tr('知识补给')),
         actions: [
           IconButton(
-            tooltip: '刷新实时资讯',
+            tooltip: context.tr('刷新实时资讯'),
             onPressed: _loading ? null : _load,
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -366,6 +366,13 @@ class _KnowledgeDetailPageState extends State<KnowledgeDetailPage> {
     });
 
     final article = widget.article;
+    final languageName = switch (AppLocalizations.currentLanguageCode) {
+      'en' => 'English',
+      'ja' => 'Japanese',
+      'ko' => 'Korean',
+      'ru' => 'Russian',
+      _ => 'Chinese',
+    };
     final reply = await AiCoachService.chat(
       endpoint: settings.aiEndpoint,
       model: settings.aiModel,
@@ -374,15 +381,15 @@ class _KnowledgeDetailPageState extends State<KnowledgeDetailPage> {
       messages: [
         {
           'role': 'system',
-          'content': '你是「铁镌」App 的运动科学解读助手。请用自然、易懂的中文把研究讲清楚。'
-              '输出格式：第一行一句不超过 24 字的结论；随后依次用“研究发现”“对你的意义”“注意”三个小节各写 1-3 句；'
-              '可以使用 Markdown 的标题、粗体和项目符号，但不要在正文里堆砌星号；内容要完整，不要为了字数截断关键信息；'
-              '只输出最终中文回答，不要输出思考过程或英文草稿。不要做医疗诊断，证据不足时明确说明。',
+          'content': 'You are the sports science explainer of the Iron Etch app. Explain the research in natural, easy-to-understand $languageName. '
+              'Output format: start with a one-sentence conclusion of no more than 24 words; then write three short sections similar to "Research findings", "What it means for you", and "Caveats", each with 1-3 sentences; '
+              'you may use Markdown headings, bold text, and bullet points, but do not litter the body with asterisks; keep the content complete and never cut key information just to save words; '
+              'output only the final answer in $languageName, with no reasoning process or English draft. Do not make a medical diagnosis, and clearly state when evidence is insufficient.',
         },
         {
           'role': 'user',
           'content':
-              '标题：${article.title}\n来源：${article.source}\n摘要：${_abstract ?? article.summary}\n请解读这项资讯。',
+              'Title: ${article.title}\nSource: ${article.source}\nSummary: ${_abstract ?? article.summary}\nPlease explain this news item.',
         },
       ],
     );
@@ -394,7 +401,7 @@ class _KnowledgeDetailPageState extends State<KnowledgeDetailPage> {
         _aiReply = reply.content;
         _aiReasoning = reply.reasoning;
       } else {
-        _aiError = reply.error ?? 'AI 暂时不可用';
+        _aiError = reply.error ?? trGlobal('AI 暂时不可用');
       }
     });
   }
@@ -415,19 +422,18 @@ class _KnowledgeDetailPageState extends State<KnowledgeDetailPage> {
     final spec = context.watch<ThemeProvider>().currentSpec;
     final settings = context.watch<SettingsProvider>();
     final article = widget.article;
-    final date = article.publishedAt == null
-        ? ''
-        : DateFormat('yyyy年M月d日').format(article.publishedAt!);
+    final date =
+        article.publishedAt == null ? '' : formatFullDate(article.publishedAt!);
 
     return Scaffold(
       backgroundColor: spec.background,
       appBar: AppBar(
         backgroundColor: spec.background,
         surfaceTintColor: Colors.transparent,
-        title: const Text('资讯详情'),
+        title: Text(context.tr('资讯详情')),
         actions: [
           IconButton(
-            tooltip: '打开原文',
+            tooltip: context.tr('打开原文'),
             onPressed: _openSource,
             icon: const Icon(Icons.open_in_new_rounded),
           ),

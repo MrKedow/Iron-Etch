@@ -340,31 +340,50 @@ class CoachInsights {
       return '【数据权限】用户未授权发送任何训练数据。请仅给出通用的训练建议，并提醒用户可在设置中调整数据权限。\n';
     }
 
-    if (settings.aiDataScopeEnabled('profile')) {
-      buffer.writeln('【用户画像】');
+    if (settings.aiDataScopeEnabled('profile_basic')) {
+      buffer.writeln('【基础画像】');
       buffer.writeln(
-          '昵称：${settings.nickname}；目标：${settings.trainingGoal}；经验：${settings.experience}；体重：${settings.bodyWeight}kg；周训练目标：${settings.weeklyGoal}次。');
+          '昵称：${settings.nickname}；目标：${settings.trainingGoal}；经验：${settings.experience}；周训练目标：${settings.weeklyGoal}次。');
       buffer.writeln();
     }
 
-    if (settings.aiDataScopeEnabled('summary')) {
-      buffer.writeln('【总体数据】');
+    if (settings.aiDataScopeEnabled('profile_body')) {
+      buffer.writeln('【身体数据】');
       buffer.writeln(
-          '累计训练：$totalSessions次；总组数：$totalSets组；总做功：${(totalWork / 1000).toStringAsFixed(1)}千焦；估算消耗：$totalCalories千卡；有氧时长：${totalDurationMinutes.toStringAsFixed(0)}分钟；有氧距离：${totalDistanceKm.toStringAsFixed(1)}公里；训练天数：$trainingDays天。');
+          '体重：${settings.bodyWeight}kg；身高：${settings.heightCm == null ? '未填写' : '${settings.heightCm}cm'}；年龄：${settings.age ?? '未填写'}；体脂率：${settings.bodyFatPercent == null ? '未填写' : '${settings.bodyFatPercent}%'}；静息心率：${settings.restingHeartRate ?? '未填写'}。');
       buffer.writeln();
     }
 
-    if (settings.aiDataScopeEnabled('weekly')) {
-      buffer.writeln('【周期对比】');
+    if (settings.aiDataScopeEnabled('summary_strength')) {
+      buffer.writeln('【力量训练汇总】');
+      buffer.writeln(
+          '累计训练：$totalSessions次；总组数：$totalSets组；总做功：${(totalWork / 1000).toStringAsFixed(1)}千焦；估算消耗：$totalCalories千卡；训练天数：$trainingDays天。');
+      buffer.writeln();
+    }
+
+    if (settings.aiDataScopeEnabled('summary_cardio')) {
+      buffer.writeln('【有氧训练汇总】');
+      buffer.writeln(
+          '有氧时长：${totalDurationMinutes.toStringAsFixed(0)}分钟；有氧距离：${totalDistanceKm.toStringAsFixed(1)}公里。');
+      buffer.writeln();
+    }
+
+    if (settings.aiDataScopeEnabled('weekly_frequency')) {
+      buffer.writeln('【训练频率对比】');
       buffer.writeln('本周训练：$thisWeekSessions次；上周：$lastWeekSessions次。');
+      buffer.writeln();
+    }
+
+    if (settings.aiDataScopeEnabled('weekly_work')) {
+      buffer.writeln('【训练做功对比】');
       buffer.writeln(
           '最近7天做功：${(lastWeekWork / 1000).toStringAsFixed(1)}千焦；前7天：${(prevWeekWork / 1000).toStringAsFixed(1)}千焦。');
       buffer.writeln();
     }
 
-    if (settings.aiDataScopeEnabled('parts')) {
+    if (settings.aiDataScopeEnabled('parts_distribution')) {
       final fav = favoritePart;
-      buffer.writeln('【部位分布】');
+      buffer.writeln('【部位容量分布】');
       if (fav != null) {
         buffer.writeln('最常训练部位：${fav.part}（${fav.sessions}次，${fav.sets}组）。');
       }
@@ -372,39 +391,75 @@ class CoachInsights {
         buffer.writeln(
             '${stat.part}：${stat.sessions}次，${stat.sets}组，${(stat.work / 1000).toStringAsFixed(1)}千焦${stat.minutes > 0 ? '，${stat.minutes.toStringAsFixed(0)}分钟' : ''}');
       }
-      buffer.writeln(
-          '本周缺失部位：${missingPartsWeek.isEmpty ? '无，覆盖全面' : missingPartsWeek.join('、')}');
       buffer.writeln();
     }
 
-    if (settings.aiDataScopeEnabled('recent')) {
-      buffer.writeln('【最近训练】');
-      final recent = sortedDesc.take(8).toList();
+    if (settings.aiDataScopeEnabled('parts_missing')) {
+      buffer.writeln('【本周缺失部位】');
+      buffer.writeln(missingPartsWeek.isEmpty
+          ? '无，覆盖全面。'
+          : '${missingPartsWeek.join('、')}。');
+      buffer.writeln();
+    }
+
+    final recent = sortedDesc.take(8).toList();
+    if (settings.aiDataScopeEnabled('recent_strength')) {
+      buffer.writeln('【最近力量明细】');
       for (final record in recent) {
-        final projects =
-            record.projects.where((p) => p.name.trim().isNotEmpty).map((p) {
-          final detail = p.isTimeBased
-              ? '${p.durationMinutes.toStringAsFixed(0)}分钟${p.distanceKm > 0 ? ' ${p.distanceKm.toStringAsFixed(1)}公里' : ''} 约${p.estimatedCalories().round()}千卡'
-              : '${p.weight}kg×${p.sets}组×${p.repsPerSet}次';
-          final feeling = settings.aiDataScopeEnabled('feelings') &&
-                  p.feeling.trim().isNotEmpty
-              ? ' 感受:${p.feeling}'
-              : '';
-          return '${p.name}(${p.part}) $detail$feeling';
-        }).join('；');
+        final projects = record.projects
+            .where((p) => !p.isTimeBased && p.name.trim().isNotEmpty)
+            .map((p) => '${p.name}(${p.part}) '
+                '${p.weight}kg×${p.sets}组×${p.repsPerSet}次')
+            .join('；');
+        if (projects.isEmpty) continue;
         buffer.writeln(
-            '${DateFormat('yyyy-MM-dd').format(record.date)} 第${record.sessionNumber ?? '-'}次：$projects。总做功${(record.totalWork / 1000).toStringAsFixed(1)}千焦，有氧${record.totalDurationMinutes.toStringAsFixed(0)}分钟。');
+            '${DateFormat('yyyy-MM-dd').format(record.date)} 第${record.sessionNumber ?? '-'}次：$projects。总做功${(record.totalWork / 1000).toStringAsFixed(1)}千焦。');
       }
       buffer.writeln();
     }
 
-    if (settings.aiDataScopeEnabled('exercises')) {
+    if (settings.aiDataScopeEnabled('recent_cardio')) {
+      buffer.writeln('【最近有氧明细】');
+      for (final record in recent) {
+        final projects = record.projects
+            .where((p) => p.isTimeBased && p.name.trim().isNotEmpty)
+            .map((p) => '${p.name}(${p.part}) '
+                '${p.durationMinutes.toStringAsFixed(0)}分钟'
+                '${p.distanceKm > 0 ? ' ${p.distanceKm.toStringAsFixed(1)}公里' : ''} '
+                '约${p.estimatedCalories().round()}千卡')
+            .join('；');
+        if (projects.isEmpty) continue;
+        buffer.writeln(
+            '${DateFormat('yyyy-MM-dd').format(record.date)} 第${record.sessionNumber ?? '-'}次：$projects。');
+      }
+      buffer.writeln();
+    }
+
+    if (settings.aiDataScopeEnabled('exercise_weights')) {
       buffer.writeln('【最近一次与上次的重量对比】');
       for (final progress in lastExerciseProgress) {
         final diff = progress.diff;
         buffer.writeln(
             '${progress.name}：${progress.currentWeight}kg，上次${progress.previousWeight ?? '无'}kg${diff == null ? '' : '，变化${diff >= 0 ? '+' : ''}${diff.toStringAsFixed(1)}kg'}。');
       }
+      buffer.writeln();
+    }
+
+    if (settings.aiDataScopeEnabled('feelings')) {
+      buffer.writeln('【训练感受与备注】');
+      var hasFeeling = false;
+      for (final record in recent) {
+        final feelings = record.projects
+            .where((p) => p.feeling.trim().isNotEmpty)
+            .map((p) =>
+                '${p.name}：${p.feeling.trim()}${p.supplement.trim().isEmpty ? '' : '（备注：${p.supplement.trim()}）'}')
+            .join('；');
+        if (feelings.isEmpty) continue;
+        hasFeeling = true;
+        buffer.writeln(
+            '${DateFormat('yyyy-MM-dd').format(record.date)}：$feelings。');
+      }
+      if (!hasFeeling) buffer.writeln('最近训练没有记录主观感受或备注。');
       buffer.writeln();
     }
 

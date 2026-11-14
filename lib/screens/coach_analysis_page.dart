@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -42,6 +43,8 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
   final GlobalKey _aiKey = GlobalKey();
   final GlobalKey _lastTurnKey = GlobalKey();
   final Random _random = Random();
+  Timer? _typingTimer;
+  int _turnSeq = 0;
 
   @override
   void initState() {
@@ -81,10 +84,39 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
 
   @override
   void dispose() {
+    _typingTimer?.cancel();
     _orbController.dispose();
     _questionController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _beginTypewriter(_ChatTurn turn) {
+    if (!mounted || turn.visibleChars == null || turn.typing) return;
+    turn.typing = true;
+    _typingTimer?.cancel();
+    _typingTimer = Timer.periodic(const Duration(milliseconds: 18), (timer) {
+      if (!mounted || !_chat.contains(turn)) {
+        timer.cancel();
+        return;
+      }
+      final full = turn.content;
+      final shown = turn.visibleChars ?? full.length;
+      if (shown < full.length) {
+        setState(() {
+          turn.visibleChars = min(full.length, shown + 2);
+        });
+      } else if (turn.answerDone) {
+        timer.cancel();
+        turn.typing = false;
+        _typingTimer = null;
+      }
+    });
+  }
+
+  void _handleReasoningMarqueeDone(_ChatTurn turn) {
+    if (!mounted || turn.reasoningStreaming) return;
+    _beginTypewriter(turn);
   }
 
   CoachInsights get _insights =>
@@ -119,43 +151,63 @@ class _CoachAnalysisPageState extends State<CoachAnalysisPage>
             : _questionController.text.trim());
 
     if (!settings.aiEnabled) {
-      _showSnack('AI 建议已在设置中关闭，可随时重新开启。');
+      _showSnack(context.tr('AI 建议已在设置中关闭，可随时重新开启。'));
       return;
     }
     if (question.isEmpty && _chat.isNotEmpty) {
-      _showSnack('先写下一个问题，再让 AI 教练分析。');
+      _showSnack(context.tr('先写下一个问题，再让 AI 教练分析。'));
       return;
     }
 
     final effectiveQuestion = question.isEmpty ? defaultQuestion : question;
 
+    _typingTimer?.cancel();
+    for (final turn in _chat) {
+      if (turn.visibleChars != null) {
+        turn.visibleChars = turn.content.length;
+        turn.typing = false;
+      }
+    }
+    final assistant = _ChatTurn(
+      id: ++_turnSeq,
+      role: _ChatRole.assistant,
+      content: '',
+      reasoning: '',
+      loading: true,
+      visibleChars: 0,
+      answerDone: false,
+      reasoningStreaming: true,
+    );
     setState(() {
       _aiLoading = true;
       _chat.add(_ChatTurn(role: _ChatRole.user, content: effectiveQuestion));
-      _chat.add(_ChatTurn(
-        role: _ChatRole.assistant,
-        content: '',
-        loading: true,
-      ));
+      _chat.add(assistant);
       _questionController.clear();
     });
     _scrollToAi(latestTurn: true);
 
+    final languageName = switch (AppLocalizations.currentLanguageCode) {
+      'en' => 'English',
+      'ja' => 'Japanese',
+      'ko' => 'Korean',
+      'ru' => 'Russian',
+      _ => 'Chinese',
+    };
     final systemPrompt = '''
-你是「铁镌」App 的 AI 力量教练，由免费 AI 多通道驱动。
-你的风格：专业、直接、有温度，像一位懂训练数据的老教练。不要空泛鼓励，必须引用用户真实数据。
-训练建议必须遵循科学证据；不确定时说明不确定性；不要提供医疗诊断，若涉及伤痛请建议就医。
-重点分析：最近一次训练质量、容量与频率、肌群均衡、渐进超负荷、恢复与下周安排。
+You are the AI strength coach of the Iron Etch app, powered by free AI channels.
+Your style: professional, direct, and warm, like an experienced coach who understands training data. Avoid empty encouragement and always cite the user's real data.
+Training advice must follow scientific evidence; state uncertainty when unsure; never provide a medical diagnosis, and suggest seeing a doctor if pain or injury is involved.
+Focus on: quality of the latest session, volume and frequency, muscle balance, progressive overload, recovery, and next week's plan.
 
-输出格式：
-1. 只输出最终中文回答，不要输出思考过程、英文草稿或自我说明。
-2. 可以使用 Markdown 组织内容，例如二级标题、粗体、项目符号和表格；不要在正文里堆砌星号。
-3. 第一行用一句不超过 24 字的结论概括状态。
-4. 接下来写 2-3 个小节，每节标题用“结论”“问题”“安排”这类短词，各配 1-3 句话。
-5. 最后单独一行以“今天先做：”开头，给一个今天就能执行的具体动作。
-6. 语气自然，像教练当面说话；内容完整优先，不要为了字数截断关键建议。
+Output format:
+1. Respond only in $languageName. Do not output a Chinese draft or self-explanation.
+2. You may use Markdown, such as level-2 headings, bold text, bullet points, and tables; do not litter the body with asterisks.
+3. Start with a one-sentence conclusion of no more than 24 words summarizing the status.
+4. Follow with 2-3 short sections using brief headings similar to "Conclusion", "Issues", and "Plan", each with 1-3 sentences.
+5. End with one separate line beginning with the $languageName equivalent of "Do this today:" and give one concrete action the user can do today.
+6. Keep a natural tone, as if the coach is speaking face to face; prioritize complete content and never cut key advice just to save words.
 
-以下是用户真实训练数据：
+The user's real workout data follows:
 ${insights.buildAiContext(settings)}
 ''';
 
@@ -171,58 +223,109 @@ ${insights.buildAiContext(settings)}
       });
     }
 
-    final reply = await AiCoachService.chat(
+    final reply = await AiCoachService.chatStream(
       messages: history,
       endpoint: settings.aiEndpoint,
       model: settings.aiModel,
       apiKey: settings.aiApiKey,
       reasoningEffort: settings.aiReasoningEffort,
+      onReasoningChunk: (delta) {
+        if (!mounted) return;
+        setState(() => assistant.reasoning += delta);
+      },
+      onContentChunk: (delta) {
+        if (!mounted) return;
+        setState(() => assistant.content += delta);
+        if (!assistant.typing && assistant.reasoning.trim().isEmpty) {
+          _beginTypewriter(assistant);
+        }
+      },
+      onReasoningDone: () {
+        if (!mounted) return;
+        setState(() => assistant.reasoningStreaming = false);
+        if (assistant.reasoning.trim().isEmpty) {
+          _beginTypewriter(assistant);
+        }
+      },
     );
 
     if (!mounted) return;
     setState(() {
       _aiLoading = false;
-      _chat.removeLast();
+      assistant.loading = false;
+      assistant.answerDone = true;
+      assistant.reasoningStreaming = false;
       if (reply.success) {
-        _chat.add(_ChatTurn(
-          role: _ChatRole.assistant,
-          content: reply.content,
-          reasoning: reply.reasoning,
-        ));
+        if (assistant.reasoning.trim().isEmpty &&
+            reply.reasoning.trim().isNotEmpty) {
+          assistant.reasoning = reply.reasoning;
+        }
+        if (assistant.content.trim().isEmpty) {
+          assistant.content = reply.content;
+        }
+        if (assistant.content.trim().isEmpty) {
+          assistant.content = trGlobal(
+            '模型只返回了思考内容，没有生成最终回答。可以重新提问或降低推理强度。',
+          );
+          assistant.visibleChars = null;
+        }
       } else {
-        _chat.add(_ChatTurn(
-          role: _ChatRole.assistant,
-          content: _fallbackAdvice(reply.error ?? 'AI 暂时不可用', insights),
-          isError: true,
-        ));
+        assistant
+          ..content = _fallbackAdvice(
+            reply.error ?? trGlobal('AI 暂时不可用'),
+            insights,
+          )
+          ..reasoning = ''
+          ..isError = true
+          ..visibleChars = null;
       }
     });
+    if (reply.success &&
+        assistant.reasoning.trim().isEmpty &&
+        assistant.visibleChars != null) {
+      _beginTypewriter(assistant);
+    }
     _scrollToAi(latestTurn: true);
   }
 
   String _fallbackAdvice(String error, CoachInsights insights) {
     final buffer = StringBuffer();
-    buffer.writeln('AI 在线服务暂时不可用：$error');
+    buffer.writeln(trGlobalArgs('AI 在线服务暂时不可用：{e}', {'e': error}));
     buffer.writeln();
-    buffer.writeln('先给你一份离线教练建议：');
+    buffer.writeln(trGlobal('先给你一份离线教练建议：'));
     if (insights.lastRecord == null) {
-      buffer.writeln('• 还没有训练记录，先完成第一次训练，AI 才能基于真实数据给建议。');
+      buffer.writeln(
+        trGlobal('• 还没有训练记录，先完成第一次训练，AI 才能基于真实数据给建议。'),
+      );
       return buffer.toString();
     }
     buffer.writeln(
-        '• 最近一次训练做功 ${(insights.lastWork / 1000).toStringAsFixed(1)} 千焦，共 ${insights.lastRecord!.projects.length} 个项目。');
+      trGlobalArgs('• 最近一次训练做功 {w} 千焦，共 {p} 个项目。', {
+        'w': (insights.lastWork / 1000).toStringAsFixed(1),
+        'p': '${insights.lastRecord!.projects.length}',
+      }),
+    );
     if (insights.previousWork > 0) {
       final diff = insights.lastWork - insights.previousWork;
       buffer.writeln(
-          '• 与上一次相比容量${diff >= 0 ? '提升' : '下降'} ${(diff.abs() / 1000).toStringAsFixed(1)} 千焦。');
+        trGlobalArgs('• 与上一次相比容量{trend} {w} 千焦。', {
+          'trend': trGlobal(diff >= 0 ? '提升' : '下降'),
+          'w': (diff.abs() / 1000).toStringAsFixed(1),
+        }),
+      );
     }
     if (insights.missingPartsWeek.isNotEmpty) {
       buffer.writeln(
-          '• 本周还缺少 ${insights.missingPartsWeek.join('、')} 的训练，下周优先补齐。');
+        trGlobalArgs('• 本周还缺少 {parts} 的训练，下周优先补齐。', {
+          'parts': insights.missingPartsWeek.map(trGlobal).join(', '),
+        }),
+      );
     } else {
-      buffer.writeln('• 本周部位覆盖较全面，继续保持。');
+      buffer.writeln(trGlobal('• 本周部位覆盖较全面，继续保持。'));
     }
-    buffer.writeln('• 下一次训练优先保持动作质量，再尝试在主要动作上增加 1-2.5kg 或 1-2 次。');
+    buffer.writeln(
+      trGlobal('• 下一次训练优先保持动作质量，再尝试在主要动作上增加 1-2.5kg 或 1-2 次。'),
+    );
     return buffer.toString();
   }
 
@@ -248,10 +351,10 @@ ${insights.buildAiContext(settings)}
             pinned: true,
             expandedHeight: 0,
             backgroundColor: spec.background.withValues(alpha: .8),
-            title: const Text('AI 训练舱'),
+            title: Text(context.tr('AI 训练舱')),
             actions: [
               IconButton(
-                tooltip: '刷新 AI 建议',
+                tooltip: context.tr('刷新 AI 建议'),
                 onPressed: _aiLoading ? null : () => _askAi(),
                 icon: const Icon(Icons.auto_awesome_rounded),
               ),
@@ -358,6 +461,7 @@ ${insights.buildAiContext(settings)}
                       lastTurnKey: _lastTurnKey,
                       onSend: () => _askAi(),
                       onPreset: (question) => _askAi(presetQuestion: question),
+                      onReasoningMarqueeDone: _handleReasoningMarqueeDone,
                       onOpenSettings: () {
                         _showAiConfig(context, settings);
                       },
@@ -450,19 +554,34 @@ ${insights.buildAiContext(settings)}
 enum _ChatRole { user, assistant }
 
 class _ChatTurn {
+  final int id;
   final _ChatRole role;
-  final String content;
-  final String reasoning;
-  final bool loading;
-  final bool isError;
+  String content;
+  String reasoning;
+  bool loading;
+  bool isError = false;
+  int? visibleChars;
+  bool answerDone;
+  bool reasoningStreaming;
+  bool typing = false;
 
-  const _ChatTurn({
+  _ChatTurn({
+    this.id = 0,
     required this.role,
     required this.content,
     this.reasoning = '',
     this.loading = false,
-    this.isError = false,
+    this.visibleChars,
+    this.answerDone = true,
+    this.reasoningStreaming = false,
   });
+
+  String get displayContent {
+    final shown = visibleChars;
+    if (shown == null) return content;
+    return content.substring(
+        0, shown < content.length ? shown : content.length);
+  }
 }
 
 class _HeroPanel extends StatelessWidget {
@@ -570,7 +689,10 @@ class _HeroPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  '${dayGreeting()}，${settings.nickname}',
+                  context.trArgs('{greeting}，{name}', {
+                    'greeting': dayGreeting(),
+                    'name': context.tr(settings.nickname),
+                  }),
                   style: TextStyle(
                     color: spec.onHero,
                     fontSize: 23,
@@ -582,7 +704,7 @@ class _HeroPanel extends StatelessWidget {
                 Text(
                   insights.lastRecord == null
                       ? '记录第一次训练，让 AI 教练认识你。'
-                      : '最近一次训练 · ${DateFormat('M月d日').format(insights.lastRecord!.date)} · ${insights.lastRecord!.projects.length} 个项目',
+                      : '最近一次训练 · ${formatMonthDay(insights.lastRecord!.date)} · ${insights.lastRecord!.projects.length} 个项目',
                   maxLines: 1,
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
@@ -764,7 +886,7 @@ class _RecentAnalysisCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${DateFormat('M月d日').format(last.date)} · ${weekdayLabel(last.date)}',
+                      '${formatMonthDay(last.date)} · ${weekdayLabel(last.date)}',
                       maxLines: 1,
                       softWrap: false,
                       overflow: TextOverflow.ellipsis,
@@ -1307,6 +1429,7 @@ class _AiCoachCard extends StatelessWidget {
   final GlobalKey lastTurnKey;
   final VoidCallback onSend;
   final void Function(String) onPreset;
+  final void Function(_ChatTurn) onReasoningMarqueeDone;
   final VoidCallback onOpenSettings;
 
   const _AiCoachCard({
@@ -1318,6 +1441,7 @@ class _AiCoachCard extends StatelessWidget {
     required this.lastTurnKey,
     required this.onSend,
     required this.onPreset,
+    required this.onReasoningMarqueeDone,
     required this.onOpenSettings,
   });
 
@@ -1387,7 +1511,7 @@ class _AiCoachCard extends StatelessWidget {
                 onPressed: onOpenSettings,
                 icon: Icon(Icons.tune_rounded,
                     size: 19, color: spec.textSecondary),
-                tooltip: 'AI 设置',
+                tooltip: context.tr('AI 设置'),
               ),
             ],
           ),
@@ -1435,12 +1559,14 @@ class _AiCoachCard extends StatelessWidget {
                         turn: chat[i],
                         spec: spec,
                         settings: settings,
+                        onReasoningMarqueeDone: onReasoningMarqueeDone,
                       ),
                     )
                   : _ChatBubble(
                       turn: chat[i],
                       spec: spec,
                       settings: settings,
+                      onReasoningMarqueeDone: onReasoningMarqueeDone,
                     ),
           if (loading)
             Padding(
@@ -1486,8 +1612,8 @@ class _AiCoachCard extends StatelessWidget {
                   maxLines: 3,
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => onSend(),
-                  decoration: const InputDecoration(
-                    hintText: '追问 AI 教练…',
+                  decoration: InputDecoration(
+                    hintText: context.tr('追问 AI 教练…'),
                     contentPadding:
                         EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
@@ -1497,7 +1623,7 @@ class _AiCoachCard extends StatelessWidget {
               IconButton.filled(
                 onPressed: loading ? null : onSend,
                 icon: const Icon(Icons.arrow_upward_rounded, size: 20),
-                tooltip: '发送',
+                tooltip: context.tr('发送'),
               ),
             ],
           ),
@@ -1527,11 +1653,13 @@ class _ChatBubble extends StatelessWidget {
   final _ChatTurn turn;
   final AppThemeSpec spec;
   final SettingsProvider settings;
+  final void Function(_ChatTurn) onReasoningMarqueeDone;
 
   const _ChatBubble({
     required this.turn,
     required this.spec,
     required this.settings,
+    required this.onReasoningMarqueeDone,
   });
 
   @override
@@ -1608,9 +1736,15 @@ class _ChatBubble extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             if (!isUser && turn.reasoning.trim().isNotEmpty)
-              AiReasoningPanel(reasoning: turn.reasoning, spec: spec),
+              AiReasoningPanel(
+                key: ValueKey('reasoning-${turn.id}'),
+                reasoning: turn.reasoning,
+                spec: spec,
+                streaming: turn.reasoningStreaming,
+                onMarqueeCompleted: () => onReasoningMarqueeDone(turn),
+              ),
             AiMessageText(
-              text: turn.content,
+              text: turn.displayContent,
               spec: spec,
             ),
           ],

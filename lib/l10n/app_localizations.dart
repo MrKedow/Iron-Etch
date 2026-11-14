@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'generated_translations.dart';
+
 class AppLanguage {
   final String code;
   final String label;
@@ -44,6 +46,8 @@ class AppLocalizations {
 
   const AppLocalizations(this.locale);
 
+  static String currentLanguageCode = 'zh';
+
   static const List<Locale> supportedLocales = [
     Locale('zh', 'CN'),
     Locale('en', 'US'),
@@ -70,10 +74,147 @@ class AppLocalizations {
 
   String t(String source) {
     if (languageCode == 'zh') return source;
-    final table = _translations[languageCode];
-    return table?[source] ?? source;
+    final direct = _lookup(source);
+    if (direct != null) return _localizePunctuation(direct);
+    final dynamic = _translateDynamic(source);
+    if (dynamic != source) return _localizePunctuation(dynamic);
+    final colon = source.indexOf('：');
+    if (colon > 0) {
+      final head = source.substring(0, colon);
+      final translatedHead = t(head);
+      if (translatedHead != head) {
+        final separator = _lookup('：') ?? ': ';
+        return _localizePunctuation(
+          '$translatedHead$separator${source.substring(colon + 1)}',
+        );
+      }
+    }
+    return _localizePunctuation(dynamic);
+  }
+
+  String _localizePunctuation(String text) {
+    if (languageCode == 'ja') {
+      return text
+          .replaceAll('，', '、')
+          .replaceAll('《', '「')
+          .replaceAll('》', '」');
+    }
+    return text
+        .replaceAll('、', ', ')
+        .replaceAll('，', ', ')
+        .replaceAll('；', '; ')
+        .replaceAll('：', ': ')
+        .replaceAll('（', ' (')
+        .replaceAll('）', ')')
+        .replaceAll('《', '“')
+        .replaceAll('》', '”')
+        .replaceAll('。', '.')
+        .replaceAll(RegExp(r' {2,}'), ' ');
+  }
+
+  String? _lookup(String source) {
+    return _translations[languageCode]?[source] ??
+        generatedTranslations[languageCode]?[source];
+  }
+
+  String _translateDynamic(String source) {
+    var result = source;
+    for (final entry in _dynamicPatterns) {
+      result = result.replaceAllMapped(entry.$1, (match) {
+        final template = _lookup(entry.$2);
+        if (template == null) return match.group(0)!;
+        var translated = template;
+        for (var i = 0; i < entry.$3.length; i++) {
+          final value = match.group(i + 1) ?? '';
+          translated = translated.replaceAll('{${entry.$3[i]}}', value);
+        }
+        return translated;
+      });
+    }
+    return result;
   }
 }
+
+final List<(RegExp, String, List<String>)> _dynamicPatterns = [
+  (RegExp(r'加载全部 (\d+) 个视频'), '加载全部 {n} 个视频', ['n']),
+  (RegExp(r'展开全部 (\d+) 个视频'), '展开全部 {n} 个视频', ['n']),
+  (RegExp(r'(\d+) 位 UP 主 · 已折叠'), '{n} 位 UP 主 · 已折叠', ['n']),
+  (RegExp(r'(\d+\+) 个视频'), '{n}+ 个视频', ['n']),
+  (RegExp(r'已添加 (.+) 到「(.+)」'), '已添加 {name} 到「{collection}」', ['name', 'collection']),
+  (RegExp(r'已删除「(.+)」'), '已删除「{title}」', ['title']),
+  (RegExp(r'共 (\d+) 天'), '共 {n} 天', ['n']),
+  (RegExp(r'完整度 (\d+)%'), '完整度 {p}%', ['p']),
+  (RegExp(r'体脂 (\d+(?:\.\d+)?)%'), '体脂 {n}%', ['n']),
+  (RegExp(r'静息 (\d+) bpm'), '静息 {n} bpm', ['n']),
+  (RegExp(r'训练 (\d+(?:\.\d+)?) 年'), '训练 {n} 年', ['n']),
+  (RegExp(r'本周已训练 (\d+) 天 · 累计 (\d+) 次'), '本周已训练 {d} 天 · 累计 {n} 次', ['d', 'n']),
+  (RegExp(r'还差 (\d+) 天达成目标'), '还差 {n} 天达成目标', ['n']),
+  (RegExp(r'(\d+) / (\d+) 次'), '{a} / {b} 次', ['a', 'b']),
+  (RegExp(r'累计容量 ([\d.]+) kJ'), '累计容量 {w} kJ', ['w']),
+  (RegExp(r'· 时长 (\d+) 分钟'), '· 时长 {n} 分钟', ['n']),
+  (RegExp(r'(\d+) 个训练日 · 累计 ([\d.]+) kJ'), '{d} 个训练日 · 累计 {w} kJ', ['d', 'w']),
+  (RegExp(r'(\d+) 组 × (\d+) 次'), '{s} 组 × {r} 次', ['s', 'r']),
+  (RegExp(r'· 有氧 (\d+) 分钟'), '· 有氧 {n} 分钟', ['n']),
+  (RegExp(r'共 (\d+) 次 · 按时间倒序'), '共 {n} 次 · 按时间倒序', ['n']),
+  (RegExp(r'(\d+) 天 · 恢复与准备'), '{n} 天 · 恢复与准备', ['n']),
+  (RegExp(r'(\d+) 个动作 · (\d+) 组'), '{a} 个动作 · {b} 组', ['a', 'b']),
+  (RegExp(r'请输入 ([\d.]+) - ([\d.]+) 之间的数值'), '请输入 {a} - {b} 之间的数值', ['a', 'b']),
+  (
+    RegExp(r'范围 ([\d.]+) - ([\d.]+) (.+)，留空或点“清除”表示暂不填写。'),
+    '范围 {a} - {b} {unit}，留空或点“清除”表示暂不填写。',
+    ['a', 'b', 'unit']
+  ),
+  (RegExp(r'第 (\d+) 章'), '第 {n} 章', ['n']),
+  (RegExp(r'(\d+) 章 · 当前第 (\d+) 章'), '{c} 章 · 当前第 {n} 章', ['c', 'n']),
+  (RegExp(r'没有找到「(.+)」'), '没有找到「{q}」', ['q']),
+  (RegExp(r'(\d+) 条 · 仅保存在本机'), '{n} 条 · 仅保存在本机', ['n']),
+  (RegExp(r'(\d+) 条 · 选中文字后点「小笺」添加'), '{n} 条 · 选中文字后点「小笺」添加', ['n']),
+  (RegExp(r'· 恢复与准备'), '· 恢复与准备', []),
+  (RegExp(r'· 累计'), '· 累计', []),
+  (RegExp(r'· 时长'), '· 时长', []),
+  (RegExp(r'· 有氧'), '· 有氧', []),
+  (RegExp(r'第 ([^\s·]+) 次训练'), '第 {n} 次训练', ['n']),
+  (RegExp(r'第 ([^\s·]+) 次 · 合并'), '第 {n} 次 · 合并', ['n']),
+  (RegExp(r'第 ([^\s·]+) 次'), '第 {n} 次', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 个动作'), '{n} 个动作', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 个项目'), '{n} 个项目', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 条记录'), '{n} 条记录', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 位 UP 主'), '{n} 位 UP 主', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 个视频'), '{n} 个视频', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 个训练日'), '{n} 个训练日', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 次训练'), '{n} 次训练', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 分钟'), '{n} 分钟', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 千焦'), '{n} 千焦', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 千卡'), '{n} 千卡', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 秒'), '{n} 秒', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 岁'), '{n} 岁', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 年'), '{n} 年', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 天'), '{n} 天', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 组'), '{n} 组', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 次'), '{n} 次', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 本'), '{n} 本', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 章'), '{n} 章', ['n']),
+  (RegExp(r'(\d+(?:\.\d+)?) 条'), '{n} 条', ['n']),
+  (RegExp(r'目标 (\d+)'), '目标 {n}', ['n']),
+  (RegExp(r'完成度 (\d+)%'), '完成度 {p}%', ['p']),
+  (RegExp(r'还差 (\d+) 次达成目标'), '还差 {n} 次达成目标', ['n']),
+  (RegExp(r'感受：([^·\n]+)'), '感受：{v}', ['v']),
+  (RegExp(r'备注：([^·\n]+)'), '备注：{v}', ['v']),
+  (RegExp(r'正在打开《([^》]+)》…'), '正在打开《{t}》…', ['t']),
+  (RegExp(r'正在恢复《([^》]+)》…'), '正在恢复《{t}》…', ['t']),
+  (RegExp(r'已导入《([^》]+)》'), '已导入《{t}》', ['t']),
+  (RegExp(r'下载中 (\d+)% · (.+)'), '下载中 {p}% · {s}', ['p', 's']),
+  (RegExp(r'加载全部 (\d+) 个视频'), '加载全部 {n} 个视频', ['n']),
+  (RegExp(r'展开全部 (\d+) 个视频'), '展开全部 {n} 个视频', ['n']),
+  (RegExp(r'(\d+) 位 UP 主 · 已折叠'), '{n} 位 UP 主 · 已折叠', ['n']),
+  (RegExp(r'(\d+\+) 个视频'), '{n}+ 个视频', ['n']),
+  (
+    RegExp(r'已添加 (.+) 到「(.+)」'),
+    '已添加 {name} 到「{collection}」',
+    ['name', 'collection']
+  ),
+  (RegExp(r'已删除「(.+)」'), '已删除「{title}」', ['title']),
+];
 
 class _AppLocalizationsDelegate
     extends LocalizationsDelegate<AppLocalizations> {
@@ -96,6 +237,14 @@ class _AppLocalizationsDelegate
 extension AppLocalizationsX on BuildContext {
   AppLocalizations get l10n => AppLocalizations.of(this);
   String tr(String source) => l10n.t(source);
+
+  String trArgs(String source, Map<String, String> args) {
+    var result = tr(source);
+    for (final entry in args.entries) {
+      result = result.replaceAll('{${entry.key}}', entry.value);
+    }
+    return result;
+  }
 }
 
 const Map<String, Map<String, String>> _translations = {
@@ -107,6 +256,13 @@ const Map<String, Map<String, String>> _translations = {
     '阅读器': 'Reader',
     '训练历史': 'History',
     '主题工坊': 'Themes',
+    '铁镌书库': 'Iron Etch Library',
+    '知识补给': 'Knowledge',
+    '资讯详情': 'Article',
+    '本周目标': 'Weekly goal',
+    '部位均衡': 'Muscle balance',
+    '容量趋势': 'Volume trend',
+    '个人记录': 'Personal records',
     '设置': 'Settings',
     '版本': 'Version',
     '累计训练': 'Workouts',
@@ -130,6 +286,25 @@ const Map<String, Map<String, String>> _translations = {
     '功能': 'Functional',
     '自定义字体已导入': 'Custom font imported',
     '字体导入失败': 'Font import failed',
+    '字体导入失败：{e}': 'Font import failed: {e}',
+    '头像设置失败：{e}': 'Failed to set avatar: {e}',
+    '：': ': ',
+    '下载失败': 'Download failed',
+    '打开失败': 'Open failed',
+    '恢复失败': 'Restore failed',
+    '导入失败': 'Import failed',
+    '删除失败': 'Delete failed',
+    '内置书准备失败': 'Built-in book preparation failed',
+    '正在打开': 'Opening',
+    '正在恢复': 'Restoring',
+    '正在准备书库…': 'Preparing library…',
+    '正在解压内置书，请稍候…': 'Extracting built-in books, please wait…',
+    '正在打开《{t}》…': 'Opening “{t}”…',
+    '正在恢复《{t}》…': 'Restoring “{t}”…',
+    '已导入《{t}》': 'Imported “{t}”',
+    '下载中 {p}% · {s}': 'Downloading {p}% · {s}',
+    '切换为列表': 'Switch to list',
+    '切换为网格': 'Switch to grid',
     '字体导入失败，请确认文件有效': 'Font import failed. Check the file.',
     '已设置 · 点击更换或移除': 'Photo set · Tap to replace or remove',
     '未设置 · 点击从相册选择': 'Not set · Tap to choose from gallery',
@@ -163,6 +338,7 @@ const Map<String, Map<String, String>> _translations = {
     '动作示意图与动作分类参考来源': 'Exercise images and classification sources',
     'AI 识别失败，照片已保存为打卡照片':
         'AI recognition failed; photo saved as check-in photo',
+    '处理照片失败：{e}': 'Failed to process photo: {e}',
     '保存本地数据失败': 'Failed to save local data',
     '保存训练记录': 'Save workout',
     '背': 'Back',
@@ -176,6 +352,7 @@ const Map<String, Map<String, String>> _translations = {
     '打卡照片已添加，将随训练记录保存':
         'Check-in photo added; it will be saved with the workout',
     '导出失败': 'Export failed',
+    '导出失败：{e}': 'Export failed: {e}',
     '导入已有的训练打卡照片': 'Import existing workout check-in photos',
     '第几次健身': 'Workout number',
     '动作库': 'Exercise library',
@@ -437,6 +614,13 @@ const Map<String, Map<String, String>> _translations = {
     '阅读器': 'リーダー',
     '训练历史': '履歴',
     '主题工坊': 'テーマ',
+    '铁镌书库': 'Iron Etch 書庫',
+    '知识补给': '知識補給',
+    '资讯详情': '記事詳細',
+    '本周目标': '今週の目標',
+    '部位均衡': '部位バランス',
+    '容量趋势': 'ボリューム推移',
+    '个人记录': '自己記録',
     '设置': '設定',
     '版本': 'バージョン',
     '累计训练': '総トレーニング',
@@ -460,6 +644,25 @@ const Map<String, Map<String, String>> _translations = {
     '功能': '機能',
     '自定义字体已导入': 'カスタムフォントを読み込みました',
     '字体导入失败': 'フォントの読み込みに失敗',
+    '字体导入失败：{e}': 'フォントの読み込みに失敗：{e}',
+    '头像设置失败：{e}': 'アイコンの設定に失敗しました：{e}',
+    '：': '：',
+    '下载失败': 'ダウンロードに失敗',
+    '打开失败': '開けませんでした',
+    '恢复失败': '復元に失敗',
+    '导入失败': 'インポートに失敗',
+    '删除失败': '削除に失敗',
+    '内置书准备失败': '内蔵本の準備に失敗',
+    '正在打开': '開いています',
+    '正在恢复': '復元しています',
+    '正在准备书库…': '書庫を準備しています…',
+    '正在解压内置书，请稍候…': '内蔵本を展開しています。しばらくお待ちください…',
+    '正在打开《{t}》…': '「{t}」を開いています…',
+    '正在恢复《{t}》…': '「{t}」を復元しています…',
+    '已导入《{t}》': '「{t}」をインポートしました',
+    '下载中 {p}% · {s}': 'ダウンロード中 {p}% · {s}',
+    '切换为列表': 'リスト表示に切り替え',
+    '切换为网格': 'グリッド表示に切り替え',
     '字体导入失败，请确认文件有效': 'フォントを読み込めません。ファイルを確認してください。',
     '已设置 · 点击更换或移除': '設定済み · タップして変更または削除',
     '未设置 · 点击从相册选择': '未設定 · タップしてギャラリーから選択',
@@ -490,6 +693,7 @@ const Map<String, Map<String, String>> _translations = {
     '鸣谢': '謝辞',
     '动作示意图与动作分类参考来源': '種目画像と分類の参考元',
     'AI 识别失败，照片已保存为打卡照片': 'AI 認識に失敗しました。写真は記録用として保存されました',
+    '处理照片失败：{e}': '写真の処理に失敗しました：{e}',
     '保存本地数据失败': 'ローカルデータの保存に失敗しました',
     '保存训练记录': 'トレーニングを保存',
     '背': '背中',
@@ -502,6 +706,7 @@ const Map<String, Map<String, String>> _translations = {
     '从相册选择': 'ギャラリーから選択',
     '打卡照片已添加，将随训练记录保存': '記録写真を追加しました。トレーニングと一緒に保存されます',
     '导出失败': 'エクスポートに失敗しました',
+    '导出失败：{e}': 'エクスポートに失敗しました：{e}',
     '导入已有的训练打卡照片': '既存のトレーニング記録写真を読み込む',
     '第几次健身': '何回目のトレーニング',
     '动作库': '種目ライブラリ',
@@ -749,6 +954,13 @@ const Map<String, Map<String, String>> _translations = {
     '阅读器': '리더',
     '训练历史': '기록',
     '主题工坊': '테마',
+    '铁镌书库': 'Iron Etch 서재',
+    '知识补给': '지식 보급',
+    '资讯详情': '뉴스 상세',
+    '本周目标': '주간 목표',
+    '部位均衡': '부위 밸런스',
+    '容量趋势': '볼륨 추세',
+    '个人记录': '개인 기록',
     '设置': '설정',
     '版本': '버전',
     '累计训练': '총 운동',
@@ -772,6 +984,25 @@ const Map<String, Map<String, String>> _translations = {
     '功能': '기능',
     '自定义字体已导入': '사용자 글꼴을 가져왔습니다',
     '字体导入失败': '글꼴 가져오기 실패',
+    '字体导入失败：{e}': '글꼴 가져오기 실패: {e}',
+    '头像设置失败：{e}': '프로필 사진 설정 실패: {e}',
+    '：': ': ',
+    '下载失败': '다운로드 실패',
+    '打开失败': '열기 실패',
+    '恢复失败': '복원 실패',
+    '导入失败': '가져오기 실패',
+    '删除失败': '삭제 실패',
+    '内置书准备失败': '내장 도서 준비 실패',
+    '正在打开': '여는 중',
+    '正在恢复': '복원 중',
+    '正在准备书库…': '서재 준비 중…',
+    '正在解压内置书，请稍候…': '내장 도서 압축을 푸는 중입니다. 잠시 기다려 주세요…',
+    '正在打开《{t}》…': '“{t}” 여는 중…',
+    '正在恢复《{t}》…': '“{t}” 복원 중…',
+    '已导入《{t}》': '“{t}” 가져옴',
+    '下载中 {p}% · {s}': '다운로드 중 {p}% · {s}',
+    '切换为列表': '목록 보기로 전환',
+    '切换为网格': '그리드 보기로 전환',
     '字体导入失败，请确认文件有效': '글꼴을 불러오지 못했습니다. 파일을 확인하세요.',
     '已设置 · 点击更换或移除': '설정됨 · 눌러서 변경 또는 제거',
     '未设置 · 点击从相册选择': '설정 안 됨 · 눌러서 갤러리에서 선택',
@@ -802,6 +1033,7 @@ const Map<String, Map<String, String>> _translations = {
     '鸣谢': '감사의 말',
     '动作示意图与动作分类参考来源': '동작 이미지 및 분류 참고 출처',
     'AI 识别失败，照片已保存为打卡照片': 'AI 인식 실패. 사진은 기록용으로 저장되었습니다',
+    '处理照片失败：{e}': '사진 처리 실패: {e}',
     '保存本地数据失败': '로컬 데이터 저장 실패',
     '保存训练记录': '운동 저장',
     '背': '등',
@@ -814,6 +1046,7 @@ const Map<String, Map<String, String>> _translations = {
     '从相册选择': '갤러리에서 선택',
     '打卡照片已添加，将随训练记录保存': '기록 사진이 추가되었습니다. 운동과 함께 저장됩니다',
     '导出失败': '내보내기 실패',
+    '导出失败：{e}': '내보내기 실패: {e}',
     '导入已有的训练打卡照片': '기존 운동 기록 사진 가져오기',
     '第几次健身': '몇 번째 운동',
     '动作库': '동작 라이브러리',
@@ -1060,6 +1293,13 @@ const Map<String, Map<String, String>> _translations = {
     '阅读器': 'Читалка',
     '训练历史': 'История',
     '主题工坊': 'Темы',
+    '铁镌书库': 'Библиотека Iron Etch',
+    '知识补给': 'База знаний',
+    '资讯详情': 'Статья',
+    '本周目标': 'Цель недели',
+    '部位均衡': 'Баланс мышц',
+    '容量趋势': 'Динамика объёма',
+    '个人记录': 'Личные рекорды',
     '设置': 'Настройки',
     '版本': 'Версия',
     '累计训练': 'Всего тренировок',
@@ -1083,6 +1323,25 @@ const Map<String, Map<String, String>> _translations = {
     '功能': 'Функциональный',
     '自定义字体已导入': 'Свой шрифт импортирован',
     '字体导入失败': 'Ошибка импорта шрифта',
+    '字体导入失败：{e}': 'Ошибка импорта шрифта: {e}',
+    '头像设置失败：{e}': 'Не удалось установить аватар: {e}',
+    '：': ': ',
+    '下载失败': 'Ошибка загрузки',
+    '打开失败': 'Не удалось открыть',
+    '恢复失败': 'Ошибка восстановления',
+    '导入失败': 'Ошибка импорта',
+    '删除失败': 'Ошибка удаления',
+    '内置书准备失败': 'Ошибка подготовки встроенной книги',
+    '正在打开': 'Открытие',
+    '正在恢复': 'Восстановление',
+    '正在准备书库…': 'Подготовка библиотеки…',
+    '正在解压内置书，请稍候…': 'Распаковка встроенных книг, подождите…',
+    '正在打开《{t}》…': 'Открытие «{t}»…',
+    '正在恢复《{t}》…': 'Восстановление «{t}»…',
+    '已导入《{t}》': 'Импортировано «{t}»',
+    '下载中 {p}% · {s}': 'Загрузка {p}% · {s}',
+    '切换为列表': 'Показать списком',
+    '切换为网格': 'Показать сеткой',
     '字体导入失败，请确认文件有效': 'Не удалось загрузить шрифт. Проверьте файл.',
     '已设置 · 点击更换或移除': 'Установлено · Нажмите, чтобы заменить или удалить',
     '未设置 · 点击从相册选择': 'Не задано · Нажмите, чтобы выбрать из галереи',
@@ -1118,6 +1377,7 @@ const Map<String, Map<String, String>> _translations = {
     '动作示意图与动作分类参考来源': 'Источники изображений и классификации упражнений',
     'AI 识别失败，照片已保存为打卡照片':
         'Распознавание AI не удалось. Фото сохранено как отметка',
+    '处理照片失败：{e}': 'Не удалось обработать фото: {e}',
     '保存本地数据失败': 'Не удалось сохранить локальные данные',
     '保存训练记录': 'Сохранить тренировку',
     '背': 'Спина',
@@ -1130,6 +1390,7 @@ const Map<String, Map<String, String>> _translations = {
     '从相册选择': 'Выбрать из галереи',
     '打卡照片已添加，将随训练记录保存': 'Фото-отметка добавлено и сохранится с тренировкой',
     '导出失败': 'Ошибка экспорта',
+    '导出失败：{e}': 'Ошибка экспорта: {e}',
     '导入已有的训练打卡照片': 'Импортировать существующие фото тренировок',
     '第几次健身': 'Номер тренировки',
     '动作库': 'Библиотека упражнений',

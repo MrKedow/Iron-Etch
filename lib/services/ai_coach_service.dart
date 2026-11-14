@@ -99,49 +99,12 @@ class AiCoachService {
     final configuredModel = (model == null || model.trim().isEmpty)
         ? SettingsProvider.defaultAiModel
         : model.trim();
-    final targets = <_AiTarget>[
-      _AiTarget(
-        endpoint: configured,
-        model: configuredModel,
-        label: _labelFor(configured),
-        reasoningEffort: reasoningEffort,
-      ),
-    ];
-
-    if (key.isEmpty) {
-      for (final fallback in const [
-        _AiTarget(
-          endpoint: blockRunEndpoint,
-          model: 'nvidia/gpt-oss-20b',
-          label: 'BlockRun',
-        ),
-        _AiTarget(
-          endpoint: pollinationsEndpoint,
-          model: 'gpt-oss-20b',
-          label: 'Pollinations',
-        ),
-        _AiTarget(
-          endpoint: pollinationsCompatEndpoint,
-          model: 'gpt-oss-20b',
-          label: 'Pollinations',
-        ),
-        _AiTarget(
-          endpoint: pollinationsV1Endpoint,
-          model: 'gpt-oss-20b',
-          label: 'Pollinations',
-        ),
-        _AiTarget(
-          endpoint: openCodeEndpoint,
-          model: 'big-pickle',
-          label: 'OpenCode Zen',
-        ),
-      ]) {
-        if (targets.any((target) => target.endpoint == fallback.endpoint)) {
-          continue;
-        }
-        targets.add(fallback);
-      }
-    }
+    final targets = _chatTargets(
+      endpoint: configured,
+      model: configuredModel,
+      apiKey: key,
+      reasoningEffort: reasoningEffort,
+    );
 
     final errors = <String>[];
     for (var i = 0; i < targets.length; i++) {
@@ -163,6 +126,118 @@ class AiCoachService {
       return AiCoachReply.failure('所有 AI 通道均不可用。${errors.join('；')}');
     }
     return AiCoachReply.failure(errors.isEmpty ? 'AI 服务不可用。' : errors.first);
+  }
+
+  static Future<AiCoachReply> chatStream({
+    required List<Map<String, dynamic>> messages,
+    String? endpoint,
+    String? model,
+    String? apiKey,
+    String? reasoningEffort,
+    void Function(String delta)? onReasoningChunk,
+    void Function(String delta)? onContentChunk,
+    void Function()? onReasoningDone,
+  }) async {
+    final configured = (endpoint == null || endpoint.trim().isEmpty)
+        ? SettingsProvider.defaultAiEndpoint
+        : endpoint.trim();
+    final primaryUri = Uri.tryParse(configured);
+    if (primaryUri == null || !primaryUri.hasScheme) {
+      return AiCoachReply.failure('AI 接口地址无效，请在设置中检查。');
+    }
+
+    final key = apiKey?.trim() ?? '';
+    final configuredModel = (model == null || model.trim().isEmpty)
+        ? SettingsProvider.defaultAiModel
+        : model.trim();
+    final targets = _chatTargets(
+      endpoint: configured,
+      model: configuredModel,
+      apiKey: key,
+      reasoningEffort: reasoningEffort,
+    );
+    final errors = <String>[];
+    var emitted = false;
+    for (var i = 0; i < targets.length; i++) {
+      final target = targets[i];
+      final allowCallbacks = !emitted;
+      final reply = await _attemptStream(
+        target,
+        messages,
+        apiKey: key,
+        timeout: Duration(seconds: i == 0 ? 45 : 30),
+        onReasoningChunk: allowCallbacks
+            ? (delta) {
+                emitted = true;
+                onReasoningChunk?.call(delta);
+              }
+            : null,
+        onContentChunk: allowCallbacks
+            ? (delta) {
+                emitted = true;
+                onContentChunk?.call(delta);
+              }
+            : null,
+        onReasoningDone: allowCallbacks ? onReasoningDone : null,
+      );
+      if (reply.success) return reply;
+      errors.add('${target.label}：${reply.error ?? '未知错误'}');
+      if (key.isNotEmpty) break;
+    }
+    if (errors.length > 1) {
+      return AiCoachReply.failure('所有 AI 通道均不可用。${errors.join('；')}');
+    }
+    return AiCoachReply.failure(errors.isEmpty ? 'AI 服务不可用。' : errors.first);
+  }
+
+  static List<_AiTarget> _chatTargets({
+    required String endpoint,
+    required String model,
+    required String apiKey,
+    String? reasoningEffort,
+  }) {
+    final targets = <_AiTarget>[
+      _AiTarget(
+        endpoint: endpoint,
+        model: model,
+        label: _labelFor(endpoint),
+        reasoningEffort: reasoningEffort,
+      ),
+    ];
+    if (apiKey.isNotEmpty) return targets;
+    for (final fallback in const [
+      _AiTarget(
+        endpoint: blockRunEndpoint,
+        model: 'nvidia/gpt-oss-20b',
+        label: 'BlockRun',
+      ),
+      _AiTarget(
+        endpoint: pollinationsEndpoint,
+        model: 'gpt-oss-20b',
+        label: 'Pollinations',
+      ),
+      _AiTarget(
+        endpoint: pollinationsCompatEndpoint,
+        model: 'gpt-oss-20b',
+        label: 'Pollinations',
+      ),
+      _AiTarget(
+        endpoint: pollinationsV1Endpoint,
+        model: 'gpt-oss-20b',
+        label: 'Pollinations',
+      ),
+      _AiTarget(
+        endpoint: openCodeEndpoint,
+        model: 'big-pickle',
+        label: 'OpenCode Zen',
+      ),
+    ]) {
+      if (targets.any((target) => target.endpoint == fallback.endpoint)) {
+        continue;
+      }
+      targets.add(fallback);
+    }
+    return targets;
   }
 
   static Future<AiCoachReply> testConnection({
@@ -386,7 +461,7 @@ class AiCoachService {
     required String apiKey,
     required Duration timeout,
     double temperature = .65,
-    int maxTokens = 4096,
+    int maxTokens = 8192,
   }) async {
     final uri = Uri.tryParse(target.endpoint);
     if (uri == null || !uri.hasScheme) {
@@ -478,6 +553,196 @@ class AiCoachService {
     } finally {
       client.close();
     }
+  }
+
+  static Future<AiCoachReply> _attemptStream(
+    _AiTarget target,
+    List<Map<String, dynamic>> messages, {
+    required String apiKey,
+    required Duration timeout,
+    double temperature = .65,
+    int maxTokens = 8192,
+    void Function(String delta)? onReasoningChunk,
+    void Function(String delta)? onContentChunk,
+    void Function()? onReasoningDone,
+  }) async {
+    final uri = Uri.tryParse(target.endpoint);
+    if (uri == null || !uri.hasScheme) {
+      return AiCoachReply.failure('接口地址无效');
+    }
+
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream, application/json',
+    };
+    final effectiveKey = (target.apiKey == null || target.apiKey!.isEmpty)
+        ? apiKey
+        : target.apiKey!;
+    if (effectiveKey.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $effectiveKey';
+    }
+
+    final reasoningPayload = aiReasoningPayload(
+      target.endpoint,
+      target.model,
+      target.reasoningEffort,
+    );
+    final thinking = reasoningPayload['thinking'];
+    final thinkingBudget = thinking is Map
+        ? int.tryParse('${thinking['budget_tokens'] ?? ''}')
+        : null;
+    final effectiveMaxTokens =
+        thinkingBudget != null && thinkingBudget >= maxTokens
+            ? thinkingBudget + 2048
+            : maxTokens;
+
+    final body = jsonEncode({
+      'model': target.model,
+      'messages': messages,
+      if (thinking == null) 'temperature': temperature,
+      'max_tokens': effectiveMaxTokens,
+      'stream': true,
+      ...reasoningPayload,
+    });
+
+    final client = http.Client();
+    try {
+      final request = http.Request('POST', uri)
+        ..headers.addAll(headers)
+        ..body = body;
+      final response = await client.send(request).timeout(timeout);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final detail = _extractError(
+          await response.stream.bytesToString().timeout(timeout),
+        );
+        if (response.statusCode == 401) {
+          return AiCoachReply.failure(
+            'Key 无效或无权限（401）',
+            statusCode: response.statusCode,
+          );
+        }
+        if (response.statusCode == 429) {
+          return AiCoachReply.failure(
+            '请求过多（429）',
+            statusCode: response.statusCode,
+          );
+        }
+        return AiCoachReply.failure(
+          'HTTP ${response.statusCode}${detail.isEmpty ? '' : '：$detail'}',
+          statusCode: response.statusCode,
+        );
+      }
+
+      var reasoning = '';
+      var content = '';
+      var reasoningDone = false;
+
+      void notifyReasoningDone() {
+        if (reasoningDone) return;
+        reasoningDone = true;
+        onReasoningDone?.call();
+      }
+
+      void appendDelta(_AiExtractedReply delta) {
+        if (delta.reasoning.isNotEmpty) {
+          reasoning += delta.reasoning;
+          onReasoningChunk?.call(delta.reasoning);
+        }
+        if (delta.content.isNotEmpty) {
+          content += delta.content;
+          onContentChunk?.call(delta.content);
+        }
+      }
+
+      final contentType = response.headers['content-type'] ?? '';
+      if (contentType.contains('text/event-stream')) {
+        final lines = response.stream
+            .timeout(timeout)
+            .transform(utf8.decoder)
+            .transform(const LineSplitter());
+        await for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.isEmpty || trimmed.startsWith(':')) continue;
+          if (!trimmed.startsWith('data:')) continue;
+          final data = trimmed.substring(5).trim();
+          if (data == '[DONE]') break;
+          dynamic decoded;
+          try {
+            decoded = jsonDecode(data);
+          } catch (_) {
+            continue;
+          }
+          if (decoded is Map && decoded['error'] != null) {
+            return AiCoachReply.failure(
+              _extractError(data),
+              statusCode: response.statusCode,
+            );
+          }
+          appendDelta(_extractDelta(decoded));
+        }
+        notifyReasoningDone();
+      } else {
+        final bodyText = await response.stream.bytesToString().timeout(timeout);
+        final decoded = jsonDecode(bodyText);
+        final extracted = _extractReply(decoded);
+        reasoning = extracted.reasoning;
+        content = extracted.content;
+        if (reasoning.isNotEmpty) onReasoningChunk?.call(reasoning);
+        if (content.isNotEmpty) onContentChunk?.call(content);
+        notifyReasoningDone();
+      }
+
+      if (content.trim().isEmpty && reasoning.trim().isEmpty) {
+        return AiCoachReply.failure(
+          '返回了空内容',
+          statusCode: response.statusCode,
+        );
+      }
+      return AiCoachReply(
+        success: true,
+        content: _cleanContent(content),
+        reasoning: reasoning.trim(),
+        statusCode: response.statusCode,
+        channel: target.label,
+      );
+    } on TimeoutException {
+      return AiCoachReply.failure('响应超时');
+    } catch (e) {
+      final text = _friendlyError(e);
+      return AiCoachReply.failure(
+        text.contains('网络') ? text : '无法连接：$text',
+      );
+    } finally {
+      client.close();
+    }
+  }
+
+  static _AiExtractedReply _extractDelta(dynamic decoded) {
+    if (decoded is! Map) {
+      return const _AiExtractedReply(content: '', reasoning: '');
+    }
+    final choices = decoded['choices'];
+    if (choices is! List || choices.isEmpty) {
+      return const _AiExtractedReply(content: '', reasoning: '');
+    }
+    final choice = choices.first;
+    if (choice is! Map) {
+      return const _AiExtractedReply(content: '', reasoning: '');
+    }
+    final part = choice['delta'] ?? choice['message'];
+    if (part is! Map) {
+      return const _AiExtractedReply(content: '', reasoning: '');
+    }
+    return _AiExtractedReply(
+      content: _firstText(part['content']),
+      reasoning: _joinText([
+        _firstText(part['reasoning_content']),
+        _firstText(part['reasoning']),
+        _firstText(part['thinking']),
+        _reasoningDetails(part['reasoning_details']),
+      ]),
+    );
   }
 
   static String _labelFor(String endpoint) {

@@ -56,26 +56,121 @@ class AppFonts {
     String? customFamily,
   }) {
     final option = appFontById(fontId);
-    String? family;
     if (option.isSystem) return base;
     if (option.isCustom) {
-      family = customFamily;
+      final family = customFamily;
       if (family == null || !_loadedCustomFamilies.contains(family)) {
         return base;
       }
-    } else {
-      family = option.googleFamily;
-      if (family == null) return base;
-      try {
-        family = GoogleFonts.getFont(family).fontFamily ?? family;
-      } catch (_) {
-        return base;
-      }
+      return _applyFamily(
+        base,
+        textTheme: base.textTheme.apply(fontFamily: family),
+        primaryTextTheme: base.primaryTextTheme.apply(fontFamily: family),
+      );
     }
-    return base.copyWith(
-      textTheme: base.textTheme.apply(fontFamily: family),
-      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: family),
+    final family = option.googleFamily;
+    if (family == null) return base;
+    try {
+      return _applyFamily(
+        base,
+        textTheme: GoogleFonts.getTextTheme(family, base.textTheme),
+        primaryTextTheme:
+            GoogleFonts.getTextTheme(family, base.primaryTextTheme),
+      );
+    } catch (_) {
+      return base;
+    }
+  }
+
+  static ThemeData _applyFamily(
+    ThemeData base, {
+    required TextTheme textTheme,
+    required TextTheme primaryTextTheme,
+  }) {
+    final themed = base.copyWith(
+      textTheme: textTheme,
+      primaryTextTheme: primaryTextTheme,
     );
+
+    TextStyle? fit(TextStyle? style) {
+      if (style == null) return null;
+      final source = _styleForWeight(textTheme, style.fontWeight);
+      final family = source.fontFamily;
+      if (family == null) return style;
+      return style.copyWith(
+        fontFamily: family,
+        fontFamilyFallback: source.fontFamilyFallback,
+      );
+    }
+
+    ButtonStyle fitButton(ButtonStyle? style) {
+      if (style == null) return const ButtonStyle();
+      final property = style.textStyle;
+      if (property == null) return style;
+      return style.copyWith(
+        textStyle: WidgetStateProperty.resolveWith(
+          (states) => fit(property.resolve(states)),
+        ),
+      );
+    }
+
+    return themed.copyWith(
+      appBarTheme: themed.appBarTheme.copyWith(
+        titleTextStyle: fit(themed.appBarTheme.titleTextStyle),
+      ),
+      dialogTheme: themed.dialogTheme.copyWith(
+        titleTextStyle: fit(themed.dialogTheme.titleTextStyle),
+        contentTextStyle: fit(themed.dialogTheme.contentTextStyle),
+      ),
+      inputDecorationTheme: themed.inputDecorationTheme.copyWith(
+        labelStyle: fit(themed.inputDecorationTheme.labelStyle),
+        hintStyle: fit(themed.inputDecorationTheme.hintStyle),
+        suffixStyle: fit(themed.inputDecorationTheme.suffixStyle),
+      ),
+      chipTheme: themed.chipTheme.copyWith(
+        labelStyle: fit(themed.chipTheme.labelStyle),
+      ),
+      snackBarTheme: themed.snackBarTheme.copyWith(
+        contentTextStyle: fit(themed.snackBarTheme.contentTextStyle),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: fitButton(themed.elevatedButtonTheme.style),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: fitButton(themed.textButtonTheme.style),
+      ),
+    );
+  }
+
+  static TextStyle _styleForWeight(TextTheme theme, FontWeight? weight) {
+    final value = weight?.value ?? 400;
+    final candidates = value >= 700
+        ? [theme.titleLarge, theme.bodyLarge, theme.bodyMedium]
+        : value >= 500
+            ? [theme.titleMedium, theme.bodyMedium, theme.bodyLarge]
+            : [theme.bodyMedium, theme.bodyLarge, theme.labelMedium];
+    for (final style in candidates) {
+      if (style?.fontFamily != null) return style!;
+    }
+    return const TextStyle();
+  }
+
+  static Future<void> preload(String fontId, {String? customFamily}) async {
+    final option = appFontById(fontId);
+    if (option.isSystem) return;
+    if (option.isCustom) {
+      final family = customFamily;
+      if (family == null || _loadedCustomFamilies.contains(family)) return;
+      return;
+    }
+    final family = option.googleFamily;
+    if (family == null) return;
+    try {
+      final base = ThemeData.light();
+      GoogleFonts.getTextTheme(family, base.textTheme);
+      GoogleFonts.getTextTheme(family, base.primaryTextTheme);
+      await GoogleFonts.pendingFonts();
+    } catch (_) {}
   }
 
   static Future<String?> loadCustomFont({

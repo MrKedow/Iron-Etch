@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:provider/provider.dart';
 
-import '../l10n/app_localizations.dart';
 import '../providers/app_providers.dart';
 import '../services/ai_coach_service.dart';
 import '../theme/app_theme.dart';

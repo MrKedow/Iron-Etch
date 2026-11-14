@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -375,27 +375,27 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
       appBar: AppBar(
         backgroundColor: spec.background,
         surfaceTintColor: Colors.transparent,
-        title: const Text('铁镌书库'),
+        title: Text(context.tr('铁镌书库')),
         actions: [
           IconButton(
-            tooltip: _gridView ? '切换为列表' : '切换为网格',
+            tooltip: context.tr(_gridView ? '切换为列表' : '切换为网格'),
             onPressed: _busy ? null : _toggleView,
             icon: Icon(
               _gridView ? Icons.view_list_rounded : Icons.grid_view_rounded,
             ),
           ),
           IconButton(
-            tooltip: '书架材质',
+            tooltip: context.tr('书架材质'),
             onPressed: _busy ? null : _pickMaterial,
             icon: const Icon(Icons.format_paint_rounded),
           ),
           IconButton(
-            tooltip: '导入 EPUB',
+            tooltip: context.tr('导入 EPUB'),
             onPressed: _busy ? null : _importBook,
             icon: const Icon(Icons.add_rounded),
           ),
           IconButton(
-            tooltip: '刷新',
+            tooltip: context.tr('刷新'),
             onPressed: _busy || _preparing ? null : _prepareLibrary,
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -457,7 +457,7 @@ class _BookLibraryPageState extends State<BookLibraryPage> {
                           ),
                           IconButton(
                             onPressed: _hideIntro,
-                            tooltip: '关闭',
+                            tooltip: context.tr('关闭'),
                             icon: Icon(
                               Icons.close_rounded,
                               size: 18,
@@ -971,7 +971,7 @@ class _BookCard extends StatelessWidget {
                               width: 24,
                               height: 24,
                               child: PopupMenuButton<String>(
-                                tooltip: '管理书籍',
+                                tooltip: context.tr('管理书籍'),
                                 padding: EdgeInsets.zero,
                                 icon: const Icon(
                                   Icons.more_horiz_rounded,

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:provider/provider.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -162,7 +162,7 @@ class _BilibiliPlayerPageState extends State<BilibiliPlayerPage> {
           ),
           actions: [
             IconButton(
-              tooltip: '刷新',
+              tooltip: context.tr('刷新'),
               onPressed: _reload,
               icon: const Icon(Icons.refresh_rounded),
             ),

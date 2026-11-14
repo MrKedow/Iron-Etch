@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -308,8 +308,8 @@ class _EpubReaderPageState extends State<EpubReaderPage>
                 controller: controller,
                 autofocus: true,
                 maxLines: 4,
-                decoration: const InputDecoration(
-                  hintText: '写下你的想法…',
+                decoration: InputDecoration(
+                  hintText: context.tr('写下你的想法…'),
                 ),
               ),
             ],
@@ -1032,86 +1032,86 @@ class _EpubReaderPageState extends State<EpubReaderPage>
       backgroundColor: pageBackground,
       appBar: _controlsVisible
           ? AppBar(
-        backgroundColor: pageBackground,
-        surfaceTintColor: Colors.transparent,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _book.displayTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: spec.textSecondary,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: .2,
+              backgroundColor: pageBackground,
+              surfaceTintColor: Colors.transparent,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _book.displayTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: spec.textSecondary,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .2,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    _chapter.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: spec.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 1),
-            Text(
-              _chapter.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: spec.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: '目录',
-            onPressed: _showToc,
-            icon: const Icon(Icons.format_list_bulleted_rounded),
-          ),
-          IconButton(
-            tooltip: _isBookmarked ? '移除书签' : '添加书签',
-            onPressed: _toggleBookmark,
-            icon: Icon(
-              _isBookmarked
-                  ? Icons.bookmark_rounded
-                  : Icons.bookmark_border_rounded,
-              color: _isBookmarked ? spec.primary : null,
-            ),
-          ),
-          IconButton(
-            tooltip: '全书查找',
-            onPressed: _showSearch,
-            icon: const Icon(Icons.search_rounded),
-          ),
-          PopupMenuButton<String>(
-            tooltip: '阅读设置',
-            onSelected: (value) {
-              if (value == 'highlights') _showHighlights();
-              if (value == 'notes') _showNotes();
-              if (value == 'font') _showTextSettings();
-              if (value == 'bg') _showBgSettings();
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'highlights',
-                child: Text('我的划线'),
-              ),
-              PopupMenuItem(
-                value: 'notes',
-                child: Text('我的小笺'),
-              ),
-              PopupMenuItem(
-                value: 'font',
-                child: Text('调整字号'),
-              ),
-              PopupMenuItem(
-                value: 'bg',
-                child: Text('阅读底色'),
-              ),
-            ],
-          ),
-        ],
-      )
+              actions: [
+                IconButton(
+                  tooltip: context.tr('目录'),
+                  onPressed: _showToc,
+                  icon: const Icon(Icons.format_list_bulleted_rounded),
+                ),
+                IconButton(
+                  tooltip: context.tr(_isBookmarked ? '移除书签' : '添加书签'),
+                  onPressed: _toggleBookmark,
+                  icon: Icon(
+                    _isBookmarked
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    color: _isBookmarked ? spec.primary : null,
+                  ),
+                ),
+                IconButton(
+                  tooltip: context.tr('全书查找'),
+                  onPressed: _showSearch,
+                  icon: const Icon(Icons.search_rounded),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: context.tr('阅读设置'),
+                  onSelected: (value) {
+                    if (value == 'highlights') _showHighlights();
+                    if (value == 'notes') _showNotes();
+                    if (value == 'font') _showTextSettings();
+                    if (value == 'bg') _showBgSettings();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'highlights',
+                      child: Text('我的划线'),
+                    ),
+                    PopupMenuItem(
+                      value: 'notes',
+                      child: Text('我的小笺'),
+                    ),
+                    PopupMenuItem(
+                      value: 'font',
+                      child: Text('调整字号'),
+                    ),
+                    PopupMenuItem(
+                      value: 'bg',
+                      child: Text('阅读底色'),
+                    ),
+                  ],
+                ),
+              ],
+            )
           : null,
       body: Column(
         children: [
@@ -1129,58 +1129,58 @@ class _EpubReaderPageState extends State<EpubReaderPage>
                 Positioned.fill(
                   child: WebViewWidget(controller: _web),
                 ),
-                      if (_pageLoading)
-                        Positioned.fill(
-                          child: ColoredBox(
-                            color: pageBackground,
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                color: spec.primary,
-                                strokeWidth: 2.8,
-                              ),
-                            ),
-                          ),
+                if (_pageLoading)
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: pageBackground,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: spec.primary,
+                          strokeWidth: 2.8,
                         ),
-                      if (_error != null)
-                        Positioned.fill(
-                          child: ColoredBox(
-                            color: pageBackground,
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(28),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.menu_book_rounded,
-                                      size: 38,
-                                      color: spec.textSecondary,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      _error!,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: spec.textSecondary,
-                                        fontSize: 12,
-                                        height: 1.6,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    FilledButton.icon(
-                                      onPressed: _loadChapter,
-                                      icon: const Icon(
-                                        Icons.refresh_rounded,
-                                        size: 18,
-                                      ),
-                                      label: const Text('重试'),
-                                    ),
-                                  ],
+                      ),
+                    ),
+                  ),
+                if (_error != null)
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: pageBackground,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(28),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.menu_book_rounded,
+                                size: 38,
+                                color: spec.textSecondary,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _error!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: spec.textSecondary,
+                                  fontSize: 12,
+                                  height: 1.6,
                                 ),
                               ),
-                            ),
+                              const SizedBox(height: 14),
+                              FilledButton.icon(
+                                onPressed: _loadChapter,
+                                icon: const Icon(
+                                  Icons.refresh_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text('重试'),
+                              ),
+                            ],
                           ),
                         ),
+                      ),
+                    ),
+                  ),
                 if (_chapterIndex > 0)
                   Positioned(
                     left: 0,
@@ -1218,67 +1218,67 @@ class _EpubReaderPageState extends State<EpubReaderPage>
           ),
           if (_controlsVisible)
             SafeArea(
-            top: false,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(10, 5, 10, 7),
-              decoration: BoxDecoration(
-                color: pageBackground,
-                border: Border(
-                  top: BorderSide(
-                    color: spec.textPrimary.withValues(alpha: .06),
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(10, 5, 10, 7),
+                decoration: BoxDecoration(
+                  color: pageBackground,
+                  border: Border(
+                    top: BorderSide(
+                      color: spec.textPrimary.withValues(alpha: .06),
+                    ),
                   ),
                 ),
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    tooltip: '上一章',
-                    onPressed: _chapterIndex > 0
-                        ? () => _goToChapter(_chapterIndex - 1)
-                        : null,
-                    icon: const Icon(Icons.skip_previous_rounded),
-                  ),
-                  Expanded(
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: _showToc,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 5),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${_chapterIndex + 1} / ${_book.chapters.length}',
-                              style: TextStyle(
-                                color: spec.textPrimary,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w800,
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: context.tr('上一章'),
+                      onPressed: _chapterIndex > 0
+                          ? () => _goToChapter(_chapterIndex - 1)
+                          : null,
+                      icon: const Icon(Icons.skip_previous_rounded),
+                    ),
+                    Expanded(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: _showToc,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 5),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${_chapterIndex + 1} / ${_book.chapters.length}',
+                                style: TextStyle(
+                                  color: spec.textPrimary,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '轻点查看目录',
-                              style: TextStyle(
-                                color: spec.textSecondary,
-                                fontSize: 9.5,
+                              const SizedBox(height: 2),
+                              Text(
+                                '轻点查看目录',
+                                style: TextStyle(
+                                  color: spec.textSecondary,
+                                  fontSize: 9.5,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: '下一章',
-                    onPressed: _chapterIndex < _book.chapters.length - 1
-                        ? () => _goToChapter(_chapterIndex + 1)
-                        : null,
-                    icon: const Icon(Icons.skip_next_rounded),
-                  ),
-                ],
+                    IconButton(
+                      tooltip: context.tr('下一章'),
+                      onPressed: _chapterIndex < _book.chapters.length - 1
+                          ? () => _goToChapter(_chapterIndex + 1)
+                          : null,
+                      icon: const Icon(Icons.skip_next_rounded),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -1408,7 +1408,7 @@ class _SearchSheetState extends State<_SearchSheet> {
                       if (query.length >= 2) _search(query);
                     },
                     decoration: InputDecoration(
-                      hintText: '输入至少 2 个字，搜索全书',
+                      hintText: context.tr('输入至少 2 个字，搜索全书'),
                       prefixIcon: const Icon(Icons.search_rounded, size: 20),
                       suffixIcon: _controller.text.isEmpty
                           ? null
@@ -1657,7 +1657,7 @@ class _HighlightsSheetState extends State<_HighlightsSheet> {
                                   highlight.chapterIndex,
                                 ),
                                 trailing: IconButton(
-                                  tooltip: '删除划线',
+                                  tooltip: context.tr('删除划线'),
                                   onPressed: () => _delete(highlight),
                                   icon: Icon(
                                     Icons.delete_outline_rounded,
@@ -1850,7 +1850,7 @@ class _NotesSheet extends StatelessWidget {
                             onTap: () =>
                                 Navigator.pop(context, note.chapterIndex),
                             trailing: IconButton(
-                              tooltip: '删除小笺',
+                              tooltip: context.tr('删除小笺'),
                               onPressed: () => onDelete(note),
                               icon: Icon(
                                 Icons.delete_outline_rounded,

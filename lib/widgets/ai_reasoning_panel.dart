@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 
 import '../theme/app_theme.dart';
 import 'ai_message_text.dart';
@@ -7,11 +7,15 @@ import 'ai_message_text.dart';
 class AiReasoningPanel extends StatefulWidget {
   final String reasoning;
   final AppThemeSpec spec;
+  final bool streaming;
+  final VoidCallback? onMarqueeCompleted;
 
   const AiReasoningPanel({
     super.key,
     required this.reasoning,
     required this.spec,
+    this.streaming = false,
+    this.onMarqueeCompleted,
   });
 
   @override
@@ -22,11 +26,18 @@ class _AiReasoningPanelState extends State<AiReasoningPanel> {
   final ScrollController _scrollController = ScrollController();
   bool _expanded = false;
   bool _cancelled = false;
+  bool _notified = false;
 
   @override
   void initState() {
     super.initState();
     _startMarquee();
+  }
+
+  void _notifyCompleted() {
+    if (_notified || widget.streaming) return;
+    _notified = true;
+    widget.onMarqueeCompleted?.call();
   }
 
   Future<void> _startMarquee() async {
@@ -38,7 +49,11 @@ class _AiReasoningPanelState extends State<AiReasoningPanel> {
       }
       final max = _scrollController.position.maxScrollExtent;
       if (max <= 0) {
-        await Future<void>.delayed(const Duration(seconds: 1));
+        if (!widget.streaming) {
+          _notifyCompleted();
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 400));
         continue;
       }
       final duration = Duration(
@@ -50,6 +65,9 @@ class _AiReasoningPanelState extends State<AiReasoningPanel> {
         curve: Curves.linear,
       );
       if (_cancelled) return;
+      if (!widget.streaming) {
+        _notifyCompleted();
+      }
       await Future<void>.delayed(const Duration(milliseconds: 1200));
       if (_cancelled) return;
       await _scrollController.animateTo(

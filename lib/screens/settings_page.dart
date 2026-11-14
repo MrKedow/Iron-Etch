@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -12,7 +12,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart';
 import '../app_version.dart';
-import '../l10n/app_localizations.dart';
 import '../providers/app_providers.dart';
 import '../services/ai_coach_service.dart';
 import '../services/app_fonts.dart';
@@ -39,6 +38,9 @@ class _SettingsPageState extends State<SettingsPage>
   bool _testingAi = false;
   bool _reminderExpanded = false;
   bool _pendingReminderEnable = false;
+  bool _hapticsExpanded = false;
+  bool _dashboardExpanded = false;
+  bool _aiScopesExpanded = false;
 
   @override
   void initState() {
@@ -171,7 +173,7 @@ class _SettingsPageState extends State<SettingsPage>
           if (await previousFile.exists()) await previousFile.delete();
         } catch (_) {}
       }
-      if (mounted) _showSnack('头像已移除');
+      if (mounted) _showSnack(context.tr('头像已移除'));
     }
   }
 
@@ -204,9 +206,9 @@ class _SettingsPageState extends State<SettingsPage>
           if (await previousFile.exists()) await previousFile.delete();
         } catch (_) {}
       }
-      if (mounted) _showSnack('头像已更新');
+      if (mounted) _showSnack(context.tr('头像已更新'));
     } catch (error) {
-      if (mounted) _showSnack('头像设置失败：$error');
+      if (mounted) _showSnack(context.trArgs('头像设置失败：{e}', {'e': '$error'}));
     }
   }
 
@@ -334,7 +336,7 @@ class _SettingsPageState extends State<SettingsPage>
       );
     } catch (error) {
       if (!mounted) return;
-      _showSnack('${context.tr('字体导入失败')}：$error');
+      _showSnack(context.trArgs('字体导入失败：{e}', {'e': '$error'}));
     }
   }
 
@@ -433,7 +435,7 @@ class _SettingsPageState extends State<SettingsPage>
       min: 1,
       max: 7,
       divisions: 6,
-      labelBuilder: (v) => '${v.round()} 天 / 周',
+      labelBuilder: (v) => context.trArgs('{n} 天 / 周', {'n': '${v.round()}'}),
     );
     if (value == null || !mounted) return;
     await context.read<SettingsProvider>().setWeeklyGoal(value.round());
@@ -461,7 +463,7 @@ class _SettingsPageState extends State<SettingsPage>
       min: 15,
       max: 300,
       divisions: 19,
-      labelBuilder: (v) => '${v.round()} 秒',
+      labelBuilder: (v) => context.trArgs('{n} 秒', {'n': '${v.round()}'}),
     );
     if (value == null || !mounted) return;
     await context.read<SettingsProvider>().setRestSeconds(value.round());
@@ -486,7 +488,7 @@ class _SettingsPageState extends State<SettingsPage>
     final picked = await showTimePicker(
       context: context,
       initialTime: initial,
-      helpText: '选择提醒时间',
+      helpText: context.tr('选择提醒时间'),
       cancelText: '取消',
       confirmText: '确定',
     );
@@ -531,150 +533,6 @@ class _SettingsPageState extends State<SettingsPage>
     }
     await settings.setRemindersEnabled(true);
     await ReminderService.schedule(settings.reminderTime);
-  }
-
-  Future<void> _editAiDataScopes(SettingsProvider settings) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final spec = sheetContext.watch<ThemeProvider>().currentSpec;
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final enabled = settings.aiDataScopes;
-            final allEnabled = enabled.length == aiDataScopeIds.length;
-            return SafeArea(
-              child: Container(
-                margin: const EdgeInsets.only(top: 60),
-                padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * .82,
-                ),
-                decoration: BoxDecoration(
-                  color: spec.background,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(26)),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: spec.textSecondary.withValues(alpha: .3),
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '调整数据权限',
-                            style: TextStyle(
-                              color: spec.textPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.pop(sheetContext),
-                          icon: Icon(
-                            Icons.close_rounded,
-                            color: spec.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      '只有开启的分类会发送给 AI。关闭后，对应训练数据不会进入模型的上下文。',
-                      style: TextStyle(
-                        color: spec.textSecondary,
-                        fontSize: 11.5,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text(
-                          '已授权 ${enabled.length}/${aiDataScopeIds.length} 类',
-                          style: TextStyle(
-                            color: spec.primary,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: () async {
-                            await settings.setAllAiDataScopes(!allEnabled);
-                            setSheetState(() {});
-                          },
-                          child: Text(allEnabled ? '全部关闭' : '全部开启'),
-                        ),
-                      ],
-                    ),
-                    Flexible(
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: aiDataScopeOptions.length,
-                        separatorBuilder: (_, __) => Divider(
-                          height: 1,
-                          color: spec.textPrimary.withValues(alpha: .06),
-                        ),
-                        itemBuilder: (context, index) {
-                          final option = aiDataScopeOptions[index];
-                          final value = enabled.contains(option.id);
-                          return SwitchListTile.adaptive(
-                            value: value,
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              option.label,
-                              style: TextStyle(
-                                color: spec.textPrimary,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            subtitle: Text(
-                              option.description,
-                              style: TextStyle(
-                                color: spec.textSecondary,
-                                fontSize: 10.5,
-                                height: 1.45,
-                              ),
-                            ),
-                            onChanged: (next) async {
-                              await settings.setAiDataScope(option.id, next);
-                              setSheetState(() {});
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () => Navigator.pop(sheetContext),
-                        child: const Text('完成'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   Future<void> _editAiPrompt(SettingsProvider settings) async {
@@ -740,7 +598,7 @@ class _SettingsPageState extends State<SettingsPage>
 
   Future<void> _testAi(SettingsProvider settings) async {
     if (!settings.aiEnabled) {
-      _showSnack('AI 建议当前已关闭，请先开启。');
+      _showSnack(context.tr('AI 建议当前已关闭，请先开启。'));
       return;
     }
     setState(() => _testingAi = true);
@@ -786,18 +644,20 @@ class _SettingsPageState extends State<SettingsPage>
   Future<void> _exportData() async {
     final provider = context.read<WorkoutProvider>();
     if (provider.records.isEmpty) {
-      _showSnack('还没有可导出的训练记录');
+      _showSnack(context.tr('还没有可导出的训练记录'));
       return;
     }
     try {
       final path = await ExcelExportService().exportToExcel(provider.records);
       if (path == null) {
-        _showSnack('导出失败，请稍后重试');
+        _showSnack(trGlobal('导出失败，请稍后重试'));
         return;
       }
-      await Share.shareXFiles([XFile(path)], text: '铁镌训练数据');
+      await Share.shareXFiles([XFile(path)], text: trGlobal('铁镌训练数据'));
     } catch (e) {
-      if (mounted) _showSnack('导出失败：$e');
+      if (mounted) {
+        _showSnack(trGlobalArgs('导出失败：{e}', {'e': '$e'}));
+      }
     }
   }
 
@@ -821,7 +681,7 @@ class _SettingsPageState extends State<SettingsPage>
     );
     if (confirmed != true || !mounted) return;
     context.read<WorkoutProvider>().mergeSameDayRecords();
-    _showSnack('已整合同一天的记录');
+    _showSnack(context.tr('已整合同一天的记录'));
   }
 
   Future<void> _clearData() async {
@@ -845,7 +705,7 @@ class _SettingsPageState extends State<SettingsPage>
     );
     if (confirmed != true || !mounted) return;
     context.read<WorkoutProvider>().clearRecords();
-    _showSnack('训练记录已清空');
+    _showSnack(context.tr('训练记录已清空'));
   }
 
   void _showSnack(String message) {
@@ -890,7 +750,7 @@ class _SettingsPageState extends State<SettingsPage>
             ),
             const SizedBox(height: 4),
             Text(
-              '版本 $appVersion（Android）',
+              context.trArgs('版本 {v}（Android）', {'v': appVersion}),
               style: TextStyle(color: spec.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 14),
@@ -1143,7 +1003,9 @@ class _SettingsPageState extends State<SettingsPage>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '已连接：${nutstore.username}',
+                  context.trArgs('已连接：{name}', {
+                    'name': nutstore.username ?? '',
+                  }),
                   style: TextStyle(
                     color: spec.textSecondary,
                     fontSize: 11.5,
@@ -1372,7 +1234,11 @@ class _SettingsPageState extends State<SettingsPage>
     );
     if (result == null) return;
     await ConfigSyncService.saveScopes(result);
-    if (mounted) _snack('同步内容已更新（已选 ${result.length} 项）');
+    if (mounted) {
+      _snack(context.trArgs('同步内容已更新（已选 {n} 项）', {
+        'n': '${result.length}',
+      }));
+    }
   }
 
   String _fileExtension(String path) {
@@ -1439,7 +1305,14 @@ class _SettingsPageState extends State<SettingsPage>
       payload['files'] = await _uploadConfigFiles(nutstore);
     }
     final ok = await nutstore.uploadConfig(jsonEncode(payload));
-    _snack(ok ? '配置已同步到云端（${scopes.length} 项范围）' : '上传失败，请检查网络');
+    if (!mounted) return;
+    _snack(
+      ok
+          ? context.trArgs('配置已同步到云端（{n} 项范围）', {
+              'n': '${scopes.length}',
+            })
+          : context.tr('上传失败，请检查网络'),
+    );
   }
 
   Future<void> _downloadConfig(NutstoreService nutstore) async {
@@ -1472,7 +1345,9 @@ class _SettingsPageState extends State<SettingsPage>
       if (!mounted) return;
       await context.read<ThemeProvider>().reload();
       if (!mounted) return;
-      _snack('已恢复 $applied 项配置，部分页面重新进入后生效');
+      _snack(context.trArgs('已恢复 {n} 项配置，部分页面重新进入后生效', {
+        'n': '$applied',
+      }));
     } catch (_) {
       _snack('配置解析失败');
     }
@@ -1536,7 +1411,7 @@ class _SettingsPageState extends State<SettingsPage>
                                 const SizedBox(width: 6),
                                 IconButton(
                                   onPressed: () => _editNickname(settings),
-                                  tooltip: '修改昵称',
+                                  tooltip: context.tr('修改昵称'),
                                   visualDensity: VisualDensity.compact,
                                   icon: Icon(Icons.edit_rounded,
                                       size: 17, color: spec.textSecondary),
@@ -1544,7 +1419,7 @@ class _SettingsPageState extends State<SettingsPage>
                               ],
                             ),
                             Text(
-                              '${settings.trainingGoal} · ${settings.experience} · ${settings.bodyWeight.toStringAsFixed(1)} kg',
+                              '${context.tr(settings.trainingGoal)} · ${context.tr(settings.experience)} · ${settings.bodyWeight.toStringAsFixed(1)} kg',
                               style: TextStyle(
                                 color: spec.textSecondary,
                                 fontSize: 12,
@@ -1556,7 +1431,9 @@ class _SettingsPageState extends State<SettingsPage>
                               runSpacing: 4,
                               children: [
                                 Pill(
-                                  label: '每周 ${settings.weeklyGoal} 练',
+                                  label: context.trArgs('每周 {n} 练', {
+                                    'n': '${settings.weeklyGoal}',
+                                  }),
                                   icon: Icons.flag_rounded,
                                 ),
                                 Pill(
@@ -1613,7 +1490,10 @@ class _SettingsPageState extends State<SettingsPage>
                       title: context.tr('铁卡'),
                       subtitle: settings.heightCm == null
                           ? context.tr('可选填写身高、年龄、体脂与静息心率')
-                          : '完整度 ${(settings.ironProfile.completeness * 100).round()}% · 点击完善',
+                          : context.trArgs('完整度 {p}% · 点击完善', {
+                              'p':
+                                  '${(settings.ironProfile.completeness * 100).round()}',
+                            }),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -1649,128 +1529,104 @@ class _SettingsPageState extends State<SettingsPage>
                       subtitle: '${settings.restSeconds} ${context.tr('秒')}',
                       onTap: () => _editRestSeconds(settings),
                     ),
-                    _SettingsTile(
+                    _SettingsTreeTile(
                       icon: Icons.vibration_rounded,
                       title: context.tr('触感反馈'),
                       subtitle: settings.haptics
-                          ? context.tr('点击按钮、卡片与模块时的反馈')
-                          : context.tr('默认关闭 · 开启后可分别选择振动与动效'),
-                      trailing: Switch.adaptive(
-                        value: settings.haptics,
-                        onChanged: (value) =>
-                            context.read<SettingsProvider>().setHaptics(value),
+                          ? context.tr('已开启 · 展开选择振动与动效')
+                          : context.tr('默认关闭 · 展开后可分别开启'),
+                      expanded: _hapticsExpanded,
+                      onToggle: () => setState(
+                        () => _hapticsExpanded = !_hapticsExpanded,
                       ),
-                      onTap: () => context
-                          .read<SettingsProvider>()
-                          .setHaptics(!settings.haptics),
+                      switchValue: settings.haptics,
+                      onSwitchChanged: (value) =>
+                          context.read<SettingsProvider>().setHaptics(value),
+                      children: [
+                        _SettingsTreeChild(
+                          icon: Icons.vibration_outlined,
+                          title: context.tr('振动'),
+                          subtitle: context.tr('点击时提供轻触振动反馈'),
+                          switchValue: settings.hapticsVibration,
+                          onChanged: settings.haptics
+                              ? (value) => context
+                                  .read<SettingsProvider>()
+                                  .setHapticsVibration(value)
+                              : null,
+                        ),
+                        _SettingsTreeChild(
+                          icon: Icons.animation_rounded,
+                          title: context.tr('动效'),
+                          subtitle: context.tr('按下内陷、变暗、缩小，松开回弹'),
+                          switchValue: settings.hapticsMotion,
+                          onChanged: settings.haptics
+                              ? (value) => context
+                                  .read<SettingsProvider>()
+                                  .setHapticsMotion(value)
+                              : null,
+                        ),
+                      ],
                     ),
-                    if (settings.haptics) ...[
-                      _SettingsTile(
-                        icon: Icons.vibration_outlined,
-                        title: context.tr('振动'),
-                        subtitle: context.tr('点击时提供轻触振动反馈'),
-                        trailing: Switch.adaptive(
-                          value: settings.hapticsVibration,
-                          onChanged: (value) => context
-                              .read<SettingsProvider>()
-                              .setHapticsVibration(value),
-                        ),
-                        onTap: () => context
-                            .read<SettingsProvider>()
-                            .setHapticsVibration(!settings.hapticsVibration),
-                      ),
-                      _SettingsTile(
-                        icon: Icons.animation_rounded,
-                        title: context.tr('动效'),
-                        subtitle: context.tr('按下内陷、变暗、缩小，松开回弹'),
-                        trailing: Switch.adaptive(
-                          value: settings.hapticsMotion,
-                          onChanged: (value) => context
-                              .read<SettingsProvider>()
-                              .setHapticsMotion(value),
-                        ),
-                        onTap: () => context
-                            .read<SettingsProvider>()
-                            .setHapticsMotion(!settings.hapticsMotion),
-                      ),
-                    ],
-                    _SettingsTile(
+                    _SettingsTreeTile(
                       icon: Icons.photo_camera_rounded,
                       title: context.tr('仪表盘拍照入口'),
                       subtitle: settings.dashboardCameraEnabled
-                          ? context.tr('卡片右侧显示彩色拍照按钮')
-                          : context.tr('已隐藏 · 时长/距离/速度自动铺满'),
-                      trailing: Switch.adaptive(
-                        value: settings.dashboardCameraEnabled,
-                        onChanged: (value) => context
-                            .read<SettingsProvider>()
-                            .setDashboardCameraEnabled(value),
+                          ? context.tr('已显示 · 展开控制照片识别')
+                          : context.tr('已隐藏 · 展开后可重新开启'),
+                      expanded: _dashboardExpanded,
+                      onToggle: () => setState(
+                        () => _dashboardExpanded = !_dashboardExpanded,
                       ),
-                      onTap: () => context
+                      switchValue: settings.dashboardCameraEnabled,
+                      onSwitchChanged: (value) => context
                           .read<SettingsProvider>()
-                          .setDashboardCameraEnabled(
-                              !settings.dashboardCameraEnabled),
-                    ),
-                    if (settings.dashboardCameraEnabled)
-                      _SettingsTile(
-                        icon: Icons.document_scanner_outlined,
-                        title: context.tr('识别打卡照片数据'),
-                        subtitle: settings.dashboardAiScanEnabled
-                            ? context.tr('识别照片中的距离/速度')
-                            : context.tr('关闭识别 · 照片仅作为打卡记录'),
-                        trailing: Switch.adaptive(
-                          value: settings.dashboardAiScanEnabled,
-                          onChanged: (value) => context
-                              .read<SettingsProvider>()
-                              .setDashboardAiScanEnabled(value),
+                          .setDashboardCameraEnabled(value),
+                      children: [
+                        _SettingsTreeChild(
+                          icon: Icons.document_scanner_outlined,
+                          title: context.tr('识别打卡照片数据'),
+                          subtitle: settings.dashboardAiScanEnabled
+                              ? context.tr('识别照片中的距离/速度')
+                              : context.tr('关闭识别 · 照片仅作为打卡记录'),
+                          switchValue: settings.dashboardAiScanEnabled,
+                          onChanged: settings.dashboardCameraEnabled
+                              ? (value) => context
+                                  .read<SettingsProvider>()
+                                  .setDashboardAiScanEnabled(value)
+                              : null,
                         ),
-                        onTap: () => context
-                            .read<SettingsProvider>()
-                            .setDashboardAiScanEnabled(
-                                !settings.dashboardAiScanEnabled),
-                      ),
-                    _SettingsTile(
+                      ],
+                    ),
+                    _SettingsTreeTile(
                       icon: Icons.notifications_active_outlined,
                       title: context.tr('训练提醒'),
                       subtitle: settings.remindersEnabled
-                          ? '每天 ${settings.reminderTime} 提醒 · 点击自定义文案'
-                          : '关闭 · 点击自定义文案',
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _reminderExpanded
-                                ? Icons.expand_less_rounded
-                                : Icons.expand_more_rounded,
-                            size: 18,
-                            color: spec.textSecondary,
-                          ),
-                          const SizedBox(width: 2),
-                          Switch.adaptive(
-                            value: settings.remindersEnabled,
-                            onChanged: (value) =>
-                                _toggleReminders(settings, value),
-                          ),
-                        ],
-                      ),
-                      onTap: () => setState(
+                          ? context.trArgs('每天 {time} 提醒 · 展开自定义', {
+                              'time': settings.reminderTime,
+                            })
+                          : context.tr('关闭 · 展开后可设置提醒'),
+                      expanded: _reminderExpanded,
+                      onToggle: () => setState(
                         () => _reminderExpanded = !_reminderExpanded,
                       ),
+                      switchValue: settings.remindersEnabled,
+                      onSwitchChanged: (value) =>
+                          _toggleReminders(settings, value),
+                      children: [
+                        _ReminderMessageField(
+                          initialValue: settings.reminderMessage,
+                          onChanged: (value) => context
+                              .read<SettingsProvider>()
+                              .setReminderMessage(value),
+                        ),
+                        _SettingsTreeChild(
+                          icon: Icons.schedule_rounded,
+                          title: context.tr('提醒时间'),
+                          subtitle: settings.reminderTime,
+                          onTap: () => _pickReminderTime(settings),
+                        ),
+                      ],
                     ),
-                    if (_reminderExpanded)
-                      _ReminderMessageField(
-                        initialValue: settings.reminderMessage,
-                        onChanged: (value) => context
-                            .read<SettingsProvider>()
-                            .setReminderMessage(value),
-                      ),
-                    if (settings.remindersEnabled)
-                      _SettingsTile(
-                        icon: Icons.schedule_rounded,
-                        title: context.tr('提醒时间'),
-                        subtitle: settings.reminderTime,
-                        onTap: () => _pickReminderTime(settings),
-                      ),
                   ],
                 ),
                 SectionHeader(
@@ -1795,12 +1651,34 @@ class _SettingsPageState extends State<SettingsPage>
                           .read<SettingsProvider>()
                           .setAiEnabled(!settings.aiEnabled),
                     ),
-                    _SettingsTile(
+                    _SettingsTreeTile(
                       icon: Icons.shield_outlined,
                       title: '调整数据权限',
-                      subtitle:
-                          '已授权 ${settings.aiDataScopeCount}/${aiDataScopeIds.length} 类 · 精细控制发送给 AI 的训练内容',
-                      onTap: () => _editAiDataScopes(settings),
+                      subtitle: context.trArgs(
+                        '已授权 {n}/{total} 类 · 展开精细控制',
+                        {
+                          'n': '${settings.aiDataScopeCount}',
+                          'total': '${aiDataScopeIds.length}',
+                        },
+                      ),
+                      expanded: _aiScopesExpanded,
+                      onToggle: () => setState(
+                        () => _aiScopesExpanded = !_aiScopesExpanded,
+                      ),
+                      switchValue: settings.aiDataScopeCount > 0,
+                      onSwitchChanged: (value) => context
+                          .read<SettingsProvider>()
+                          .setAllAiDataScopes(value),
+                      children: [
+                        for (final group in aiDataScopeGroups)
+                          _AiScopeGroupTile(
+                            group: group,
+                            options: aiDataScopeOptions
+                                .where((option) => option.group == group.id)
+                                .toList(growable: false),
+                            settings: settings,
+                          ),
+                      ],
                     ),
                     _SettingsTile(
                       icon: _testingAi
@@ -1839,7 +1717,8 @@ class _SettingsPageState extends State<SettingsPage>
                     _SettingsTile(
                       icon: Icons.palette_outlined,
                       title: context.tr('主题工坊'),
-                      subtitle: '${spec.emoji} ${spec.name} · ${spec.subtitle}',
+                      subtitle:
+                          '${spec.emoji} ${context.tr(spec.name)} · ${context.tr(spec.subtitle)}',
                       onTap: () {
                         Navigator.push(
                           context,
@@ -1859,20 +1738,21 @@ class _SettingsPageState extends State<SettingsPage>
                     _SettingsTile(
                       icon: Icons.font_download_outlined,
                       title: context.tr('字体风格'),
-                      subtitle: appFontById(settings.appFontId).label,
+                      subtitle:
+                          context.tr(appFontById(settings.appFontId).label),
                       onTap: () => _pickFont(settings),
                     ),
                     _SettingsTile(
                       icon: Icons.bolt_rounded,
                       title: context.tr('我的状态'),
                       subtitle:
-                          '${settings.statusEmoji} ${settings.statusText}',
+                          '${settings.statusEmoji} ${context.tr(settings.statusText)}',
                       onTap: () => showStatusEditor(context),
                     ),
                     _SettingsTile(
                       icon: Icons.wb_sunny_outlined,
                       title: context.tr('今日格言'),
-                      subtitle: settings.todayQuote,
+                      subtitle: context.tr(settings.todayQuote),
                     ),
                     if (themeProvider.hasCustomBackground)
                       _SettingsTile(
@@ -1899,8 +1779,10 @@ class _SettingsPageState extends State<SettingsPage>
                     _SettingsTile(
                       icon: Icons.ios_share_rounded,
                       title: context.tr('导出 Excel'),
-                      subtitle:
-                          '${context.watch<WorkoutProvider>().records.length} 条记录',
+                      subtitle: context.trArgs('{n} 条记录', {
+                        'n':
+                            '${context.watch<WorkoutProvider>().records.length}',
+                      }),
                       onTap: _exportData,
                     ),
                     _SettingsTile(
@@ -2091,6 +1973,352 @@ class _SettingsTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SettingsTreeTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final bool? switchValue;
+  final ValueChanged<bool>? onSwitchChanged;
+  final List<Widget> children;
+
+  const _SettingsTreeTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.expanded,
+    required this.onToggle,
+    required this.children,
+    this.switchValue,
+    this.onSwitchChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = context.watch<ThemeProvider>().currentSpec;
+    return Column(
+      children: [
+        _SettingsTile(
+          icon: icon,
+          title: title,
+          subtitle: subtitle,
+          onTap: onToggle,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (switchValue != null)
+                Switch.adaptive(
+                  value: switchValue!,
+                  onChanged: onSwitchChanged,
+                ),
+              const SizedBox(width: 2),
+              AnimatedRotation(
+                turns: expanded ? .5 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: Icon(
+                  Icons.expand_more_rounded,
+                  size: 20,
+                  color: spec.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: expanded
+              ? Container(
+                  margin: const EdgeInsets.fromLTRB(28, 0, 14, 10),
+                  padding: const EdgeInsets.only(left: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                        color: spec.primary.withValues(alpha: .22),
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: children,
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsTreeChild extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool? switchValue;
+  final ValueChanged<bool>? onChanged;
+  final VoidCallback? onTap;
+
+  const _SettingsTreeChild({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.switchValue,
+    this.onChanged,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = context.watch<ThemeProvider>().currentSpec;
+    final enabled = onTap != null || (switchValue != null && onChanged != null);
+    final tone =
+        enabled ? spec.primary : spec.textSecondary.withValues(alpha: .45);
+    return AppPressFeedback(
+      borderRadius: 12,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap ??
+              (switchValue != null && onChanged != null
+                  ? () => onChanged!(!switchValue!)
+                  : null),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 4),
+            child: Row(
+              children: [
+                Icon(icon, size: 15, color: tone),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: enabled ? spec.textPrimary : tone,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: spec.textSecondary.withValues(
+                            alpha: enabled ? 1 : .5,
+                          ),
+                          fontSize: 10.5,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (switchValue != null)
+                  Transform.scale(
+                    scale: .78,
+                    child: Switch.adaptive(
+                      value: switchValue!,
+                      onChanged: onChanged,
+                    ),
+                  )
+                else if (onTap != null)
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: spec.textSecondary,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AiScopeGroupTile extends StatefulWidget {
+  final AiDataScopeGroup group;
+  final List<AiDataScopeOption> options;
+  final SettingsProvider settings;
+
+  const _AiScopeGroupTile({
+    required this.group,
+    required this.options,
+    required this.settings,
+  });
+
+  @override
+  State<_AiScopeGroupTile> createState() => _AiScopeGroupTileState();
+}
+
+class _AiScopeGroupTileState extends State<_AiScopeGroupTile> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = context.watch<ThemeProvider>().currentSpec;
+    final enabled = widget.options
+        .where((option) => widget.settings.aiDataScopeEnabled(option.id))
+        .length;
+    return Column(
+      children: [
+        AppPressFeedback(
+          borderRadius: 10,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 7,
+                  horizontal: 4,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _aiGroupIcon(widget.group.id),
+                      size: 15,
+                      color: enabled > 0
+                          ? spec.primary
+                          : spec.textSecondary.withValues(alpha: .5),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.group.label,
+                            style: TextStyle(
+                              color: spec.textPrimary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            '${widget.group.description} · $enabled/'
+                            '${widget.options.length}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: spec.textSecondary,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Transform.scale(
+                      scale: .72,
+                      child: Switch.adaptive(
+                        value: enabled > 0,
+                        onChanged: (value) =>
+                            widget.settings.setAiDataScopeGroup(
+                          widget.options.map((option) => option.id),
+                          value,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      _expanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      size: 17,
+                      color: spec.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _expanded
+              ? Container(
+                  margin: const EdgeInsets.only(left: 18, bottom: 4),
+                  padding: const EdgeInsets.only(left: 10),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(
+                        color: spec.textPrimary.withValues(alpha: .1),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      for (final option in widget.options)
+                        _SettingsTreeChild(
+                          icon: _aiScopeIcon(option.id),
+                          title: option.label,
+                          subtitle: option.description,
+                          switchValue:
+                              widget.settings.aiDataScopeEnabled(option.id),
+                          onChanged: (value) =>
+                              widget.settings.setAiDataScope(option.id, value),
+                        ),
+                    ],
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
+}
+
+IconData _aiGroupIcon(String id) {
+  switch (id) {
+    case 'profile':
+      return Icons.badge_outlined;
+    case 'summary':
+      return Icons.summarize_outlined;
+    case 'weekly':
+      return Icons.date_range_outlined;
+    case 'parts':
+      return Icons.accessibility_new_rounded;
+    case 'recent':
+      return Icons.history_rounded;
+    case 'exercise':
+      return Icons.fitness_center_rounded;
+    case 'feeling':
+      return Icons.mood_outlined;
+    default:
+      return Icons.tune_rounded;
+  }
+}
+
+IconData _aiScopeIcon(String id) {
+  switch (id) {
+    case 'profile':
+      return Icons.badge_outlined;
+    case 'summary':
+      return Icons.summarize_outlined;
+    case 'weekly':
+      return Icons.date_range_outlined;
+    case 'parts':
+      return Icons.accessibility_new_rounded;
+    case 'recent':
+      return Icons.history_rounded;
+    case 'exercises':
+      return Icons.fitness_center_rounded;
+    case 'feelings':
+      return Icons.mood_outlined;
+    default:
+      return Icons.tune_rounded;
   }
 }
 

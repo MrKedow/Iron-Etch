@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_providers.dart';
@@ -74,7 +74,9 @@ class _BookDownloadDialogState extends State<_BookDownloadDialog>
   void _handleLibraryChanged() {
     if (!mounted || _closing) return;
     final info = _library.downloadProgressFor(EpubLibraryService.defaultId);
-    if (!_library.isDefaultDownloading && info != null && info.progress >= .999) {
+    if (!_library.isDefaultDownloading &&
+        info != null &&
+        info.progress >= .999) {
       _closing = true;
       Future<void>.delayed(const Duration(milliseconds: 650), () {
         if (mounted) Navigator.of(context).pop();

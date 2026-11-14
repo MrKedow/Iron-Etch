@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -362,8 +364,7 @@ const List<AiProviderPreset> builtInAiProviders = [
       AiModelPreset('glm-5.3', 'GLM 5.3', reasoning: lowHighMaxReasoningPreset),
       AiModelPreset('minimax-m3', 'MiniMax M3'),
       AiModelPreset('kimi-k2.7-code', 'Kimi K2.7 Code'),
-      AiModelPreset('kimi-k3', 'Kimi K3',
-          reasoning: lowHighMaxReasoningPreset),
+      AiModelPreset('kimi-k3', 'Kimi K3', reasoning: lowHighMaxReasoningPreset),
       AiModelPreset('qwen3.8-flash', 'Qwen3.8 Flash',
           reasoning: lowMediumXHighReasoningPreset),
       AiModelPreset('qwen3.8-max', 'Qwen3.8 Max',
@@ -667,60 +668,96 @@ Map<String, dynamic> aiReasoningPayload(
 }
 
 class AiDataScopeOption {
+  final String group;
   final String id;
   final String label;
   final String description;
 
-  const AiDataScopeOption(this.id, this.label, this.description);
+  const AiDataScopeOption(this.group, this.id, this.label, this.description);
 }
+
+class AiDataScopeGroup {
+  final String id;
+  final String label;
+  final String description;
+
+  const AiDataScopeGroup(this.id, this.label, this.description);
+}
+
+const List<AiDataScopeGroup> aiDataScopeGroups = [
+  AiDataScopeGroup('profile', '基础画像', '昵称、目标、经验与身体数据'),
+  AiDataScopeGroup('summary', '训练汇总', '累计力量与有氧数据'),
+  AiDataScopeGroup('weekly', '周期对比', '本周频率与做功变化'),
+  AiDataScopeGroup('parts', '部位分布', '各部位容量与缺失部位'),
+  AiDataScopeGroup('recent', '最近训练', '最近力量与有氧明细'),
+  AiDataScopeGroup('exercise', '动作对比', '动作重量变化'),
+  AiDataScopeGroup('feeling', '训练感受', '主观感受与备注'),
+];
 
 const List<AiDataScopeOption> aiDataScopeOptions = [
   AiDataScopeOption(
-    'profile',
-    '基础画像',
-    '昵称、训练目标、经验、体重、周训练目标',
-  ),
+      'profile', 'profile_basic', '昵称与训练目标', '昵称、训练目标、训练经验、每周训练目标'),
+  AiDataScopeOption('profile', 'profile_body', '身体数据', '体重、身高、年龄、体脂率、静息心率'),
   AiDataScopeOption(
-    'summary',
-    '训练汇总',
-    '累计训练次数、组数、做功、消耗、有氧时长与距离',
-  ),
+      'summary', 'summary_strength', '力量训练汇总', '累计训练次数、组数、总做功、估算消耗与训练天数'),
+  AiDataScopeOption('summary', 'summary_cardio', '有氧训练汇总', '累计有氧时长与有氧距离'),
+  AiDataScopeOption('weekly', 'weekly_frequency', '训练频率对比', '本周与上周训练次数'),
+  AiDataScopeOption('weekly', 'weekly_work', '训练做功对比', '最近 7 天与前 7 天做功'),
   AiDataScopeOption(
-    'weekly',
-    '周期对比',
-    '本周与上周训练次数、最近 7 天与前 7 天做功',
-  ),
+      'parts', 'parts_distribution', '部位容量分布', '最常训练部位、各部位训练次数、组数与容量'),
+  AiDataScopeOption('parts', 'parts_missing', '本周缺失部位', '本周尚未训练到的肌群'),
   AiDataScopeOption(
-    'parts',
-    '部位分布',
-    '各部位训练次数、组数、容量与本周缺失部位',
-  ),
+      'recent', 'recent_strength', '最近力量明细', '最近 8 次训练中的动作、重量、组数与次数'),
   AiDataScopeOption(
-    'recent',
-    '最近训练明细',
-    '最近 8 次训练的日期、动作、重量、组数、次数与有氧数据',
-  ),
-  AiDataScopeOption(
-    'exercises',
-    '动作重量对比',
-    '最近一次与上一次动作重量变化',
-  ),
-  AiDataScopeOption(
-    'feelings',
-    '训练感受',
-    '训练记录中的主观感受与备注文本',
-  ),
+      'recent', 'recent_cardio', '最近有氧明细', '最近 8 次训练中的有氧时长、距离与消耗'),
+  AiDataScopeOption('exercise', 'exercise_weights', '动作重量对比', '最近一次与上一次动作重量变化'),
+  AiDataScopeOption('feeling', 'feelings', '感受与备注', '训练记录中的主观感受与备注文本'),
 ];
 
 const List<String> aiDataScopeIds = [
-  'profile',
-  'summary',
-  'weekly',
-  'parts',
-  'recent',
-  'exercises',
+  'profile_basic',
+  'profile_body',
+  'summary_strength',
+  'summary_cardio',
+  'weekly_frequency',
+  'weekly_work',
+  'parts_distribution',
+  'parts_missing',
+  'recent_strength',
+  'recent_cardio',
+  'exercise_weights',
   'feelings',
 ];
+
+const Map<String, List<String>> _legacyAiDataScopes = {
+  'profile': ['profile_basic', 'profile_body'],
+  'summary': ['summary_strength', 'summary_cardio'],
+  'weekly': ['weekly_frequency', 'weekly_work'],
+  'parts': ['parts_distribution', 'parts_missing'],
+  'recent': ['recent_strength', 'recent_cardio'],
+  'exercises': ['exercise_weights'],
+  'feelings': ['feelings'],
+};
+
+List<String> _migrateAiDataScopes(Iterable<String> saved) {
+  final result = <String>{};
+  var hadLegacy = false;
+  for (final id in saved) {
+    if (aiDataScopeIds.contains(id)) {
+      result.add(id);
+      continue;
+    }
+    final mapped = _legacyAiDataScopes[id];
+    if (mapped != null) {
+      hadLegacy = true;
+      result.addAll(mapped);
+    }
+  }
+  if (result.isEmpty && saved.isNotEmpty && !hadLegacy) {
+    return List<String>.of(aiDataScopeIds);
+  }
+  return aiDataScopeIds.where(result.contains).toList(growable: false);
+}
 
 class ThemeProvider extends ChangeNotifier with WidgetsBindingObserver {
   ThemeProvider(
@@ -1101,9 +1138,14 @@ class SettingsProvider extends ChangeNotifier {
     _aiPrompt = prefs.getString('ai_prompt') ?? '';
     final savedDataScopes = prefs.getStringList('ai_data_scopes');
     if (savedDataScopes != null) {
+      final migrated = _migrateAiDataScopes(savedDataScopes);
       _aiDataScopes
         ..clear()
-        ..addAll(savedDataScopes.where(aiDataScopeIds.contains));
+        ..addAll(migrated);
+      if (migrated.length != savedDataScopes.length ||
+          !migrated.every(savedDataScopes.contains)) {
+        await prefs.setStringList('ai_data_scopes', migrated);
+      }
     }
 
     _appLanguageCode = prefs.getString('app_language') ?? 'zh';
@@ -1126,6 +1168,10 @@ class SettingsProvider extends ChangeNotifier {
     _avatarPath = prefs.getString('profile_avatar_path');
     _syncIronProfile();
     notifyListeners();
+    unawaited(
+      AppFonts.preload(_appFontId, customFamily: _customFontFamily)
+          .then((_) => notifyListeners()),
+    );
   }
 
   void _syncIronProfile() {
@@ -1394,6 +1440,25 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setAiDataScopeGroup(
+    Iterable<String> ids,
+    bool enabled,
+  ) async {
+    for (final id in ids) {
+      if (!aiDataScopeIds.contains(id)) continue;
+      if (enabled) {
+        _aiDataScopes.add(id);
+      } else {
+        _aiDataScopes.remove(id);
+      }
+    }
+    final ordered =
+        aiDataScopeIds.where(_aiDataScopes.contains).toList(growable: false);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('ai_data_scopes', ordered);
+    notifyListeners();
+  }
+
   Future<void> setAllAiDataScopes(bool enabled) async {
     _aiDataScopes
       ..clear()
@@ -1414,9 +1479,15 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<void> setAppFont(String id) async {
-    _appFontId = appFontById(id).id;
+    final next = appFontById(id).id;
+    if (_appFontId == next) return;
+    _appFontId = next;
     await _persist('app_font_id', _appFontId);
     notifyListeners();
+    unawaited(
+      AppFonts.preload(_appFontId, customFamily: _customFontFamily)
+          .then((_) => notifyListeners()),
+    );
   }
 
   Future<bool> setCustomFont(String path) async {

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
@@ -105,7 +105,7 @@ class _HistoryPageState extends State<HistoryPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('删除这次训练？'),
         content: Text(
-          '${DateFormat('yyyy年M月d日').format(record.date)} · 第 ${record.sessionNumber ?? '-'} 次训练\n'
+          '${formatFullDate(record.date)} · 第 ${record.sessionNumber ?? '-'} 次训练\n'
           '该操作无法撤销。',
         ),
         actions: [
@@ -243,7 +243,7 @@ class _HistoryPageState extends State<HistoryPage> {
                       ),
                     ),
                     Text(
-                      '${record.date.month}月 · ${weekdayLabel(record.date)}',
+                      '${formatMonthOnly(record.date)} · ${weekdayLabel(record.date)}',
                       style: TextStyle(
                         color: spec.textSecondary,
                         fontSize: 8.5,
@@ -391,7 +391,7 @@ class _HistoryPageState extends State<HistoryPage> {
                 ),
               ),
               PopupMenuButton<String>(
-                tooltip: '管理记录',
+                tooltip: context.tr('管理记录'),
                 icon: Icon(
                   Icons.more_vert_rounded,
                   color: spec.textSecondary,
@@ -547,7 +547,7 @@ class _HistoryPageState extends State<HistoryPage> {
         onChanged: (value) => setState(() => _query = value),
         style: TextStyle(color: spec.textPrimary),
         decoration: InputDecoration(
-          hintText: '搜索动作、部位或备注',
+          hintText: context.tr('搜索动作、部位或备注'),
           prefixIcon:
               Icon(Icons.search_rounded, color: spec.textSecondary, size: 20),
           suffixIcon: _query.isEmpty
@@ -653,22 +653,22 @@ class _HistoryPageState extends State<HistoryPage> {
           SliverAppBar(
             pinned: true,
             backgroundColor: spec.background.withValues(alpha: .82),
-            title: const Text('训练历史'),
+            title: Text(context.tr('训练历史')),
             actions: [
               if (widget.onSync != null)
                 IconButton(
-                  tooltip: '云同步',
+                  tooltip: context.tr('云同步'),
                   onPressed: widget.onSync,
                   icon: const Icon(Icons.cloud_sync_outlined),
                 ),
               if (widget.onExport != null)
                 IconButton(
-                  tooltip: '导出 Excel',
+                  tooltip: context.tr('导出 Excel'),
                   onPressed: widget.onExport,
                   icon: const Icon(Icons.ios_share_rounded),
                 ),
               PopupMenuButton<String>(
-                tooltip: '更多',
+                tooltip: context.tr('更多'),
                 onSelected: (value) {
                   if (value == 'merge') _mergeRecords();
                 },
@@ -921,9 +921,9 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
       initialDate: _date,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      helpText: '修改训练日期',
-      cancelText: '取消',
-      confirmText: '确定',
+      helpText: context.tr('修改训练日期'),
+      cancelText: context.tr('取消'),
+      confirmText: context.tr('确定'),
     );
     if (picked != null && mounted) {
       setState(() => _date = picked);
@@ -1019,9 +1019,9 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
         fontWeight: FontWeight.w600,
       ),
       decoration: InputDecoration(
-        hintText: hint,
+        hintText: context.tr(hint),
         hintStyle: TextStyle(color: spec.textSecondary, fontSize: 12),
-        suffixText: suffix,
+        suffixText: suffix == null ? null : context.tr(suffix),
         suffixStyle: TextStyle(
           color: spec.textSecondary,
           fontSize: 10,
@@ -1152,7 +1152,7 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
               if (_drafts.length > 1)
                 IconButton(
                   onPressed: () => _removeDraft(index),
-                  tooltip: '删除动作',
+                  tooltip: context.tr('删除动作'),
                   icon: Icon(Icons.close_rounded,
                       size: 19, color: spec.textSecondary),
                 ),
@@ -1363,7 +1363,7 @@ class _EditRecordSheetState extends State<_EditRecordSheet> {
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          '${DateFormat('yyyy年M月d日').format(_date)} · ${weekdayLabel(_date)}',
+                          '${formatFullDate(_date)} · ${weekdayLabel(_date)}',
                           maxLines: 1,
                           softWrap: false,
                           style: TextStyle(

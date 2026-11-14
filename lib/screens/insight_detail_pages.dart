@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -185,7 +185,7 @@ class WeeklyTrainingDaysPage extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: spec.background,
         surfaceTintColor: Colors.transparent,
-        title: const Text('本周目标'),
+        title: Text(context.tr('本周目标')),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 6, 18, 34),
@@ -377,8 +377,8 @@ class _WeekDayCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       trained
-                          ? '${DateFormat('M月d日').format(day)} · ${projects.length} 个动作 · $totalSets 组'
-                          : '${DateFormat('M月d日').format(day)} · 恢复与准备',
+                          ? '${formatMonthDay(day)} · ${projects.length} 个动作 · $totalSets 组'
+                          : '${formatMonthDay(day)} · 恢复与准备',
                       style: TextStyle(
                         color: spec.textSecondary,
                         fontSize: 10.5,
@@ -461,7 +461,7 @@ class PartBalanceDetailPage extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: spec.background,
         surfaceTintColor: Colors.transparent,
-        title: const Text('部位均衡'),
+        title: Text(context.tr('部位均衡')),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 6, 18, 34),
@@ -730,7 +730,7 @@ class _VolumeTrendPageState extends State<VolumeTrendPage> {
       initialDateRange: initial,
       firstDate: earliest.isBefore(initial.start) ? earliest : initial.start,
       lastDate: now,
-      helpText: '选择容量统计范围',
+      helpText: context.tr('选择容量统计范围'),
       saveText: '确定',
     );
     if (picked == null || !mounted) return;
@@ -767,7 +767,7 @@ class _VolumeTrendPageState extends State<VolumeTrendPage> {
       appBar: AppBar(
         backgroundColor: spec.background,
         surfaceTintColor: Colors.transparent,
-        title: const Text('容量趋势'),
+        title: Text(context.tr('容量趋势')),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 6, 18, 34),
@@ -968,8 +968,7 @@ List<_VolumeBucket> _buildVolumeBuckets(
         date: date,
         label:
             spanDays <= 7 ? weekdayLabel(date) : DateFormat('M/d').format(date),
-        fullLabel:
-            '${DateFormat('yyyy年M月d日').format(date)} · ${weekdayLabel(date)}',
+        fullLabel: '${formatFullDate(date)} · ${weekdayLabel(date)}',
       );
     }
   } else if (mode == _VolumeMode.month) {
@@ -979,8 +978,8 @@ List<_VolumeBucket> _buildVolumeBuckets(
       final key = DateFormat('yyyy-MM').format(cursor);
       buckets[key] = _VolumeBucket(
         date: cursor,
-        label: DateFormat('M月').format(cursor),
-        fullLabel: DateFormat('yyyy年M月').format(cursor),
+        label: formatMonthOnly(cursor),
+        fullLabel: formatYearMonth(cursor),
       );
       cursor = DateTime(cursor.year, cursor.month + 1);
     }
@@ -1145,7 +1144,7 @@ class _PersonalRecordsPageState extends State<PersonalRecordsPage> {
       initialDateRange: initial,
       firstDate: earliest.isBefore(initial.start) ? earliest : initial.start,
       lastDate: now,
-      helpText: '选择个人记录范围',
+      helpText: context.tr('选择个人记录范围'),
       saveText: '确定',
     );
     if (picked == null || !mounted) return;
@@ -1177,7 +1176,7 @@ class _PersonalRecordsPageState extends State<PersonalRecordsPage> {
       appBar: AppBar(
         backgroundColor: spec.background,
         surfaceTintColor: Colors.transparent,
-        title: const Text('个人记录'),
+        title: Text(context.tr('个人记录')),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 6, 18, 34),
@@ -1346,7 +1345,7 @@ class _PersonalRecordsPageState extends State<PersonalRecordsPage> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${DateFormat('yyyy年M月d日').format(insights.bestRecord!.date)} · 第 ${insights.bestRecord!.sessionNumber ?? '—'} 次训练',
+                          '${formatFullDate(insights.bestRecord!.date)} · 第 ${insights.bestRecord!.sessionNumber ?? '—'} 次训练',
                           style: TextStyle(
                             color: spec.textSecondary,
                             fontSize: 10.5,
@@ -1414,7 +1413,7 @@ class _PersonalRecordsPageState extends State<PersonalRecordsPage> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  '${bests[i].part} · ${DateFormat('M月d日').format(bests[i].date)} · ${bests[i].sets} 组 × ${bests[i].reps} 次',
+                                  '${bests[i].part} · ${formatMonthDay(bests[i].date)} · ${bests[i].sets} 组 × ${bests[i].reps} 次',
                                   style: TextStyle(
                                     color: spec.textSecondary,
                                     fontSize: 10,
@@ -1596,7 +1595,7 @@ class _RecordSummaryCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                '${DateFormat('M月d日').format(record.date)} · ${weekdayLabel(record.date)}',
+                '${formatMonthDay(record.date)} · ${weekdayLabel(record.date)}',
                 style: TextStyle(
                   color: spec.textPrimary,
                   fontSize: 13,

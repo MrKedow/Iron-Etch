@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../theme/app_theme.dart';

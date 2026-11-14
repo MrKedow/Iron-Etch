@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -209,7 +209,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       child: const Text('退出引导'),
                     ),
                     IconButton(
-                      tooltip: '关闭',
+                      tooltip: context.tr('关闭'),
                       onPressed: _complete,
                       icon: const Icon(Icons.close_rounded),
                     ),

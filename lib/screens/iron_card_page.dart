@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_providers.dart';
@@ -21,7 +21,7 @@ class IronCardPage extends StatelessWidget {
           SliverAppBar(
             pinned: true,
             backgroundColor: spec.background.withValues(alpha: .84),
-            title: const Text('铁卡'),
+            title: Text(context.tr('铁卡')),
           ),
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
@@ -689,8 +689,8 @@ Future<void> _editNumber(
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                hintText: '可选填',
-                suffixText: unit,
+                hintText: context.tr('可选填'),
+                suffixText: context.tr(unit),
               ),
             ),
             const SizedBox(height: 8),

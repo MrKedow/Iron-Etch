@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 
 import '../services/epub_service.dart';
 
@@ -62,8 +62,7 @@ class _BookDownloadToastHostState extends State<BookDownloadToastHost>
             } else if (value < .84) {
               slide = 0;
             } else {
-              slide = 168 *
-                  Curves.easeInCubic.transform((value - .84) / .16);
+              slide = 168 * Curves.easeInCubic.transform((value - .84) / .16);
             }
             final wiggle = math.sin(value * math.pi * 8) * 1.5;
             return Transform.translate(
@@ -114,10 +113,12 @@ class _CloudBubblePainter extends CustomPainter {
     final body = Rect.fromLTWH(0, 8, size.width - 14, size.height - 16);
     final cloud = Path();
     final circles = <Rect>[
-      Rect.fromCircle(center: Offset(body.left + 16, body.top + 14), radius: 13),
+      Rect.fromCircle(
+          center: Offset(body.left + 16, body.top + 14), radius: 13),
       Rect.fromCircle(center: Offset(body.left + 36, body.top + 8), radius: 15),
       Rect.fromCircle(center: Offset(body.left + 60, body.top + 9), radius: 14),
-      Rect.fromCircle(center: Offset(body.left + 84, body.top + 12), radius: 13),
+      Rect.fromCircle(
+          center: Offset(body.left + 84, body.top + 12), radius: 13),
       Rect.fromCircle(
           center: Offset(body.right - 12, body.top + 18), radius: 12),
       Rect.fromCircle(
@@ -167,7 +168,8 @@ class _CloudBubblePainter extends CustomPainter {
     )..layout(maxWidth: size.width - 40);
     text.paint(
       canvas,
-      Offset((size.width - 14 - text.width) / 2, (size.height - text.height) / 2),
+      Offset(
+          (size.width - 14 - text.width) / 2, (size.height - text.height) / 2),
     );
   }
 

@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import '../l10n/localized_material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -23,10 +23,10 @@ class ThemeGalleryPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('主题工坊'),
+        title: Text(context.tr('主题工坊')),
         actions: [
           IconButton(
-            tooltip: '恢复默认',
+            tooltip: context.tr('恢复默认'),
             onPressed: () async {
               await themeProvider.clearCustomBackground();
               await themeProvider.setTheme(AppThemes.ironForge.id);
@@ -57,7 +57,7 @@ class ThemeGalleryPage extends StatelessWidget {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          spec.name,
+                          context.tr(spec.name),
                           style: TextStyle(
                             color: spec.onHero,
                             fontSize: 22,
@@ -82,7 +82,7 @@ class ThemeGalleryPage extends StatelessWidget {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        spec.subtitle,
+                        context.tr(spec.subtitle),
                         maxLines: 1,
                         softWrap: false,
                         style: TextStyle(
@@ -237,7 +237,7 @@ class ThemeGalleryPage extends StatelessWidget {
                           },
                           icon: const Icon(Icons.delete_outline_rounded,
                               color: Colors.redAccent),
-                          tooltip: '移除自定义背景',
+                          tooltip: context.tr('移除自定义背景'),
                         ),
                       ],
                     ],
@@ -636,7 +636,7 @@ class _ThemeCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    spec.name,
+                    context.tr(spec.name),
                     style: TextStyle(
                       color: spec.textPrimary,
                       fontSize: 14,
@@ -645,7 +645,7 @@ class _ThemeCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    spec.subtitle,
+                    context.tr(spec.subtitle),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
