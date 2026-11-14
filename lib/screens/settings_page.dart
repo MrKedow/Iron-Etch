@@ -22,6 +22,7 @@ import '../theme/app_theme.dart';
 import '../widgets/app_ui.dart';
 import '../widgets/press_feedback.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/user_avatar.dart';
 import 'iron_card_page.dart';
 import 'onboarding_page.dart';
 import 'theme_gallery_page.dart';
@@ -891,11 +892,6 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Widget _profileAvatar(SettingsProvider settings, AppThemeSpec spec) {
-    final path = settings.avatarPath;
-    final avatarFile =
-        path != null && path.trim().isNotEmpty && File(path).existsSync()
-            ? File(path)
-            : null;
     final nickname = settings.nickname.trim();
     final initial = nickname.isEmpty ? '铁' : nickname.characters.first;
     return GestureDetector(
@@ -911,31 +907,19 @@ class _SettingsPageState extends State<SettingsPage>
               gradient: spec.heroGradient,
               borderRadius: BorderRadius.circular(18),
             ),
-            child: avatarFile != null
-                ? Image.file(
-                    avatarFile,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Center(
-                      child: Text(
-                        initial,
-                        style: TextStyle(
-                          color: spec.onHero,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  )
-                : Center(
-                    child: Text(
-                      initial,
-                      style: TextStyle(
-                        color: spec.onHero,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
+            child: UserAvatar(
+              path: settings.avatarPath,
+              size: 58,
+              circle: false,
+              fallback: Text(
+                initial,
+                style: TextStyle(
+                  color: spec.onHero,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
           ),
           Positioned(
             right: -5,

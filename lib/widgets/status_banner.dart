@@ -10,6 +10,7 @@ import '../providers/app_providers.dart';
 import 'app_ui.dart';
 import 'press_feedback.dart';
 import 'status_level.dart';
+import 'user_avatar.dart';
 
 const List<List<Color>> statusTones = [
   [Color(0xFFE4B363), Color(0xFFB45309)],
@@ -21,6 +22,14 @@ const List<List<Color>> statusTones = [
 ];
 
 const List<String> statusMotionNames = ['极光流动', '微光扫过', '星尘漂浮'];
+
+bool _fileExists(String? path) {
+  try {
+    return path != null && path.trim().isNotEmpty && File(path).existsSync();
+  } catch (_) {
+    return false;
+  }
+}
 
 class StatusBanner extends StatefulWidget {
   final DateTime startedAt;
@@ -36,8 +45,6 @@ class _StatusBannerState extends State<StatusBanner>
   late final AnimationController _controller;
   String? _checkedImagePath;
   bool _imageExists = false;
-  String? _checkedAvatarPath;
-  bool _avatarExists = false;
 
   @override
   void initState() {
@@ -62,7 +69,7 @@ class _StatusBannerState extends State<StatusBanner>
     final imagePath = settings.statusImagePath;
     if (imagePath != _checkedImagePath) {
       _checkedImagePath = imagePath;
-      _imageExists = imagePath != null && File(imagePath).existsSync();
+      _imageExists = _fileExists(imagePath);
     }
     final hasImage = _imageExists;
 
@@ -452,30 +459,14 @@ class _StatusBannerState extends State<StatusBanner>
   }
 
   Widget _statusAvatar(SettingsProvider settings) {
-    final path = settings.avatarPath;
-    if (path != _checkedAvatarPath) {
-      _checkedAvatarPath = path;
-      _avatarExists = path != null && File(path).existsSync();
-    }
-    if (_avatarExists && path != null) {
-      return ClipOval(
-        child: Image.file(
-          File(path),
-          width: 42,
-          height: 42,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const Icon(
-            Icons.person_rounded,
-            color: Colors.white,
-            size: 24,
-          ),
-        ),
-      );
-    }
-    return const Icon(
-      Icons.person_rounded,
-      color: Colors.white,
-      size: 24,
+    return UserAvatar(
+      path: settings.avatarPath,
+      size: 42,
+      fallback: const Icon(
+        Icons.person_rounded,
+        color: Colors.white,
+        size: 24,
+      ),
     );
   }
 
@@ -769,7 +760,7 @@ Future<void> showStatusEditor(BuildContext context) async {
         builder: (context, setSheetState) {
           final spec = context.watch<ThemeProvider>().currentSpec;
           final palette = statusTones[tone % statusTones.length];
-          final hasImage = imagePath != null && File(imagePath!).existsSync();
+          final hasImage = _fileExists(imagePath);
 
           Future<void> pickImage() async {
             final picker = ImagePicker();
@@ -1227,7 +1218,7 @@ class _StatusPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final spec = context.watch<ThemeProvider>().currentSpec;
     final palette = statusTones[tone % statusTones.length];
-    final hasImage = imagePath != null && File(imagePath!).existsSync();
+    final hasImage = _fileExists(imagePath);
 
     return Container(
       height: 150,

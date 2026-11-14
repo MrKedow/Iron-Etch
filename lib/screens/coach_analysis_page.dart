@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
 import '../l10n/localized_material.dart';
@@ -17,6 +16,7 @@ import '../widgets/ai_config_dialog.dart';
 import '../widgets/ai_message_text.dart';
 import '../widgets/ai_reasoning_panel.dart';
 import '../widgets/app_ui.dart';
+import '../widgets/user_avatar.dart';
 import 'insight_detail_pages.dart';
 import 'knowledge_page.dart';
 
@@ -236,14 +236,17 @@ ${insights.buildAiContext(settings)}
       onContentChunk: (delta) {
         if (!mounted) return;
         setState(() => assistant.content += delta);
-        if (!assistant.typing && assistant.reasoning.trim().isEmpty) {
+        if (!assistant.typing &&
+            (!assistant.reasoningStreaming ||
+                assistant.reasoning.trim().isEmpty)) {
           _beginTypewriter(assistant);
         }
       },
       onReasoningDone: () {
         if (!mounted) return;
         setState(() => assistant.reasoningStreaming = false);
-        if (assistant.reasoning.trim().isEmpty) {
+        if (assistant.reasoning.trim().isEmpty ||
+            assistant.content.trim().isNotEmpty) {
           _beginTypewriter(assistant);
         }
       },
@@ -281,8 +284,9 @@ ${insights.buildAiContext(settings)}
       }
     });
     if (reply.success &&
-        assistant.reasoning.trim().isEmpty &&
-        assistant.visibleChars != null) {
+        assistant.visibleChars != null &&
+        !assistant.typing &&
+        assistant.content.trim().isNotEmpty) {
       _beginTypewriter(assistant);
     }
     _scrollToAi(latestTurn: true);
@@ -1696,25 +1700,21 @@ class _ChatBubble extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (isUser && avatarPath != null && avatarPath.isNotEmpty)
-                  ClipOval(
-                    child: Image.file(
-                      File(avatarPath),
-                      width: 18,
-                      height: 18,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.person_rounded,
-                        size: 12,
-                        color: spec.primary,
-                      ),
+                if (isUser)
+                  UserAvatar(
+                    path: avatarPath,
+                    size: 18,
+                    fallback: Icon(
+                      Icons.person_rounded,
+                      size: 12,
+                      color: spec.primary,
                     ),
                   )
                 else
                   Icon(
-                    isUser ? Icons.person_rounded : Icons.smart_toy_rounded,
+                    Icons.smart_toy_rounded,
                     size: 12,
-                    color: isUser ? spec.primary : spec.secondary,
+                    color: spec.secondary,
                   ),
                 const SizedBox(width: 5),
                 Flexible(
@@ -1741,6 +1741,7 @@ class _ChatBubble extends StatelessWidget {
                 reasoning: turn.reasoning,
                 spec: spec,
                 streaming: turn.reasoningStreaming,
+                stopMarquee: turn.typing || (turn.visibleChars ?? 0) > 0,
                 onMarqueeCompleted: () => onReasoningMarqueeDone(turn),
               ),
             AiMessageText(

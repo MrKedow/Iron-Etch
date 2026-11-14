@@ -1,3 +1,3 @@
-const String appVersion = '3.5.4';
-const String appVersionName = 'Android_v3.5.4';
-const int appVersionCode = 12;
+const String appVersion = '3.5.5';
+const String appVersionName = 'Android_v3.5.5';
+const int appVersionCode = 13;
