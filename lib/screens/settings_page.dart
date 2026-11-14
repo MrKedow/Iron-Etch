@@ -297,22 +297,201 @@ class _SettingsPageState extends State<SettingsPage>
   }
 
   Future<void> _pickFont(SettingsProvider settings) async {
-    final current = appFontById(settings.appFontId);
-    final result = await _showChoiceDialog(
-      title: context.tr('字体风格'),
-      current: current.label,
-      options: appFontOptions.map((item) => item.label).toList(),
-    );
-    if (result == null || !mounted) return;
-    final selected = appFontOptions.firstWhere(
-      (item) => item.label == result,
-      orElse: () => current,
-    );
-    if (selected.isCustom) {
-      await _importFont(settings);
-      return;
+    final downloaded = <String, bool>{};
+    for (final option in appFontOptions.where((item) => item.isDownloadable)) {
+      downloaded[option.id] = await AppFonts.isDownloaded(option);
     }
-    await settings.setAppFont(selected.id);
+    if (!mounted) return;
+    String? busyId;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final spec = sheetContext.watch<ThemeProvider>().currentSpec;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Future<void> select(AppFontOption option) async {
+              if (busyId != null) return;
+              if (option.isCustom) {
+                Navigator.pop(sheetContext);
+                await _importFont(settings);
+                return;
+              }
+              if (option.isDownloadable) {
+                setSheetState(() => busyId = option.id);
+                final family = await AppFonts.downloadAndLoad(option);
+                if (!sheetContext.mounted) return;
+                setSheetState(() {
+                  busyId = null;
+                  downloaded[option.id] = family != null;
+                });
+                if (family == null) {
+                  if (mounted) {
+                    _showSnack(context.tr('字体下载失败，请检查网络'));
+                  }
+                  return;
+                }
+              }
+              await settings.setAppFont(option.id);
+              if (sheetContext.mounted) Navigator.pop(sheetContext);
+            }
+
+            Future<void> remove(AppFontOption option) async {
+              if (busyId != null) return;
+              setSheetState(() => busyId = option.id);
+              await AppFonts.delete(option);
+              if (settings.appFontId == option.id) {
+                await settings.setAppFont('system');
+              }
+              if (!sheetContext.mounted) return;
+              setSheetState(() {
+                busyId = null;
+                downloaded[option.id] = false;
+              });
+              if (mounted) {
+                _showSnack(
+                  context.trArgs('已删除字体：{name}', {
+                    'name': context.tr(option.label),
+                  }),
+                );
+              }
+            }
+
+            return SafeArea(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * .86,
+                ),
+                decoration: BoxDecoration(
+                  color: spec.background,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 10),
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: spec.textSecondary.withValues(alpha: .25),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.tr('字体风格'),
+                            style: TextStyle(
+                              color: spec.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            context.tr('内置字体按需下载，点击即可下载并启用'),
+                            style: TextStyle(
+                              color: spec.textSecondary,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      height: MediaQuery.sizeOf(context).height * .66,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(10, 4, 10, 18),
+                        itemCount: appFontOptions.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: spec.textPrimary.withValues(alpha: .06),
+                        ),
+                        itemBuilder: (context, index) {
+                          final option = appFontOptions[index];
+                          final isCurrent = settings.appFontId == option.id;
+                          final isBusy = busyId == option.id;
+                          final isDownloaded = downloaded[option.id] ?? false;
+                          final subtitle = option.isSystem
+                              ? context.tr('跟随系统字体')
+                              : option.isCustom
+                                  ? context.tr('从本地导入字体文件')
+                                  : isBusy
+                                      ? context.tr('正在下载字体…')
+                                      : isCurrent
+                                          ? context.tr('使用中')
+                                          : isDownloaded
+                                              ? context.tr('已下载')
+                                              : context.tr('未下载 · 点击下载并启用');
+                          return ListTile(
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 10),
+                            leading: Icon(
+                              isCurrent
+                                  ? Icons.check_circle_rounded
+                                  : option.isDownloadable && !isDownloaded
+                                      ? Icons.cloud_download_outlined
+                                      : Icons.font_download_outlined,
+                              color:
+                                  isCurrent ? spec.primary : spec.textSecondary,
+                            ),
+                            title: Text(context.tr(option.label)),
+                            subtitle: Text(
+                              subtitle,
+                              style: TextStyle(
+                                color: spec.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                            trailing: isBusy
+                                ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: spec.primary,
+                                    ),
+                                  )
+                                : option.isDownloadable && isDownloaded
+                                    ? IconButton(
+                                        tooltip: context.tr('删除字体'),
+                                        onPressed: () => remove(option),
+                                        icon: Icon(
+                                          Icons.delete_outline_rounded,
+                                          color: spec.textSecondary,
+                                        ),
+                                      )
+                                    : option.isDownloadable
+                                        ? Icon(
+                                            Icons.download_rounded,
+                                            color: spec.primary,
+                                          )
+                                        : option.isCustom
+                                            ? Icon(
+                                                Icons.file_open_outlined,
+                                                color: spec.textSecondary,
+                                              )
+                                            : null,
+                            onTap: () => select(option),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _importFont(SettingsProvider settings) async {
@@ -845,6 +1024,13 @@ class _SettingsPageState extends State<SettingsPage>
               'ACE / NASM / ACSM',
               '动作库、矫正训练体系与运动测试处方参考',
               'https://www.acefitness.org',
+            ),
+            const SizedBox(height: 12),
+            _ackItem(
+              spec,
+              'Google Fonts',
+              '内置字体来源（SIL Open Font License 1.1，经 jsDelivr 按需下载）',
+              'https://github.com/google/fonts',
             ),
           ],
         ),

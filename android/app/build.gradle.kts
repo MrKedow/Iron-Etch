@@ -20,8 +20,8 @@ android {
         applicationId = "com.mrkedow.ironetch"
         minSdk = flutter.minSdkVersion
         targetSdk = 34
-        versionCode = 13
-        versionName = "Android_v3.5.5"
+        versionCode = 14
+        versionName = "Android_v3.5.6"
     }
 
 

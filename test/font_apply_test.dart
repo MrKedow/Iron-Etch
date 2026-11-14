@@ -5,25 +5,43 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('selected Google font is applied to the text theme', () {
-    final theme = AppFonts.apply(
-      ThemeData(
-        appBarTheme: const AppBarTheme(
-          titleTextStyle: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-        ),
-        dialogTheme: const DialogThemeData(
-          titleTextStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-        ),
-      ),
-      fontId: 'ma-shan-zheng',
-    );
+  test('system font keeps the base theme unchanged', () {
+    final base = ThemeData();
+    final theme = AppFonts.apply(base, fontId: 'system');
+    expect(identical(theme, base), isTrue);
+  });
 
-    expect(theme.textTheme.bodyMedium?.fontFamily, contains('MaShanZheng'));
-    expect(theme.textTheme.bodyMedium?.fontFamilyFallback,
-        contains('MaShanZheng'));
+  test('downloadable font is not applied until it is loaded', () {
+    final base = ThemeData(
+      appBarTheme: const AppBarTheme(
+        titleTextStyle: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+      ),
+    );
+    final theme = AppFonts.apply(base, fontId: 'ma-shan-zheng');
     expect(
-        theme.appBarTheme.titleTextStyle?.fontFamily, contains('MaShanZheng'));
+      theme.textTheme.bodyMedium?.fontFamily,
+      base.textTheme.bodyMedium?.fontFamily,
+    );
     expect(
-        theme.dialogTheme.titleTextStyle?.fontFamily, contains('MaShanZheng'));
+      theme.appBarTheme.titleTextStyle?.fontFamily,
+      base.appBarTheme.titleTextStyle?.fontFamily,
+    );
+    expect(AppFonts.isLoaded('ma-shan-zheng'), isFalse);
+  });
+
+  test('unknown font id resolves to the system option', () {
+    expect(appFontById('does-not-exist').id, 'system');
+    expect(appFontById(null).isSystem, isTrue);
+  });
+
+  test('only bundled options expose a download url', () {
+    for (final option in appFontOptions) {
+      if (option.isSystem || option.isCustom) {
+        expect(option.url, isNull);
+      } else {
+        expect(option.url, isNotNull);
+        expect(option.url, startsWith('https://'));
+      }
+    }
   });
 }
